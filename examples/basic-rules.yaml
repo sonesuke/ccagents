@@ -18,11 +18,7 @@ rules:
     action: "send_keys"
     keys: ["/resume", "\r"]
   
-  # Legacy format for backward compatibility during transition
-  - priority: 100
-    pattern: "legacy_cancel"
-    command: "cancel"
-    args: []
+  # Legacy format for backward compatibility during transition  
   - priority: 110
     pattern: "legacy_resume"
     command: "resume"

@@ -91,7 +91,7 @@ rules:
     args: []
   - priority: 20
     pattern: "second"
-    command: "cancel"
+    command: "resume"
     args: []
 "#;
 
@@ -135,7 +135,7 @@ fn test_decide_cmd_priority_ordering_with_loaded_rules() -> Result<()> {
 rules:
   - priority: 20
     pattern: "test"
-    command: "cancel"
+    command: "resume"
     args: ["low"]
   - priority: 10
     pattern: "test"
@@ -217,11 +217,6 @@ fn test_decide_cmd_with_all_basic_rule_patterns() -> Result<()> {
     assert_eq!(command, CmdKind::Resume);
     assert_eq!(args, Vec::<String>::new()); // No args for workflow compatibility mode
 
-    // Test legacy cancel pattern (priority 100)
-    let (command, args) = decide_cmd("legacy_cancel", &rules);
-    assert_eq!(command, CmdKind::Cancel);
-    assert!(args.is_empty()); // No capture groups
-
     // Test resume pattern - uses send_keys action, so decide_cmd returns Resume
     let (command, args) = decide_cmd("resume", &rules);
     assert_eq!(command, CmdKind::Resume);
@@ -281,7 +276,7 @@ rules:
 rules:
   - priority: 5
     pattern: "new pattern"  
-    command: "cancel"
+    command: "entry"
     args: []
   - priority: 10
     pattern: "test pattern"
@@ -345,7 +340,7 @@ async fn test_manager_integration() -> Result<()> {
         .await
         .is_ok());
     assert!(manager
-        .handle_waiting_state("test-agent", "cancel")
+        .handle_waiting_state("test-agent", "resume")
         .await
         .is_ok());
     assert!(manager
@@ -374,7 +369,7 @@ async fn test_manager_handles_multiple_scenarios() -> Result<()> {
     let scenarios = vec![
         ("agent-001", "issue 456 detected in process"),
         ("agent-002", "network connection failed"),
-        ("agent-003", "cancel current operation"),
+        ("agent-003", "resume current operation"),
         ("agent-004", "resume normal operation"),
         ("agent-005", "unknown error occurred"),
     ];
@@ -399,8 +394,8 @@ rules:
     command: "entry"
     args: ["test-arg"]
   - priority: 20
-    pattern: "cancel-test"
-    command: "cancel"
+    pattern: "resume-test"
+    command: "resume"
     args: []
 "#;
 
@@ -415,7 +410,7 @@ rules:
         .await
         .is_ok());
     assert!(manager
-        .handle_waiting_state("test-agent", "cancel-test")
+        .handle_waiting_state("test-agent", "resume-test")
         .await
         .is_ok());
     assert!(manager
@@ -458,7 +453,7 @@ rules:
 rules:
   - priority: 10
     pattern: "updated-hot-reload"
-    command: "cancel"
+    command: "resume"
     args: []
 "#;
 

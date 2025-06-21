@@ -90,7 +90,7 @@ mod tests {
     fn test_decide_cmd_exact_match() {
         let rules = vec![
             create_test_rule(10, r"issue\s+(\d+)", CmdKind::Entry, vec![]),
-            create_test_rule(20, r"cancel", CmdKind::Cancel, vec![]),
+            create_test_rule(20, r"resume", CmdKind::Resume, vec![]),
         ];
 
         let (command, args) = decide_cmd("issue 123", &rules);
@@ -102,7 +102,7 @@ mod tests {
     fn test_decide_cmd_priority_ordering() {
         let rules = vec![
             create_test_rule(10, r"test", CmdKind::Entry, vec!["high".to_string()]),
-            create_test_rule(20, r"test", CmdKind::Cancel, vec!["low".to_string()]),
+            create_test_rule(20, r"test", CmdKind::Resume, vec!["low".to_string()]),
         ];
 
         // Should match the first rule (higher priority - lower number)
@@ -115,7 +115,7 @@ mod tests {
     fn test_decide_cmd_no_match() {
         let rules = vec![
             create_test_rule(10, r"issue\s+(\d+)", CmdKind::Entry, vec![]),
-            create_test_rule(20, r"cancel", CmdKind::Cancel, vec![]),
+            create_test_rule(20, r"resume", CmdKind::Resume, vec![]),
         ];
 
         let (command, args) = decide_cmd("no matching pattern here", &rules);
@@ -162,13 +162,13 @@ mod tests {
     fn test_decide_cmd_no_capture_groups() {
         let rules = vec![create_test_rule(
             20,
-            r"cancel",
-            CmdKind::Cancel,
+            r"resume",
+            CmdKind::Resume,
             vec!["static".to_string()],
         )];
 
-        let (command, args) = decide_cmd("cancel", &rules);
-        assert_eq!(command, CmdKind::Cancel);
+        let (command, args) = decide_cmd("resume", &rules);
+        assert_eq!(command, CmdKind::Resume);
         assert_eq!(args, vec!["static"]); // Only static args, no capture groups
     }
 

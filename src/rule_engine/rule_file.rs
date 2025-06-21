@@ -45,7 +45,6 @@ pub enum ActionType {
 #[derive(Debug, Clone, PartialEq)]
 pub enum CmdKind {
     Entry,
-    Cancel,
     Resume,
 }
 
@@ -94,10 +93,9 @@ fn compile_rule(rule: &Rule) -> Result<CompiledRule> {
             _ => anyhow::bail!("Unknown action type: {}", action_type),
         }
     } else if let Some(command) = &rule.command {
-        // Legacy command support
+        // Legacy command support (Cancel removed in main branch)
         let cmd_kind = match command.as_str() {
             "entry" => CmdKind::Entry,
-            "cancel" => CmdKind::Cancel,
             "resume" => CmdKind::Resume,
             _ => anyhow::bail!("Unknown legacy command: {}", command),
         };

@@ -27,6 +27,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Starting HT client...");
     ht_client.start().await?;
 
+    info!("Note: HT terminal web interface is available at http://localhost:9999");
+
     // Create terminal output monitor with custom configuration
     let monitor_config = MonitorConfig {
         change_detection_interval: Duration::from_millis(250), // Check every 250ms
