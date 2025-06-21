@@ -697,7 +697,7 @@ impl Manager {
 
         // Try to execute a simple command to verify the terminal is responsive
         println!("🧪 Testing terminal responsiveness...");
-        if let Ok(_) = backend.send_keys("echo 'Terminal recovered'").await {
+        if backend.send_keys("echo 'Terminal recovered'").await.is_ok() {
             backend.send_keys("\r").await.ok();
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
