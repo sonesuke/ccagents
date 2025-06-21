@@ -643,7 +643,9 @@ fn test_ht_process_config_default() {
     let config = HtProcessConfig::default();
 
     assert_eq!(config.ht_binary_path, "ht");
-    assert_eq!(config.shell_command, Some(std::env::var("SHELL").unwrap_or_else(|_| "bash".to_string())));
+    // Test that the shell command is set to either SHELL env var or "bash" fallback
+    let expected_shell = std::env::var("SHELL").unwrap_or_else(|_| "bash".to_string());
+    assert_eq!(config.shell_command, Some(expected_shell));
     assert_eq!(config.restart_attempts, 3);
     assert_eq!(config.restart_delay_ms, 1000);
 }
