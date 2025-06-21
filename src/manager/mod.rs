@@ -25,7 +25,15 @@ impl Manager {
             || std::env::var("GITHUB_ACTIONS").is_ok()
             || std::thread::current()
                 .name()
-                .is_some_and(|name| name.contains("test"));
+                .is_some_and(|name| name.contains("test"))
+            || std::env::current_exe()
+                .map(|exe| {
+                    exe.file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .contains("test")
+                })
+                .unwrap_or(false);
         let (terminal_backend, test_mode) = if is_test {
             // Use direct backend for tests, which should always be available
             let config = TerminalBackendConfig {
@@ -248,6 +256,26 @@ impl Manager {
 
         let backend = self.terminal_backend.backend();
 
+        // Check if we're in a worktree first
+        let pwd_result = backend
+            .execute_command("pwd")
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get current directory: {}", e))?;
+
+        let current_dir = pwd_result.output.trim();
+
+        // If we're already in a worktree for this issue, we don't need to do git operations
+        if current_dir.contains(&format!(".worktree/issue-{}", issue_number)) {
+            println!("ℹ️ Already in correct worktree, skipping git operations");
+            return Ok(());
+        }
+
+        // Check if we're in the main worktree directory and need to navigate elsewhere
+        if current_dir.contains(".worktree") {
+            println!("ℹ️ In worktree environment, git operations handled by worktree setup");
+            return Ok(());
+        }
+
         // Check current branch first
         let branch_result = backend
             .execute_command("git branch --show-current")
@@ -255,8 +283,8 @@ impl Manager {
             .map_err(|e| anyhow::anyhow!("Failed to get current branch: {}", e))?;
 
         let current_branch = branch_result.output.trim();
-        
-        // Only checkout main if we're not already on it
+
+        // Only checkout main if we're not already on it and not in a worktree
         if current_branch != "main" {
             let result = backend
                 .execute_command("git checkout main")
@@ -311,7 +339,10 @@ impl Manager {
             // Check if branch already exists first
             let branch_name = format!("issue-{}", issue_number);
             let branch_check = backend
-                .execute_command(&format!("git show-ref --verify --quiet refs/heads/{}", branch_name))
+                .execute_command(&format!(
+                    "git show-ref --verify --quiet refs/heads/{}",
+                    branch_name
+                ))
                 .await;
 
             let cmd = if branch_check.is_ok() && branch_check.unwrap().exit_code == Some(0) {

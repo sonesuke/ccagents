@@ -117,7 +117,7 @@ fn test_decide_cmd_exact_match() -> Result<()> {
     // Test match with "issue 123" pattern
     let (command, args) = decide_cmd("issue 123", &rules);
     assert_eq!(command, CmdKind::Entry);
-    assert!(args.is_empty()); // Args should match what's in the YAML
+    assert_eq!(args, vec!["123"]); // Should capture the issue number from regex
     Ok(())
 }
 
@@ -208,17 +208,17 @@ fn test_decide_cmd_with_all_basic_rule_patterns() -> Result<()> {
     // Test issue pattern
     let (command, args) = decide_cmd("issue 456", &rules);
     assert_eq!(command, CmdKind::Entry);
-    assert!(args.is_empty());
+    assert_eq!(args, vec!["456"]); // Should capture issue number
 
     // Test cancel pattern
     let (command, args) = decide_cmd("cancel", &rules);
     assert_eq!(command, CmdKind::Cancel);
-    assert!(args.is_empty());
+    assert!(args.is_empty()); // No capture groups
 
     // Test resume pattern
     let (command, args) = decide_cmd("resume", &rules);
     assert_eq!(command, CmdKind::Resume);
-    assert!(args.is_empty());
+    assert!(args.is_empty()); // No capture groups
 
     Ok(())
 }
@@ -319,6 +319,7 @@ rules:
 // Manager integration tests
 #[tokio::test]
 async fn test_manager_integration() -> Result<()> {
+    std::env::set_var("CARGO_TEST", "1");
     let manager = Manager::new("examples/basic-rules.yaml").await?;
 
     // Test agent waiting scenarios
@@ -350,6 +351,7 @@ async fn test_manager_with_invalid_rules_file() {
 
 #[tokio::test]
 async fn test_manager_handles_multiple_scenarios() -> Result<()> {
+    std::env::set_var("CARGO_TEST", "1");
     let manager = Manager::new("examples/basic-rules.yaml").await?;
 
     let scenarios = vec![
@@ -372,6 +374,7 @@ async fn test_manager_handles_multiple_scenarios() -> Result<()> {
 
 #[tokio::test]
 async fn test_manager_with_custom_rules() -> Result<()> {
+    std::env::set_var("CARGO_TEST", "1");
     let yaml_content = r#"
 rules:
   - priority: 10
@@ -408,6 +411,7 @@ rules:
 
 #[tokio::test]
 async fn test_manager_with_hot_reload() -> Result<()> {
+    std::env::set_var("CARGO_TEST", "1");
     use std::fs;
 
     let yaml_content = r#"
@@ -457,6 +461,7 @@ rules:
 
 #[tokio::test]
 async fn test_concurrent_agents() -> Result<()> {
+    std::env::set_var("CARGO_TEST", "1");
     let manager = Manager::new("examples/basic-rules.yaml").await?;
 
     // Simulate multiple agents hitting waiting state simultaneously

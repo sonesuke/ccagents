@@ -18,8 +18,18 @@ use crate::rule_engine::{CmdKind, CompiledRule};
 /// Should complete within 1ms for 100 rules with typical patterns.
 pub fn decide_cmd(capture: &str, rules: &[CompiledRule]) -> (CmdKind, Vec<String>) {
     for rule in rules {
-        if rule.regex.is_match(capture) {
-            return (rule.command.clone(), rule.args.clone());
+        if let Some(captures) = rule.regex.captures(capture) {
+            let mut args = rule.args.clone();
+
+            // Extract capture groups and add them to args
+            // Skip the first capture (index 0) which is the full match
+            for i in 1..captures.len() {
+                if let Some(captured) = captures.get(i) {
+                    args.push(captured.as_str().to_string());
+                }
+            }
+
+            return (rule.command.clone(), args);
         }
     }
 
@@ -55,7 +65,7 @@ mod tests {
 
         let (command, args) = decide_cmd("issue 123", &rules);
         assert_eq!(command, CmdKind::Entry);
-        assert!(args.is_empty());
+        assert_eq!(args, vec!["123"]); // Should capture the issue number
     }
 
     #[test]
@@ -102,6 +112,34 @@ mod tests {
         let (command, args) = decide_cmd("any text", &[]);
         assert_eq!(command, CmdKind::Resume);
         assert!(args.is_empty());
+    }
+
+    #[test]
+    fn test_decide_cmd_capture_groups() {
+        let rules = vec![create_test_rule(
+            10,
+            r"deploy\s+(\w+)\s+to\s+(\w+)",
+            CmdKind::Entry,
+            vec!["static".to_string()],
+        )];
+
+        let (command, args) = decide_cmd("deploy app to production", &rules);
+        assert_eq!(command, CmdKind::SolveIssue);
+        assert_eq!(args, vec!["static", "app", "production"]); // static + captured groups
+    }
+
+    #[test]
+    fn test_decide_cmd_no_capture_groups() {
+        let rules = vec![create_test_rule(
+            20,
+            r"cancel",
+            CmdKind::Cancel,
+            vec!["static".to_string()],
+        )];
+
+        let (command, args) = decide_cmd("cancel", &rules);
+        assert_eq!(command, CmdKind::Cancel);
+        assert_eq!(args, vec!["static"]); // Only static args, no capture groups
     }
 
     #[test]
