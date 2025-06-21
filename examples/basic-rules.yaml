@@ -1,0 +1,45 @@
+# Example rule configuration for RuleAgents
+version: "1.0"
+name: "Basic Rules Example"
+
+rules:
+  - name: "file-change-monitor"
+    description: "Monitor file changes in the project"
+    trigger:
+      type: "file_change"
+      patterns:
+        - "src/**/*.rs"
+        - "Cargo.toml"
+    conditions:
+      - type: "pattern_match"
+        pattern: "TODO|FIXME"
+    actions:
+      - type: "log"
+        level: "info"
+        message: "Found TODO/FIXME in changed file: {file_path}"
+      - type: "notify"
+        channel: "development"
+
+  - name: "test-runner"
+    description: "Run tests when source files change"
+    trigger:
+      type: "file_change"
+      patterns:
+        - "src/**/*.rs"
+        - "tests/**/*.rs"
+    actions:
+      - type: "command"
+        command: "cargo test"
+        timeout: 60
+
+  - name: "metric-collector"
+    description: "Collect metrics periodically"
+    trigger:
+      type: "interval"
+      seconds: 300  # Every 5 minutes
+    actions:
+      - type: "collect_metrics"
+        metrics:
+          - "memory_usage"
+          - "cpu_usage"
+          - "rule_execution_count"
