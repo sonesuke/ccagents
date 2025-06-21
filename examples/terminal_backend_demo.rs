@@ -73,8 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("=== Demo 2: Direct Backend ===");
     let direct_config = TerminalBackendConfig::new()
         .with_backend_type(BackendType::Direct)
-        .with_direct_timeout(Duration::from_secs(10))
-        .with_fallback(false);
+        .with_direct_timeout(Duration::from_secs(10));
 
     match TerminalBackendManager::new(direct_config).await {
         Ok(direct_manager) => {
@@ -123,19 +122,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Demo 3: Try HT backend with fallback
-    info!("=== Demo 3: HT Backend with Fallback ===");
-    let ht_config = TerminalBackendConfig::new()
-        .with_backend_type(BackendType::Ht)
-        .with_fallback(true); // Enable fallback to direct
+    // Demo 3: Try HT backend
+    info!("=== Demo 3: HT Backend ===");
+    let ht_config = TerminalBackendConfig::new().with_backend_type(BackendType::Ht);
 
     match TerminalBackendManager::new(ht_config).await {
         Ok(ht_manager) => {
-            info!("Created HT backend (or fallback) successfully");
-            info!(
-                "Actual backend type: {}",
-                ht_manager.backend().backend_type()
-            );
+            info!("Created HT backend successfully");
+            info!("Backend type: {}", ht_manager.backend().backend_type());
 
             // Test basic command execution
             match ht_manager.backend().execute_command("date").await {
@@ -149,7 +143,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         Err(e) => {
-            error!("Failed to create HT backend: {}", e);
+            info!("HT backend not available: {}", e);
         }
     }
 

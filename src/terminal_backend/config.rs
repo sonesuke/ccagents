@@ -8,7 +8,6 @@ pub struct TerminalBackendConfig {
     pub backend_type: BackendType,
     pub ht_config: HtBackendConfig,
     pub direct_config: DirectBackendConfig,
-    pub fallback_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,7 +30,6 @@ impl Default for TerminalBackendConfig {
             backend_type: BackendType::Direct,
             ht_config: HtBackendConfig::default(),
             direct_config: DirectBackendConfig::default(),
-            fallback_enabled: true,
         }
     }
 }
@@ -86,11 +84,6 @@ impl TerminalBackendConfig {
         self
     }
 
-    pub fn with_fallback(mut self, enabled: bool) -> Self {
-        self.fallback_enabled = enabled;
-        self
-    }
-
     pub fn validate(&self) -> Result<(), TerminalBackendError> {
         match self.backend_type {
             BackendType::Ht => {
@@ -124,11 +117,6 @@ impl TerminalBackendConfig {
         // Read shell from environment
         if let Ok(shell) = std::env::var("TERMINAL_SHELL") {
             config.direct_config.shell = Some(shell);
-        }
-
-        // Read fallback setting from environment
-        if let Ok(fallback_str) = std::env::var("TERMINAL_BACKEND_FALLBACK") {
-            config.fallback_enabled = fallback_str.parse().unwrap_or(true);
         }
 
         Ok(config)
