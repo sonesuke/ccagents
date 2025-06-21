@@ -52,7 +52,7 @@ impl Default for HtProcessConfig {
     fn default() -> Self {
         Self {
             ht_binary_path: "ht".to_string(),
-            shell_command: Some("bash".to_string()),
+            shell_command: Some(std::env::var("SHELL").unwrap()),
             restart_attempts: 3,
             restart_delay_ms: 1000,
         }
@@ -106,6 +106,10 @@ impl HtProcess {
         }
 
         info!("Starting HT process with config: {:?}", self.config);
+
+        let shell = self.config.shell_command.as_deref().unwrap_or("unknown");
+        println!("🐚 Starting HT with shell: {}", shell);
+        println!("🌐 HT terminal web interface available at: http://localhost:9999");
 
         let mut command = Command::new(&self.config.ht_binary_path);
 
