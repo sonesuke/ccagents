@@ -1,4 +1,4 @@
-use crate::ruler::rule_types::{ActionType, CmdKind, CompiledRule, Rule, RuleFile};
+use crate::ruler::rule_types::{ActionType, CompiledRule, Rule, RuleFile};
 use anyhow::{Context, Result};
 use regex::Regex;
 use std::path::Path;
@@ -47,16 +47,8 @@ fn compile_rule(rule: &Rule) -> Result<CompiledRule> {
             }
             _ => anyhow::bail!("Unknown action type: {}", action_type),
         }
-    } else if let Some(command) = &rule.command {
-        // Legacy command support (Cancel removed in main branch)
-        let cmd_kind = match command.as_str() {
-            "entry" => CmdKind::Entry,
-            "resume" => CmdKind::Resume,
-            _ => anyhow::bail!("Unknown legacy command: {}", command),
-        };
-        ActionType::Legacy(cmd_kind, rule.args.clone())
     } else {
-        anyhow::bail!("Rule must have either 'action' or 'command' field");
+        anyhow::bail!("Rule must have 'action' field");
     };
 
     Ok(CompiledRule {

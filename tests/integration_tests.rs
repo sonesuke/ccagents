@@ -71,8 +71,8 @@ fn test_binary_with_custom_rules() {
 rules:
   - priority: 10
     pattern: "test pattern"
-    command: "resume"
-    args: []
+    action: "send_keys"
+    keys: ["test", "\r"]
 "#;
 
     let mut temp_file = NamedTempFile::new().unwrap();

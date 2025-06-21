@@ -18,9 +18,3 @@ rules:
     pattern: "resume"
     action: "send_keys"
     keys: ["/resume", "\r"]
-  
-  # Legacy format for backward compatibility during transition  
-  - priority: 110
-    pattern: "legacy_resume"
-    command: "resume"
-    args: []

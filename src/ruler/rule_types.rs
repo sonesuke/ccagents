@@ -19,9 +19,6 @@ pub struct Rule {
     pub workflow: Option<String>,
     #[serde(default)]
     pub args: Vec<String>,
-    // Legacy support for existing rules
-    #[serde(default)]
-    pub command: Option<String>,
 }
 
 // Compiled structures for runtime use
@@ -36,12 +33,4 @@ pub struct CompiledRule {
 pub enum ActionType {
     SendKeys(Vec<String>),
     Workflow(String, Vec<String>),
-    // Legacy support during transition
-    Legacy(CmdKind, Vec<String>),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum CmdKind {
-    Entry,
-    Resume,
 }

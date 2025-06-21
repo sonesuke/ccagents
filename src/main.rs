@@ -4,7 +4,7 @@ mod workflow;
 
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
-use ruler::decision::decide_cmd;
+use ruler::decision::decide_action;
 use ruler::rule_loader::load_rules;
 use ruler::Ruler;
 use std::path::PathBuf;
@@ -117,12 +117,12 @@ async fn main() -> Result<()> {
 
                 let capture = test_captures[counter % test_captures.len()];
                 let rules = engine.get_rules().await;
-                let (command, cmd_args) = decide_cmd(capture, &rules);
+                let action = decide_action(capture, &rules);
 
                 counter += 1;
                 println!(
-                    "[{}] Capture: \"{}\" → {:?} {:?}",
-                    counter, capture, command, cmd_args
+                    "[{}] Capture: \"{}\" → {:?}",
+                    counter, capture, action
                 );
             }
         }
@@ -149,10 +149,10 @@ async fn main() -> Result<()> {
             Commands::Test(args) => {
                 // Load rules and test against capture text
                 let rules = load_rules(&args.rules).context("Failed to load rules")?;
-                let (command, cmd_args) = decide_cmd(&args.capture, &rules);
+                let action = decide_action(&args.capture, &rules);
 
                 println!("Input: \"{}\"", args.capture);
-                println!("Result: Command = {:?}, Args = {:?}", command, cmd_args);
+                println!("Result: Action = {:?}", action);
 
                 // Show which rule matched (if any)
                 for rule in &rules {
@@ -186,12 +186,12 @@ async fn main() -> Result<()> {
 
                     let capture = test_captures[counter % test_captures.len()];
                     let rules = engine.get_rules().await;
-                    let (command, cmd_args) = decide_cmd(capture, &rules);
+                    let action = decide_action(capture, &rules);
 
                     counter += 1;
                     println!(
-                        "[{}] Capture: \"{}\" → {:?} {:?}",
-                        counter, capture, command, cmd_args
+                        "[{}] Capture: \"{}\" → {:?}",
+                        counter, capture, action
                     );
                 }
             }
