@@ -1,23 +1,16 @@
-pub mod ht_client;
-pub mod ht_process;
-pub mod manager;
-pub mod rule_engine;
-pub mod session_manager;
-pub mod terminal_backend;
-pub mod terminal_output_monitor;
+pub mod agent;
+pub mod ruler;
 
-pub use ht_client::{HtClient, HtClientError, HtCommand, HtEvent, TerminalSnapshot};
-pub use ht_process::HtProcess;
-pub use manager::Manager;
-pub use rule_engine::{CompiledRule, RuleEngine, RuleFile};
-pub use session_manager::{SessionManager, SessionPersistence, SessionState};
-pub use terminal_backend::{
-    BackendType, CommandResult, DirectBackendConfig, DirectTerminalBackend, HtBackendConfig,
-    HtTerminalBackend, TerminalBackend, TerminalBackendConfig, TerminalBackendError,
-    TerminalBackendFactory, TerminalBackendManager, TerminalBackendResult,
-    TerminalSnapshot as BackendTerminalSnapshot,
-};
-pub use terminal_output_monitor::{
+// Re-export legacy modules temporarily for backward compatibility
+pub mod ht_client;
+
+// Public API
+pub use agent::ht_process::{HtProcess, HtProcessConfig};
+pub use agent::terminal_monitor::{
     AgentState, MonitorConfig, MonitorError, MonitorStatistics, StateTransition,
-    TerminalOutputMonitor,
+    TerminalOutputMonitor, TerminalSnapshot,
 };
+pub use agent::Agent;
+pub use ruler::rule_engine::{CompiledRule, RuleEngine, RuleFile};
+pub use ruler::session::{SessionPersistence, SessionState, SessionStore};
+pub use ruler::Ruler;

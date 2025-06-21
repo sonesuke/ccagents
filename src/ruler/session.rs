@@ -1,4 +1,4 @@
-use crate::terminal_backend::TerminalSnapshot;
+use crate::agent::terminal_monitor::TerminalSnapshot;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -35,12 +35,12 @@ impl Default for SessionPersistence {
     }
 }
 
-pub struct SessionManager {
+pub struct SessionStore {
     persistence_file: PathBuf,
     sessions: HashMap<String, SessionState>,
 }
 
-impl SessionManager {
+impl SessionStore {
     pub fn new<P: AsRef<Path>>(persistence_file: P) -> Self {
         Self {
             persistence_file: persistence_file.as_ref().to_path_buf(),
@@ -202,7 +202,7 @@ mod tests {
     #[tokio::test]
     async fn test_session_persistence() {
         let temp_file = NamedTempFile::new().unwrap();
-        let mut session_manager = SessionManager::new(temp_file.path());
+        let mut session_store = SessionStore::new(temp_file.path());
 
         // Create a test session state
         let snapshot = TerminalSnapshot {
@@ -216,7 +216,7 @@ mod tests {
         env_vars.insert("TEST_VAR".to_string(), "test_value".to_string());
 
         // Save session state
-        session_manager
+        session_store
             .save_session_state(
                 "test-agent",
                 "/tmp/test",
@@ -227,12 +227,12 @@ mod tests {
             .await
             .unwrap();
 
-        // Create new session manager and load
-        let mut new_session_manager = SessionManager::new(temp_file.path());
-        new_session_manager.load_sessions().await.unwrap();
+        // Create new session store and load
+        let mut new_session_store = SessionStore::new(temp_file.path());
+        new_session_store.load_sessions().await.unwrap();
 
         // Verify session was loaded
-        let loaded_session = new_session_manager.get_session_state("test-agent").unwrap();
+        let loaded_session = new_session_store.get_session_state("test-agent").unwrap();
         assert_eq!(loaded_session.agent_id, "test-agent");
         assert_eq!(loaded_session.working_directory, "/tmp/test");
         assert_eq!(loaded_session.terminal_snapshot.content, "test content");
@@ -242,7 +242,7 @@ mod tests {
     #[tokio::test]
     async fn test_cleanup_old_sessions() {
         let temp_file = NamedTempFile::new().unwrap();
-        let mut session_manager = SessionManager::new(temp_file.path());
+        let mut session_store = SessionStore::new(temp_file.path());
 
         // Create an old session by manually setting timestamp
         let snapshot = TerminalSnapshot {
@@ -262,14 +262,14 @@ mod tests {
             session_id: "old_session".to_string(),
         };
 
-        session_manager
+        session_store
             .sessions
             .insert("old-agent".to_string(), old_session);
 
         // Cleanup sessions older than 1 hour
-        session_manager.cleanup_old_sessions(1).await.unwrap();
+        session_store.cleanup_old_sessions(1).await.unwrap();
 
         // Verify old session was removed
-        assert!(!session_manager.has_session("old-agent"));
+        assert!(!session_store.has_session("old-agent"));
     }
 }

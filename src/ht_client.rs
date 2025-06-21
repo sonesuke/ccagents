@@ -6,7 +6,7 @@ use thiserror::Error;
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tracing::{debug, error, info, warn};
 
-use crate::ht_process::{HtProcess, HtProcessError};
+use crate::agent::ht_process::{HtProcess, HtProcessError};
 
 #[derive(Debug, Error)]
 pub enum HtClientError {

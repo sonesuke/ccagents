@@ -1,21 +1,24 @@
-use crate::rule_engine::{decide_action, ActionType, CmdKind, RuleEngine};
-use crate::session_manager::SessionManager;
-use crate::terminal_backend::{BackendType, TerminalBackendConfig, TerminalBackendManager};
+pub mod rule_engine;
+pub mod session;
+
+use crate::agent::Agent;
+use crate::ruler::rule_engine::{decide_action, ActionType, CmdKind, RuleEngine};
+use crate::ruler::session::SessionStore;
 use anyhow::Result;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::Duration;
 
-#[derive(Clone)]
-pub struct Manager {
+pub struct Ruler {
     rule_engine: Arc<RuleEngine>,
-    terminal_backend: Arc<TerminalBackendManager>,
-    session_manager: Arc<Mutex<SessionManager>>,
+    agents: HashMap<String, Agent>,
+    sessions: Arc<Mutex<SessionStore>>,
     test_mode: bool,
 }
 
-impl Manager {
+impl Ruler {
     pub async fn new(rules_path: &str) -> Result<Self> {
         let rule_engine = RuleEngine::new(rules_path).await?;
 
@@ -36,25 +39,9 @@ impl Manager {
                         .contains("test")
                 })
                 .unwrap_or(false);
-        let (terminal_backend, test_mode) = if is_test {
-            // Use direct backend for tests, which should always be available
-            let config = TerminalBackendConfig {
-                backend_type: BackendType::Direct,
-                ..Default::default()
-            };
-            let backend = TerminalBackendManager::new(config).await.map_err(|e| {
-                anyhow::anyhow!("Failed to initialize test terminal backend: {}", e)
-            })?;
-            (backend, true)
-        } else {
-            let backend = TerminalBackendManager::new_auto()
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to initialize terminal backend: {}", e))?;
-            (backend, false)
-        };
 
-        // Initialize session manager with default persistence file
-        let session_file = if test_mode {
+        // Initialize session store with default persistence file
+        let session_file = if is_test {
             PathBuf::from("/tmp/rule-agents-test-sessions.json")
         } else {
             dirs::config_dir()
@@ -63,45 +50,37 @@ impl Manager {
                 .join("sessions.json")
         };
 
-        let mut session_manager = SessionManager::new(session_file);
-        session_manager.load_sessions().await.unwrap_or_else(|e| {
+        let mut sessions = SessionStore::new(session_file);
+        sessions.load_sessions().await.unwrap_or_else(|e| {
             eprintln!("Warning: Could not load sessions: {}", e);
         });
 
-        Ok(Manager {
+        Ok(Ruler {
             rule_engine: Arc::new(rule_engine),
-            terminal_backend: Arc::new(terminal_backend),
-            session_manager: Arc::new(Mutex::new(session_manager)),
-            test_mode,
+            agents: HashMap::new(),
+            sessions: Arc::new(Mutex::new(sessions)),
+            test_mode: is_test,
         })
     }
 
-    pub async fn new_with_backend(
-        rules_path: &str,
-        terminal_backend: TerminalBackendManager,
-    ) -> Result<Self> {
-        let rule_engine = RuleEngine::new(rules_path).await?;
+    pub async fn create_agent(&mut self, agent_id: &str) -> Result<()> {
+        if self.agents.contains_key(agent_id) {
+            return Err(anyhow::anyhow!("Agent {} already exists", agent_id));
+        }
 
-        // Initialize session manager with default persistence file
-        let session_file = dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("rule-agents")
-            .join("sessions.json");
+        let agent = Agent::new(agent_id.to_string(), self.test_mode).await?;
+        self.agents.insert(agent_id.to_string(), agent);
+        Ok(())
+    }
 
-        let mut session_manager = SessionManager::new(session_file);
-        session_manager.load_sessions().await.unwrap_or_else(|e| {
-            eprintln!("Warning: Could not load sessions: {}", e);
-        });
-
-        Ok(Manager {
-            rule_engine: Arc::new(rule_engine),
-            terminal_backend: Arc::new(terminal_backend),
-            session_manager: Arc::new(Mutex::new(session_manager)),
-            test_mode: false,
-        })
+    pub async fn get_agent(&self, agent_id: &str) -> Result<&Agent> {
+        self.agents
+            .get(agent_id)
+            .ok_or_else(|| anyhow::anyhow!("Agent {} not found", agent_id))
     }
 
     pub async fn handle_waiting_state(&self, agent_id: &str, capture: &str) -> Result<()> {
+        self.get_agent(agent_id).await?; // Ensure agent exists
         let rules = self.rule_engine.get_rules().await;
         let action = decide_action(capture, &rules);
 
@@ -132,18 +111,19 @@ impl Manager {
 
     /// Execute an action based on the new ActionType system
     async fn execute_action(&self, agent_id: &str, action: ActionType) -> Result<()> {
+        let agent = self.get_agent(agent_id).await?;
+
         match action {
             ActionType::SendKeys(keys) => {
                 println!("→ Sending keys to agent {}: {:?}", agent_id, keys);
-                self.send_keys_to_agent(agent_id, keys).await?;
+                self.send_keys_to_agent(agent, keys).await?;
             }
             ActionType::Workflow(workflow_name, args) => {
                 println!(
                     "→ Executing workflow '{}' for agent {} with args: {:?}",
                     workflow_name, agent_id, args
                 );
-                self.execute_workflow(agent_id, &workflow_name, args)
-                    .await?;
+                self.execute_workflow(agent, &workflow_name, args).await?;
             }
             ActionType::Legacy(cmd_kind, args) => {
                 // Handle legacy commands during transition period
@@ -151,27 +131,26 @@ impl Manager {
                     "→ Executing legacy command {:?} for agent {} with args: {:?}",
                     cmd_kind, agent_id, args
                 );
-                self.send_command_to_agent(agent_id, cmd_kind, args).await?;
+                self.send_command_to_agent(agent, cmd_kind, args).await?;
             }
         }
         Ok(())
     }
 
     /// Send keys directly to the terminal
-    async fn send_keys_to_agent(&self, agent_id: &str, keys: Vec<String>) -> Result<()> {
+    async fn send_keys_to_agent(&self, agent: &Agent, keys: Vec<String>) -> Result<()> {
         if self.test_mode {
             println!(
                 "ℹ️ Test mode: would send keys {:?} to agent {}",
-                keys, agent_id
+                keys,
+                agent.id()
             );
             return Ok(());
         }
 
-        let backend = self.terminal_backend.backend();
-
         for key in keys {
             println!("  → Sending key: '{}'", key);
-            backend
+            agent
                 .send_keys(&key)
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to send key '{}': {}", key, e))?;
@@ -185,14 +164,14 @@ impl Manager {
     /// Execute a workflow by name
     async fn execute_workflow(
         &self,
-        agent_id: &str,
+        agent: &Agent,
         workflow_name: &str,
         args: Vec<String>,
     ) -> Result<()> {
         match workflow_name {
             "github_issue_resolution" => {
                 // Use the existing entry command logic for GitHub issue resolution
-                self.execute_entry_command(agent_id, args).await?;
+                self.execute_entry_command(agent, args).await?;
             }
             _ => {
                 return Err(anyhow::anyhow!("Unknown workflow: {}", workflow_name));
@@ -203,7 +182,7 @@ impl Manager {
 
     async fn send_command_to_agent(
         &self,
-        agent_id: &str,
+        agent: &Agent,
         command: CmdKind,
         args: Vec<String>,
     ) -> Result<()> {
@@ -211,50 +190,49 @@ impl Manager {
             CmdKind::Entry => {
                 println!(
                     "→ Executing entry for agent {} with args: {:?}",
-                    agent_id, args
+                    agent.id(),
+                    args
                 );
-                self.execute_entry_command(agent_id, args).await?;
+                self.execute_entry_command(agent, args).await?;
             }
             CmdKind::Resume => {
-                println!("→ Sending resume to agent {}", agent_id);
-                self.execute_resume_command(agent_id).await?;
+                println!("→ Sending resume to agent {}", agent.id());
+                self.execute_resume_command(agent).await?;
             }
         }
 
         Ok(())
     }
 
-    async fn execute_entry_command(&self, agent_id: &str, args: Vec<String>) -> Result<()> {
-        let _backend = self.terminal_backend.backend();
-
+    async fn execute_entry_command(&self, agent: &Agent, args: Vec<String>) -> Result<()> {
         // Extract issue number from args or parse from agent_id
         let issue_number = if !args.is_empty() {
             args[0].clone()
         } else {
             // Try to extract from agent_id if it contains issue number
-            agent_id.split('-').next_back().unwrap_or("1").to_string()
+            agent.id().split('-').next_back().unwrap_or("1").to_string()
         };
 
         println!("🚀 Starting entry workflow for issue #{}", issue_number);
 
         // Step 1: Git operations
-        self.handle_git_operations(&issue_number).await?;
+        self.handle_git_operations(agent, &issue_number).await?;
 
         // Step 2: Create and switch to worktree
-        self.setup_worktree(&issue_number).await?;
+        self.setup_worktree(agent, &issue_number).await?;
 
         // Step 3: Create draft PR
-        self.create_draft_pr(&issue_number).await?;
+        self.create_draft_pr(agent, &issue_number).await?;
 
         // Step 4: Implementation phase (this would integrate with actual implementation logic)
-        self.coordinate_implementation(&issue_number).await?;
+        self.coordinate_implementation(agent, &issue_number).await?;
 
         println!("✅ Entry workflow completed for issue #{}", issue_number);
         Ok(())
     }
 
-    async fn execute_resume_command(&self, agent_id: &str) -> Result<()> {
-        println!("▶️ Executing resume command for agent {}", agent_id);
+    async fn execute_resume_command(&self, agent: &Agent) -> Result<()> {
+        println!("▶️ Executing resume command for agent {}", agent.id());
 
         // In test mode, just simulate resume
         if self.test_mode {
@@ -263,35 +241,33 @@ impl Manager {
         }
 
         let session_state = {
-            let session_manager = self.session_manager.lock().await;
-            session_manager
-                .get_latest_session_for_agent(agent_id)
-                .cloned()
+            let sessions = self.sessions.lock().await;
+            sessions.get_latest_session_for_agent(agent.id()).cloned()
         };
 
         // Try to find the most recent session for this agent
         if let Some(session_state) = session_state {
-            println!("📄 Found session state for agent {}", agent_id);
+            println!("📄 Found session state for agent {}", agent.id());
             println!("  - Working directory: {}", session_state.working_directory);
             println!("  - Last command: {:?}", session_state.last_command);
             println!("  - Session timestamp: {}", session_state.timestamp);
 
             // Restore session state
-            self.restore_session_state(agent_id, &session_state).await?;
+            self.restore_session_state(agent, &session_state).await?;
 
-            println!("✅ Session restored successfully for agent {}", agent_id);
+            println!("✅ Session restored successfully for agent {}", agent.id());
         } else {
-            println!("⚠️ No previous session found for agent {}", agent_id);
+            println!("⚠️ No previous session found for agent {}", agent.id());
             println!("   Starting fresh terminal session");
 
             // Start a fresh session since no previous state exists
-            self.start_fresh_session(agent_id).await?;
+            self.start_fresh_session(agent).await?;
         }
 
         Ok(())
     }
 
-    async fn handle_git_operations(&self, issue_number: &str) -> Result<()> {
+    async fn handle_git_operations(&self, agent: &Agent, issue_number: &str) -> Result<()> {
         println!("📦 Handling git operations for issue #{}", issue_number);
 
         // Skip actual git operations in test environment
@@ -300,10 +276,8 @@ impl Manager {
             return Ok(());
         }
 
-        let backend = self.terminal_backend.backend();
-
         // Check if we're in a worktree first
-        let pwd_result = backend
+        let pwd_result = agent
             .execute_command("pwd")
             .await
             .map_err(|e| anyhow::anyhow!("Failed to get current directory: {}", e))?;
@@ -323,7 +297,7 @@ impl Manager {
         }
 
         // Check current branch first
-        let branch_result = backend
+        let branch_result = agent
             .execute_command("git branch --show-current")
             .await
             .map_err(|e| anyhow::anyhow!("Failed to get current branch: {}", e))?;
@@ -332,7 +306,7 @@ impl Manager {
 
         // Only checkout main if we're not already on it and not in a worktree
         if current_branch != "main" {
-            let result = backend
+            let result = agent
                 .execute_command("git checkout main")
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to checkout main: {}", e))?;
@@ -345,7 +319,7 @@ impl Manager {
             }
         }
 
-        let result = backend
+        let result = agent
             .execute_command("git pull origin main")
             .await
             .map_err(|e| anyhow::anyhow!("Failed to pull main: {}", e))?;
@@ -358,7 +332,7 @@ impl Manager {
         Ok(())
     }
 
-    async fn setup_worktree(&self, issue_number: &str) -> Result<()> {
+    async fn setup_worktree(&self, agent: &Agent, issue_number: &str) -> Result<()> {
         println!("🌳 Setting up worktree for issue #{}", issue_number);
 
         // Skip actual worktree operations in test environment
@@ -367,24 +341,22 @@ impl Manager {
             return Ok(());
         }
 
-        let backend = self.terminal_backend.backend();
-
         // Check if worktree already exists
         let worktree_path = format!(".worktree/issue-{}", issue_number);
-        let check_result = backend
+        let check_result = agent
             .execute_command(&format!("test -d {}", worktree_path))
             .await;
 
         if check_result.is_ok() && check_result.unwrap().exit_code == Some(0) {
             println!("ℹ️ Worktree already exists, switching to it");
-            backend
+            agent
                 .set_working_directory(&worktree_path)
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to switch to worktree: {}", e))?;
         } else {
             // Check if branch already exists first
             let branch_name = format!("issue-{}", issue_number);
-            let branch_check = backend
+            let branch_check = agent
                 .execute_command(&format!(
                     "git show-ref --verify --quiet refs/heads/{}",
                     branch_name
@@ -399,7 +371,7 @@ impl Manager {
                 format!("git worktree add {} -b {}", worktree_path, branch_name)
             };
 
-            let result = backend
+            let result = agent
                 .execute_command(&cmd)
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to create worktree: {}", e))?;
@@ -411,7 +383,7 @@ impl Manager {
                 ));
             }
 
-            backend
+            agent
                 .set_working_directory(&worktree_path)
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to switch to worktree: {}", e))?;
@@ -421,7 +393,7 @@ impl Manager {
         Ok(())
     }
 
-    async fn create_draft_pr(&self, issue_number: &str) -> Result<()> {
+    async fn create_draft_pr(&self, agent: &Agent, issue_number: &str) -> Result<()> {
         println!("📝 Creating draft PR for issue #{}", issue_number);
 
         // Skip actual PR operations in test environment
@@ -430,11 +402,9 @@ impl Manager {
             return Ok(());
         }
 
-        let backend = self.terminal_backend.backend();
-
         // Get issue details
         let issue_cmd = format!("gh issue view {}", issue_number);
-        let issue_result = backend
+        let issue_result = agent
             .execute_command(&issue_cmd)
             .await
             .map_err(|e| anyhow::anyhow!("Failed to get issue details: {}", e))?;
@@ -451,7 +421,7 @@ impl Manager {
 
         // Create empty commit
         let commit_cmd = format!("git commit --allow-empty -m \"{}\"", title);
-        let commit_result = backend
+        let commit_result = agent
             .execute_command(&commit_cmd)
             .await
             .map_err(|e| anyhow::anyhow!("Failed to create empty commit: {}", e))?;
@@ -466,7 +436,7 @@ impl Manager {
         // Push branch
         let branch_name = format!("issue-{}", issue_number);
         let push_cmd = format!("git push -u origin {}", branch_name);
-        let push_result = backend
+        let push_result = agent
             .execute_command(&push_cmd)
             .await
             .map_err(|e| anyhow::anyhow!("Failed to push branch: {}", e))?;
@@ -482,7 +452,7 @@ impl Manager {
             title, pr_body
         );
 
-        let pr_result = backend
+        let pr_result = agent
             .execute_command(&pr_cmd)
             .await
             .map_err(|e| anyhow::anyhow!("Failed to create PR: {}", e))?;
@@ -496,20 +466,20 @@ impl Manager {
         Ok(())
     }
 
-    async fn coordinate_implementation(&self, issue_number: &str) -> Result<()> {
+    async fn coordinate_implementation(&self, agent: &Agent, issue_number: &str) -> Result<()> {
         println!("🔧 Coordinating implementation for issue #{}", issue_number);
 
         // This is where the actual implementation logic would be coordinated
         // For now, this is a placeholder that demonstrates the integration point
 
         // Example: Run tests
-        self.run_quality_checks().await?;
+        self.run_quality_checks(agent).await?;
 
         println!("✅ Implementation coordination completed");
         Ok(())
     }
 
-    async fn run_quality_checks(&self) -> Result<()> {
+    async fn run_quality_checks(&self, agent: &Agent) -> Result<()> {
         println!("🧪 Running quality checks");
 
         // Skip actual quality checks in test environment
@@ -518,10 +488,8 @@ impl Manager {
             return Ok(());
         }
 
-        let backend = self.terminal_backend.backend();
-
         // Check if we have Cargo.toml (Rust project)
-        let cargo_check = backend.execute_command("test -f Cargo.toml").await;
+        let cargo_check = agent.execute_command("test -f Cargo.toml").await;
 
         if cargo_check.is_ok() && cargo_check.unwrap().exit_code == Some(0) {
             // Run Rust quality checks
@@ -529,7 +497,7 @@ impl Manager {
 
             for check in checks {
                 println!("Running: {}", check);
-                let result = backend
+                let result = agent
                     .execute_command(check)
                     .await
                     .map_err(|e| anyhow::anyhow!("Failed to run {}: {}", check, e))?;
@@ -546,18 +514,23 @@ impl Manager {
         Ok(())
     }
 
-    pub async fn manage_editor_session(&self, file_path: &str, editor: Option<&str>) -> Result<()> {
-        let backend = self.terminal_backend.backend();
+    pub async fn manage_editor_session(
+        &self,
+        agent_id: &str,
+        file_path: &str,
+        editor: Option<&str>,
+    ) -> Result<()> {
+        let agent = self.get_agent(agent_id).await?;
         let editor_cmd = editor.unwrap_or("vim");
 
         println!("📝 Starting editor session: {} {}", editor_cmd, file_path);
 
         // For HT backend, this would work interactively
         // For direct backend, this would fail as expected
-        match backend.backend_type() {
+        match agent.backend_type() {
             "ht" => {
                 let cmd = format!("{} {}", editor_cmd, file_path);
-                let result = backend
+                let result = agent
                     .execute_command(&cmd)
                     .await
                     .map_err(|e| anyhow::anyhow!("Failed to start editor: {}", e))?;
@@ -567,12 +540,9 @@ impl Manager {
                     result.exit_code
                 );
             }
-            "direct" => {
-                println!("ℹ️ Direct backend cannot handle interactive editor sessions");
-                println!("📁 File path for manual editing: {}", file_path);
-            }
             _ => {
-                return Err(anyhow::anyhow!("Unknown backend type"));
+                println!("ℹ️ Agent cannot handle interactive editor sessions");
+                println!("📁 File path for manual editing: {}", file_path);
             }
         }
 
@@ -584,16 +554,16 @@ impl Manager {
             return Ok(());
         }
 
-        let backend = self.terminal_backend.backend();
+        let agent = self.get_agent(agent_id).await?;
 
         // Get current terminal snapshot
-        let snapshot = backend
+        let snapshot = agent
             .take_snapshot()
             .await
             .map_err(|e| anyhow::anyhow!("Failed to take terminal snapshot: {}", e))?;
 
         // Get current environment variables
-        let env_vars = backend
+        let env_vars = agent
             .get_environment()
             .await
             .map_err(|e| anyhow::anyhow!("Failed to get environment variables: {}", e))?;
@@ -601,8 +571,8 @@ impl Manager {
         // Get current working directory (simplified - in real implementation would be more sophisticated)
         let working_directory = env_vars.get("PWD").unwrap_or(&"/tmp".to_string()).clone();
 
-        let mut session_manager = self.session_manager.lock().await;
-        session_manager
+        let mut sessions = self.sessions.lock().await;
+        sessions
             .save_session_state(
                 agent_id,
                 &working_directory,
@@ -617,19 +587,17 @@ impl Manager {
 
     async fn restore_session_state(
         &self,
-        agent_id: &str,
-        session_state: &crate::session_manager::SessionState,
+        agent: &Agent,
+        session_state: &crate::ruler::session::SessionState,
     ) -> Result<()> {
-        let backend = self.terminal_backend.backend();
-
-        println!("🔄 Restoring session state for agent {}", agent_id);
+        println!("🔄 Restoring session state for agent {}", agent.id());
 
         // Restore working directory
         println!(
             "📁 Restoring working directory: {}",
             session_state.working_directory
         );
-        backend
+        agent
             .set_working_directory(&session_state.working_directory)
             .await
             .map_err(|e| anyhow::anyhow!("Failed to restore working directory: {}", e))?;
@@ -639,8 +607,8 @@ impl Manager {
             if key != "PWD" && key != "HOME" && key != "USER" {
                 // Skip system variables
                 let env_cmd = format!("export {}={}", key, value);
-                backend.send_keys(&env_cmd).await.ok(); // Best effort
-                backend.send_keys("\r").await.ok();
+                agent.send_keys(&env_cmd).await.ok(); // Best effort
+                agent.send_keys("\r").await.ok();
             }
         }
 
@@ -660,42 +628,36 @@ impl Manager {
         Ok(())
     }
 
-    async fn start_fresh_session(&self, agent_id: &str) -> Result<()> {
-        let backend = self.terminal_backend.backend();
-
-        println!("🆕 Starting fresh session for agent {}", agent_id);
+    async fn start_fresh_session(&self, agent: &Agent) -> Result<()> {
+        println!("🆕 Starting fresh session for agent {}", agent.id());
 
         // Clear terminal and show welcome message
-        backend.send_keys("clear").await.ok();
-        backend.send_keys("\r").await.ok();
+        agent.send_keys("clear").await.ok();
+        agent.send_keys("\r").await.ok();
 
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
-        let welcome_msg = format!("echo '🤖 Agent {} session started'", agent_id);
-        backend.send_keys(&welcome_msg).await.ok();
-        backend.send_keys("\r").await.ok();
+        let welcome_msg = format!("echo '🤖 Agent {} session started'", agent.id());
+        agent.send_keys(&welcome_msg).await.ok();
+        agent.send_keys("\r").await.ok();
 
-        println!("✅ Fresh session initialized for agent {}", agent_id);
+        println!("✅ Fresh session initialized for agent {}", agent.id());
         Ok(())
     }
 
     pub async fn cleanup_old_sessions(&self, max_age_hours: u64) -> Result<()> {
-        let mut session_manager = self.session_manager.lock().await;
-        session_manager.cleanup_old_sessions(max_age_hours).await
+        let mut sessions = self.sessions.lock().await;
+        sessions.cleanup_old_sessions(max_age_hours).await
     }
 
-    pub async fn list_sessions(&self) -> Vec<crate::session_manager::SessionState> {
-        let session_manager = self.session_manager.lock().await;
-        session_manager
-            .list_sessions()
-            .into_iter()
-            .cloned()
-            .collect()
+    pub async fn list_sessions(&self) -> Vec<crate::ruler::session::SessionState> {
+        let sessions = self.sessions.lock().await;
+        sessions.list_sessions().into_iter().cloned().collect()
     }
 
     pub async fn remove_session(&self, agent_id: &str) -> Result<bool> {
-        let mut session_manager = self.session_manager.lock().await;
-        session_manager.remove_session(agent_id).await
+        let mut sessions = self.sessions.lock().await;
+        sessions.remove_session(agent_id).await
     }
 
     async fn handle_interrupted_session(
@@ -713,16 +675,16 @@ impl Manager {
             return Ok(());
         }
 
-        let backend = self.terminal_backend.backend();
+        let agent = self.get_agent(agent_id).await?;
 
         // Check if backend is still available
-        if !backend.is_available().await {
-            return Err(anyhow::anyhow!("Terminal backend is no longer available"));
+        if !agent.is_available().await {
+            return Err(anyhow::anyhow!("Agent is no longer available"));
         }
 
         // Try to send Ctrl+C to cancel any hanging processes
         println!("🛑 Sending interrupt signal...");
-        if let Err(e) = backend.send_keys("^C").await {
+        if let Err(e) = agent.send_keys("^C").await {
             eprintln!("Failed to send interrupt: {}", e);
         }
 
@@ -734,7 +696,7 @@ impl Manager {
 
         // Send a few newlines to get to a clean prompt
         for _ in 0..3 {
-            if let Err(e) = backend.send_keys("\r").await {
+            if let Err(e) = agent.send_keys("\r").await {
                 eprintln!("Failed to send newline: {}", e);
             }
             tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
@@ -742,12 +704,12 @@ impl Manager {
 
         // Try to execute a simple command to verify the terminal is responsive
         println!("🧪 Testing terminal responsiveness...");
-        if backend.send_keys("echo 'Terminal recovered'").await.is_ok() {
-            backend.send_keys("\r").await.ok();
+        if agent.send_keys("echo 'Terminal recovered'").await.is_ok() {
+            agent.send_keys("\r").await.ok();
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
             // Take a snapshot to see if we got output
-            if let Ok(snapshot) = backend.take_snapshot().await {
+            if let Ok(snapshot) = agent.take_snapshot().await {
                 if snapshot.content.contains("Terminal recovered") {
                     println!("✅ Terminal session recovered successfully");
 
@@ -764,11 +726,11 @@ impl Manager {
         println!("⚠️ Terminal recovery incomplete - session may need manual intervention");
 
         // Update session state to indicate it needs attention
-        let mut session_manager = self.session_manager.lock().await;
-        if let Some(session) = session_manager.get_session_mut(agent_id) {
+        let mut sessions = self.sessions.lock().await;
+        if let Some(session) = sessions.get_session_mut(agent_id) {
             session.last_command = Some(format!("ERROR: {}", error));
         }
-        drop(session_manager);
+        drop(sessions);
 
         Err(anyhow::anyhow!("Terminal session recovery incomplete"))
     }
@@ -778,43 +740,53 @@ impl Manager {
             return Ok(true);
         }
 
-        let backend = self.terminal_backend.backend();
+        // Check health of all agents
+        for (agent_id, agent) in &self.agents {
+            if !agent.is_available().await {
+                println!("⚠️ Agent {} is not available", agent_id);
+                return Ok(false);
+            }
 
-        if !backend.is_available().await {
-            return Ok(false);
-        }
+            // Try a simple command to test responsiveness
+            match agent.send_keys("echo health_check").await {
+                Ok(()) => {
+                    agent.send_keys("\r").await.ok();
+                    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
-        // Try a simple command to test responsiveness
-        match backend.send_keys("echo health_check").await {
-            Ok(()) => {
-                backend.send_keys("\r").await.ok();
-                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-                // Check if we can take a snapshot
-                match backend.take_snapshot().await {
-                    Ok(_) => Ok(true),
-                    Err(_) => Ok(false),
+                    // Check if we can take a snapshot
+                    match agent.take_snapshot().await {
+                        Ok(_) => continue,
+                        Err(_) => {
+                            println!("⚠️ Agent {} snapshot failed", agent_id);
+                            return Ok(false);
+                        }
+                    }
+                }
+                Err(_) => {
+                    println!("⚠️ Agent {} is not responsive", agent_id);
+                    return Ok(false);
                 }
             }
-            Err(_) => Ok(false),
         }
+
+        Ok(true)
     }
 
     pub async fn force_cleanup_agent(&self, agent_id: &str) -> Result<()> {
         println!("🧹 Force cleaning up agent session: {}", agent_id);
 
         if !self.test_mode {
-            let backend = self.terminal_backend.backend();
+            if let Ok(agent) = self.get_agent(agent_id).await {
+                // Send multiple interrupt signals
+                for _ in 0..3 {
+                    agent.send_keys("^C").await.ok();
+                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                }
 
-            // Send multiple interrupt signals
-            for _ in 0..3 {
-                backend.send_keys("^C").await.ok();
-                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                // Clear the terminal
+                agent.send_keys("clear").await.ok();
+                agent.send_keys("\r").await.ok();
             }
-
-            // Clear the terminal
-            backend.send_keys("clear").await.ok();
-            backend.send_keys("\r").await.ok();
         }
 
         // Remove the session from persistence
@@ -828,33 +800,34 @@ impl Manager {
         println!("🚨 Emergency stop: cleaning up all sessions");
 
         if !self.test_mode {
-            let backend = self.terminal_backend.backend();
+            for (agent_id, agent) in &self.agents {
+                // Send multiple interrupt signals
+                for _ in 0..5 {
+                    agent.send_keys("^C").await.ok();
+                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                }
 
-            // Send multiple interrupt signals
-            for _ in 0..5 {
-                backend.send_keys("^C").await.ok();
-                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                // Try to cleanup the agent
+                agent.cleanup().await.ok();
+                println!("🛑 Stopped agent {}", agent_id);
             }
-
-            // Try to cleanup the backend
-            backend.cleanup().await.ok();
         }
 
         // Clear all sessions
-        let mut session_manager = self.session_manager.lock().await;
-        session_manager.clear_all_sessions();
-        session_manager.save_sessions().await.ok();
+        let mut sessions = self.sessions.lock().await;
+        sessions.clear_all_sessions();
+        sessions.save_sessions().await.ok();
 
         println!("🛑 Emergency stop completed");
         Ok(())
     }
 }
 
-impl std::fmt::Debug for Manager {
+impl std::fmt::Debug for Ruler {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Manager")
+        f.debug_struct("Ruler")
             .field("rule_engine", &self.rule_engine)
-            .field("terminal_backend", &"TerminalBackendManager")
+            .field("agents", &self.agents.keys().collect::<Vec<_>>())
             .field("test_mode", &self.test_mode)
             .finish()
     }

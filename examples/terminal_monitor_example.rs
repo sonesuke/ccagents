@@ -1,159 +1,113 @@
-use rule_agents::ht_process::HtProcessConfig;
-use rule_agents::{AgentState, HtClient, HtProcess, MonitorConfig, TerminalOutputMonitor};
-use std::sync::Arc;
+use rule_agents::{MonitorConfig, TerminalOutputMonitor, TerminalSnapshot};
 use std::time::Duration;
-use tokio::time::{sleep, timeout};
-use tracing::{info, warn};
+use tracing::{error, info};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize logging
+    // Initialize tracing
     tracing_subscriber::fmt::init();
 
-    info!("Starting terminal output monitoring example");
+    info!("Terminal Monitor Example Starting");
 
-    // Create HT process configuration
-    let ht_config = HtProcessConfig {
-        ht_binary_path: "ht".to_string(),
-        shell_command: Some("bash".to_string()),
-        restart_attempts: 3,
-        restart_delay_ms: 1000,
-    };
+    // Demo 1: Create a monitor with default configuration
+    info!("=== Demo 1: Default Monitor ===");
+    let monitor = TerminalOutputMonitor::new("demo-agent".to_string());
+    info!("Created terminal monitor for agent: demo-agent");
+    info!("Initial state: {:?}", monitor.current_state());
 
-    // Create and start HT process
-    let ht_process = HtProcess::new(ht_config);
-    let ht_client = Arc::new(HtClient::new(ht_process));
-
-    info!("Starting HT client...");
-    ht_client.start().await?;
-
-    info!("Note: HT terminal web interface is available at http://localhost:9999");
-
-    // Create terminal output monitor with custom configuration
+    // Demo 2: Create a monitor with custom configuration
+    info!("=== Demo 2: Custom Monitor Configuration ===");
     let monitor_config = MonitorConfig {
-        change_detection_interval: Duration::from_millis(250), // Check every 250ms
-        wait_timeout: Duration::from_secs(1),                  // Wait state after 1s
-        stuck_timeout: Duration::from_secs(15),                // Stuck after 15s
+        change_detection_interval: Duration::from_millis(100),
+        output_stable_duration: Duration::from_secs(1),
         prompt_patterns: vec![
-            r".*@.*:\S*\$ $".to_string(), // bash: user@host:/path$
-            r".*# $".to_string(),         // root: #
-            r"\$ $".to_string(),          // simple: $
+            r"\$\s*$".to_string(), // Bash prompt
+            r">\s*$".to_string(),  // CMD prompt
+            r"#\s*$".to_string(),  // Root prompt
         ],
-        snapshot_history_size: 5,
+        max_snapshot_history: 5,
     };
 
-    info!("Creating terminal output monitor...");
-    let mut monitor = TerminalOutputMonitor::with_config(ht_client.clone(), monitor_config).await?;
+    let mut custom_monitor =
+        TerminalOutputMonitor::with_config("custom-agent".to_string(), monitor_config);
+    info!("Created custom monitor for agent: custom-agent");
 
-    // Start monitoring and get state transition receiver
-    let mut state_receiver = monitor.start_monitoring();
+    // Demo 3: Start monitoring and simulate terminal snapshots
+    info!("=== Demo 3: Monitor State Transitions ===");
+    let mut state_rx = custom_monitor.start_monitoring();
 
-    // Spawn monitoring task
-    let ht_client_clone = ht_client.clone();
-    let monitor_task = tokio::spawn(async move {
-        if let Err(e) = monitor.run_monitoring_loop().await {
-            warn!("Monitor loop error: {}", e);
+    // Simulate different terminal states
+    let test_snapshots = vec![
+        // Idle state - showing bash prompt
+        TerminalSnapshot {
+            content: "user@host:~/project$ ".to_string(),
+            cursor_position: Some((19, 0)),
+            width: 80,
+            height: 24,
+        },
+        // Active state - command running with output
+        TerminalSnapshot {
+            content: "user@host:~/project$ ls -la\ndrwxr-xr-x  5 user user 4096 Jan 15 10:30 .\ndrwxr-xr-x 10 user user 4096 Jan 15 10:25 ..\n".to_string(),
+            cursor_position: Some((0, 3)),
+            width: 80,
+            height: 24,
+        },
+        // Wait state - command running but no new output
+        TerminalSnapshot {
+            content: "user@host:~/project$ sleep 10\n".to_string(),
+            cursor_position: Some((0, 1)),
+            width: 80,
+            height: 24,
+        },
+        // Back to idle - command completed
+        TerminalSnapshot {
+            content: "user@host:~/project$ sleep 10\nuser@host:~/project$ ".to_string(),
+            cursor_position: Some((19, 1)),
+            width: 80,
+            height: 24,
+        },
+    ];
+
+    // Process snapshots and monitor state transitions
+    for (i, snapshot) in test_snapshots.iter().enumerate() {
+        info!("Processing snapshot {}", i + 1);
+
+        if let Err(e) = custom_monitor.process_snapshot(snapshot.clone()).await {
+            error!("Failed to process snapshot: {}", e);
         }
-    });
 
-    // Task to demonstrate various terminal commands
-    let demo_task = tokio::spawn(async move {
-        sleep(Duration::from_secs(2)).await;
-
-        info!("Sending command: echo 'Hello, World!'");
-        let _ = ht_client_clone.send_keys("echo 'Hello, World!'\r").await;
-
-        sleep(Duration::from_secs(3)).await;
-
-        info!("Sending long-running command: sleep 5");
-        let _ = ht_client_clone.send_keys("sleep 5\r").await;
-
-        sleep(Duration::from_secs(7)).await;
-
-        info!("Sending command that generates continuous output: for i in {{1..10}}; do echo \"Line $i\"; sleep 0.5; done");
-        let _ = ht_client_clone
-            .send_keys("for i in {1..10}; do echo \"Line $i\"; sleep 0.5; done\r")
-            .await;
-
-        sleep(Duration::from_secs(8)).await;
-
-        info!("Demo completed");
-    });
-
-    // Task to handle state transitions
-    let state_handler_task = tokio::spawn(async move {
-        let mut transition_count = 0;
-
-        while let Some(transition) = state_receiver.recv().await {
-            transition_count += 1;
-
-            info!(
-                "State Transition #{}: {} -> {} (at {:?})",
-                transition_count,
-                format_state(&transition.from),
-                format_state(&transition.to),
-                transition.timestamp
-            );
-
-            // Show some context from the terminal snapshot
-            let lines: Vec<&str> = transition.snapshot.content.lines().collect();
-            if let Some(last_line) = lines.last() {
-                info!("Terminal context: '{}'", last_line);
+        // Check for state transitions
+        match state_rx.try_recv() {
+            Ok(transition) => {
+                info!(
+                    "State transition detected: {:?} -> {:?} at {:?}",
+                    transition.from, transition.to, transition.timestamp
+                );
             }
-
-            // Example: React to specific state transitions
-            match (&transition.from, &transition.to) {
-                (AgentState::Active, AgentState::Wait) => {
-                    info!("Command execution appears to be waiting for input or stuck");
-                }
-                (AgentState::Wait, AgentState::Active) => {
-                    info!("Command execution resumed");
-                }
-                (AgentState::Active, AgentState::Idle) => {
-                    info!("Command completed, back to shell prompt");
-                }
-                (AgentState::Idle, AgentState::Active) => {
-                    info!("New command started");
-                }
-                _ => {}
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
+                info!("No state change");
             }
-
-            // Stop after reasonable number of transitions for demo
-            if transition_count >= 20 {
-                info!("Received {} transitions, stopping demo", transition_count);
-                break;
+            Err(e) => {
+                error!("Error receiving state transition: {}", e);
             }
         }
-    });
 
-    // Wait for demo to complete or timeout
-    let result = timeout(Duration::from_secs(30), demo_task).await;
+        info!("Current state: {:?}", custom_monitor.current_state());
 
-    match result {
-        Ok(Ok(())) => info!("Demo completed successfully"),
-        Ok(Err(e)) => warn!("Demo task error: {}", e),
-        Err(_) => warn!("Demo timed out"),
+        // Small delay between snapshots
+        tokio::time::sleep(Duration::from_millis(200)).await;
     }
 
-    // Give some time for final state transitions
-    sleep(Duration::from_secs(2)).await;
+    // Demo 4: Monitor statistics
+    info!("=== Demo 4: Monitor Statistics ===");
+    let stats = custom_monitor.get_statistics();
+    info!("Monitor statistics: {:?}", stats);
 
-    // Stop monitoring
-    monitor_task.abort();
-    state_handler_task.abort();
+    // Demo 5: Stop monitoring
+    info!("=== Demo 5: Stop Monitoring ===");
+    custom_monitor.stop_monitoring();
+    info!("Monitoring stopped");
 
-    // Shutdown HT client
-    info!("Shutting down HT client...");
-    ht_client.stop().await?;
-
-    info!("Terminal output monitoring example completed");
+    info!("Terminal Monitor Example Complete");
     Ok(())
-}
-
-fn format_state(state: &AgentState) -> &'static str {
-    match state {
-        AgentState::Idle => "Idle",
-        AgentState::Wait => "Wait",
-        AgentState::Active => "Active",
-    }
 }

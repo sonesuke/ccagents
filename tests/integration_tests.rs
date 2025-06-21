@@ -1,10 +1,10 @@
 use anyhow::Result;
 use regex::Regex;
-use rule_agents::ht_process::{HtProcessConfig, HtProcessError};
-use rule_agents::rule_engine::{
+use rule_agents::agent::ht_process::{HtProcessConfig, HtProcessError};
+use rule_agents::ruler::rule_engine::{
     decide_cmd, load_rules, ActionType, CmdKind, CompiledRule, RuleEngine,
 };
-use rule_agents::{HtProcess, Manager};
+use rule_agents::{HtProcess, Ruler};
 use std::io::Write;
 use std::path::Path;
 use tempfile::NamedTempFile;
@@ -328,22 +328,23 @@ rules:
     Ok(())
 }
 
-// Manager integration tests
+// Ruler integration tests
 #[tokio::test]
-async fn test_manager_integration() -> Result<()> {
+async fn test_ruler_integration() -> Result<()> {
     std::env::set_var("CARGO_TEST", "1");
-    let manager = Manager::new("examples/basic-rules.yaml").await?;
+    let mut ruler = Ruler::new("examples/basic-rules.yaml").await?;
+    ruler.create_agent("test-agent").await?;
 
     // Test agent waiting scenarios
-    assert!(manager
+    assert!(ruler
         .handle_waiting_state("test-agent", "issue 123")
         .await
         .is_ok());
-    assert!(manager
+    assert!(ruler
         .handle_waiting_state("test-agent", "resume")
         .await
         .is_ok());
-    assert!(manager
+    assert!(ruler
         .handle_waiting_state("test-agent", "unknown")
         .await
         .is_ok());
@@ -352,8 +353,8 @@ async fn test_manager_integration() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_manager_with_invalid_rules_file() {
-    let result = Manager::new("nonexistent.yaml").await;
+async fn test_ruler_with_invalid_rules_file() {
+    let result = Ruler::new("nonexistent.yaml").await;
     assert!(result.is_err());
     assert!(result
         .unwrap_err()
@@ -362,9 +363,9 @@ async fn test_manager_with_invalid_rules_file() {
 }
 
 #[tokio::test]
-async fn test_manager_handles_multiple_scenarios() -> Result<()> {
+async fn test_ruler_handles_multiple_scenarios() -> Result<()> {
     std::env::set_var("CARGO_TEST", "1");
-    let manager = Manager::new("examples/basic-rules.yaml").await?;
+    let mut ruler = Ruler::new("examples/basic-rules.yaml").await?;
 
     let scenarios = vec![
         ("agent-001", "issue 456 detected in process"),
@@ -374,18 +375,19 @@ async fn test_manager_handles_multiple_scenarios() -> Result<()> {
         ("agent-005", "unknown error occurred"),
     ];
 
+    for (agent_id, _capture) in &scenarios {
+        ruler.create_agent(agent_id).await?;
+    }
+
     for (agent_id, capture) in scenarios {
-        assert!(manager
-            .handle_waiting_state(agent_id, capture)
-            .await
-            .is_ok());
+        assert!(ruler.handle_waiting_state(agent_id, capture).await.is_ok());
     }
 
     Ok(())
 }
 
 #[tokio::test]
-async fn test_manager_with_custom_rules() -> Result<()> {
+async fn test_ruler_with_custom_rules() -> Result<()> {
     std::env::set_var("CARGO_TEST", "1");
     let yaml_content = r#"
 rules:
@@ -402,18 +404,19 @@ rules:
     let mut temp_file = NamedTempFile::new()?;
     write!(temp_file, "{}", yaml_content)?;
 
-    let manager = Manager::new(temp_file.path().to_str().unwrap()).await?;
+    let mut ruler = Ruler::new(temp_file.path().to_str().unwrap()).await?;
+    ruler.create_agent("test-agent").await?;
 
     // Test that custom rules work correctly
-    assert!(manager
+    assert!(ruler
         .handle_waiting_state("test-agent", "test-pattern")
         .await
         .is_ok());
-    assert!(manager
+    assert!(ruler
         .handle_waiting_state("test-agent", "resume-test")
         .await
         .is_ok());
-    assert!(manager
+    assert!(ruler
         .handle_waiting_state("test-agent", "no-match")
         .await
         .is_ok());
@@ -422,7 +425,7 @@ rules:
 }
 
 #[tokio::test]
-async fn test_manager_with_hot_reload() -> Result<()> {
+async fn test_ruler_with_hot_reload() -> Result<()> {
     std::env::set_var("CARGO_TEST", "1");
     use std::fs;
 
@@ -437,10 +440,11 @@ rules:
     let mut temp_file = NamedTempFile::new()?;
     write!(temp_file, "{}", yaml_content)?;
 
-    let manager = Manager::new(temp_file.path().to_str().unwrap()).await?;
+    let mut ruler = Ruler::new(temp_file.path().to_str().unwrap()).await?;
+    ruler.create_agent("test-agent").await?;
 
     // Initially should match the test pattern
-    assert!(manager
+    assert!(ruler
         .handle_waiting_state("test-agent", "test-hot-reload")
         .await
         .is_ok());
@@ -463,7 +467,7 @@ rules:
     tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
 
     // Test that rules have been updated
-    assert!(manager
+    assert!(ruler
         .handle_waiting_state("test-agent", "updated-hot-reload")
         .await
         .is_ok());
@@ -474,23 +478,19 @@ rules:
 #[tokio::test]
 async fn test_concurrent_agents() -> Result<()> {
     std::env::set_var("CARGO_TEST", "1");
-    let manager = Manager::new("examples/basic-rules.yaml").await?;
+    let mut ruler = Ruler::new("examples/basic-rules.yaml").await?;
 
-    // Simulate multiple agents hitting waiting state simultaneously
-    let handles: std::vec::Vec<_> = (0..10)
-        .map(|i| {
-            let manager = manager.clone();
-            tokio::spawn(async move {
-                manager
-                    .handle_waiting_state(&format!("agent-{}", i), "issue 123")
-                    .await
-            })
-        })
-        .collect();
+    // Create agents first
+    for i in 0..10 {
+        ruler.create_agent(&format!("agent-{}", i)).await?;
+    }
 
-    // All should complete successfully
-    for handle in handles {
-        assert!(handle.await.unwrap().is_ok());
+    // Test sequential handling (since Ruler is no longer Clone)
+    for i in 0..10 {
+        assert!(ruler
+            .handle_waiting_state(&format!("agent-{}", i), "issue 123")
+            .await
+            .is_ok());
     }
 
     Ok(())
