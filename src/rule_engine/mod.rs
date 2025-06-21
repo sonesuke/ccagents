@@ -1,7 +1,9 @@
 pub mod compiled_rule;
+pub mod decision;
 pub mod rule_file;
 
 pub use compiled_rule::CompiledRule;
+pub use decision::decide_cmd;
 pub use rule_file::{load_rules, CmdKind, RuleFile};
 
 use anyhow::Result;
