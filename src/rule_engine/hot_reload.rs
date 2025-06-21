@@ -24,9 +24,12 @@ impl RuleEngine {
             if res.is_ok() {
                 let rules_ref = rules_clone.clone();
                 let path_ref = path_clone.clone();
-                tokio::spawn(async move {
-                    reload_rules(rules_ref, path_ref).await;
-                });
+                // Handle the case where tokio runtime might not be available
+                if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                    handle.spawn(async move {
+                        reload_rules(rules_ref, path_ref).await;
+                    });
+                }
             }
         })?;
 
