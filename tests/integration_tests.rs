@@ -1,6 +1,7 @@
 use anyhow::Result;
 use regex::Regex;
 use rule_agents::rule_engine::{decide_cmd, load_rules, CmdKind, CompiledRule, RuleEngine};
+use rule_agents::Manager;
 use std::io::Write;
 use std::path::Path;
 use tempfile::NamedTempFile;
@@ -311,5 +312,168 @@ rules:
     // Rules should remain unchanged
     let current_rules = engine.get_rules().await;
     assert_eq!(current_rules.len(), original_rules.len());
+    Ok(())
+}
+
+// Manager integration tests
+#[tokio::test]
+async fn test_manager_integration() -> Result<()> {
+    let manager = Manager::new("examples/basic-rules.yaml").await?;
+
+    // Test agent waiting scenarios
+    assert!(manager
+        .handle_waiting_state("test-agent", "issue 123")
+        .await
+        .is_ok());
+    assert!(manager
+        .handle_waiting_state("test-agent", "cancel")
+        .await
+        .is_ok());
+    assert!(manager
+        .handle_waiting_state("test-agent", "unknown")
+        .await
+        .is_ok());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_manager_with_invalid_rules_file() {
+    let result = Manager::new("nonexistent.yaml").await;
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Failed to read rules file"));
+}
+
+#[tokio::test]
+async fn test_manager_handles_multiple_scenarios() -> Result<()> {
+    let manager = Manager::new("examples/basic-rules.yaml").await?;
+
+    let scenarios = vec![
+        ("agent-001", "issue 456 detected in process"),
+        ("agent-002", "network connection failed"),
+        ("agent-003", "cancel current operation"),
+        ("agent-004", "resume normal operation"),
+        ("agent-005", "unknown error occurred"),
+    ];
+
+    for (agent_id, capture) in scenarios {
+        assert!(manager
+            .handle_waiting_state(agent_id, capture)
+            .await
+            .is_ok());
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_manager_with_custom_rules() -> Result<()> {
+    let yaml_content = r#"
+rules:
+  - priority: 10
+    pattern: "test-pattern"
+    command: "solve-issue"
+    args: ["test-arg"]
+  - priority: 20
+    pattern: "cancel-test"
+    command: "cancel"
+    args: []
+"#;
+
+    let mut temp_file = NamedTempFile::new()?;
+    write!(temp_file, "{}", yaml_content)?;
+
+    let manager = Manager::new(temp_file.path().to_str().unwrap()).await?;
+
+    // Test that custom rules work correctly
+    assert!(manager
+        .handle_waiting_state("test-agent", "test-pattern")
+        .await
+        .is_ok());
+    assert!(manager
+        .handle_waiting_state("test-agent", "cancel-test")
+        .await
+        .is_ok());
+    assert!(manager
+        .handle_waiting_state("test-agent", "no-match")
+        .await
+        .is_ok());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_manager_with_hot_reload() -> Result<()> {
+    use std::fs;
+
+    let yaml_content = r#"
+rules:
+  - priority: 10
+    pattern: "test-hot-reload"
+    command: "solve-issue"
+    args: []
+"#;
+
+    let mut temp_file = NamedTempFile::new()?;
+    write!(temp_file, "{}", yaml_content)?;
+
+    let manager = Manager::new(temp_file.path().to_str().unwrap()).await?;
+
+    // Initially should match the test pattern
+    assert!(manager
+        .handle_waiting_state("test-agent", "test-hot-reload")
+        .await
+        .is_ok());
+
+    // Give the file watcher time to set up
+    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
+    // Update the rules file
+    let new_yaml_content = r#"
+rules:
+  - priority: 10
+    pattern: "updated-hot-reload"
+    command: "cancel"
+    args: []
+"#;
+
+    fs::write(temp_file.path(), new_yaml_content)?;
+
+    // Give hot-reload time to process the change
+    tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+
+    // Test that rules have been updated
+    assert!(manager
+        .handle_waiting_state("test-agent", "updated-hot-reload")
+        .await
+        .is_ok());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_concurrent_agents() -> Result<()> {
+    let manager = Manager::new("examples/basic-rules.yaml").await?;
+
+    // Simulate multiple agents hitting waiting state simultaneously
+    let handles: std::vec::Vec<_> = (0..10)
+        .map(|i| {
+            let manager = manager.clone();
+            tokio::spawn(async move {
+                manager
+                    .handle_waiting_state(&format!("agent-{}", i), "issue 123")
+                    .await
+            })
+        })
+        .collect();
+
+    // All should complete successfully
+    for handle in handles {
+        assert!(handle.await.unwrap().is_ok());
+    }
+
     Ok(())
 }

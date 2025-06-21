@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
 use rule_agents::rule_engine::{decide_cmd, load_rules, RuleEngine};
+use rule_agents::Manager;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -26,6 +27,8 @@ enum Commands {
     Test(TestArgs),
     /// Run daemon with hot-reload capability
     Daemon(DaemonArgs),
+    /// Run manager simulation with agent scenarios
+    Manager(ManagerArgs),
 }
 
 #[derive(Args, Debug)]
@@ -48,11 +51,18 @@ struct TestArgs {
 #[derive(Args, Debug)]
 struct DaemonArgs {
     /// Path to rules YAML file
-    #[arg(short, long)]
-    rules: String,
+    #[arg(short, long, default_value = "examples/basic-rules.yaml")]
+    rules: PathBuf,
     /// Interval between simulated captures (seconds)
     #[arg(short, long, default_value = "5")]
     interval: u64,
+}
+
+#[derive(Args, Debug)]
+struct ManagerArgs {
+    /// Path to rules YAML file
+    #[arg(short, long, default_value = "examples/basic-rules.yaml")]
+    rules: PathBuf,
 }
 
 #[tokio::main]
@@ -143,12 +153,12 @@ async fn main() -> Result<()> {
                 }
             }
             Commands::Daemon(args) => {
-                let engine = RuleEngine::new(&args.rules)
+                let engine = RuleEngine::new(args.rules.to_str().unwrap())
                     .await
                     .context("Failed to create rule engine")?;
 
                 println!("🚀 RuleAgents daemon started");
-                println!("📂 Watching rules file: {}", args.rules);
+                println!("📂 Watching rules file: {}", args.rules.display());
                 println!("⏱️  Simulation interval: {}s", args.interval);
                 println!("📝 Edit the rules file to see hot-reload in action");
                 println!("🛑 Press Ctrl+C to stop");
@@ -175,6 +185,32 @@ async fn main() -> Result<()> {
                         counter, capture, command, cmd_args
                     );
                 }
+            }
+            Commands::Manager(args) => {
+                let manager = Manager::new(args.rules.to_str().unwrap()).await?;
+
+                println!("🎯 RuleAgents Manager started");
+                println!("📂 Rules file: {}", args.rules.display());
+                println!("🤖 Simulating agent waiting scenarios...");
+
+                // Simulate different agent waiting scenarios
+                let scenarios = vec![
+                    ("agent-001", "issue 456 detected in process"),
+                    ("agent-002", "network connection failed"),
+                    ("agent-003", "cancel current operation"),
+                    ("agent-004", "resume normal operation"),
+                    ("agent-005", "unknown error occurred"),
+                ];
+
+                for (agent_id, capture) in scenarios {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
+                    if let Err(e) = manager.handle_waiting_state(agent_id, capture).await {
+                        eprintln!("❌ Error handling agent {}: {}", agent_id, e);
+                    }
+                }
+
+                println!("✅ Manager simulation complete");
             }
         },
     }

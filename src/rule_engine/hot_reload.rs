@@ -10,6 +10,15 @@ pub struct RuleEngine {
     _watcher: RecommendedWatcher,
 }
 
+impl std::fmt::Debug for RuleEngine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RuleEngine")
+            .field("rules", &"<rules>")
+            .field("_watcher", &"<watcher>")
+            .finish()
+    }
+}
+
 impl RuleEngine {
     pub async fn new(rules_path: &str) -> Result<Self> {
         // Load initial rules using existing function from #3
