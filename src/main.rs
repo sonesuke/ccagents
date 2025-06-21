@@ -3,7 +3,6 @@ use clap::{Args, Parser, Subcommand};
 use rule_agents::ruler::rule_engine::{decide_cmd, load_rules, RuleEngine};
 use rule_agents::Ruler;
 use std::path::PathBuf;
-use std::sync::Arc;
 use tokio::signal;
 
 #[derive(Parser, Debug)]
@@ -67,15 +66,12 @@ struct ManagerArgs {
     rules: PathBuf,
 }
 
-async fn setup_signal_handler(ruler: Arc<Ruler>) {
+async fn setup_signal_handler() {
     let sigint = signal::ctrl_c();
 
     tokio::spawn(async move {
         if let Ok(()) = sigint.await {
-            println!("\nReceived Ctrl+C, initiating emergency stop...");
-            if let Err(e) = ruler.emergency_stop_all().await {
-                eprintln!("Emergency stop failed: {}", e);
-            }
+            println!("\nReceived Ctrl+C, shutting down...");
             std::process::exit(0);
         }
     });
@@ -201,15 +197,13 @@ async fn main() -> Result<()> {
                 ruler.create_agent("agent-003").await?;
                 ruler.create_agent("agent-004").await?;
 
-                let ruler_arc = Arc::new(ruler);
-
-                // Set up Ctrl+C signal handler for emergency stop
-                setup_signal_handler(ruler_arc.clone()).await;
+                // Set up Ctrl+C signal handler
+                setup_signal_handler().await;
 
                 println!("🎯 RuleAgents Ruler started");
                 println!("📂 Rules file: {}", args.rules.display());
                 println!("🤖 Simulating agent waiting scenarios...");
-                println!("🛑 Press Ctrl+C for emergency stop");
+                println!("🛑 Press Ctrl+C to stop");
 
                 // Simulate different agent waiting scenarios
                 let scenarios = vec![
@@ -222,7 +216,7 @@ async fn main() -> Result<()> {
                 for (agent_id, capture) in scenarios {
                     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
-                    if let Err(e) = ruler_arc.handle_waiting_state(agent_id, capture).await {
+                    if let Err(e) = ruler.handle_waiting_state(agent_id, capture).await {
                         eprintln!("❌ Error handling agent {}: {}", agent_id, e);
                     }
                 }

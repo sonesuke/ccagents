@@ -1,3 +1,6 @@
+pub mod rule_engine;
+pub mod session;
+
 use crate::agent::Agent;
 use crate::ruler::rule_engine::{decide_action, ActionType, CmdKind, RuleEngine};
 use crate::ruler::session::SessionStore;
@@ -8,7 +11,6 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::Duration;
 
-#[derive(Clone)]
 pub struct Ruler {
     rule_engine: Arc<RuleEngine>,
     agents: HashMap<String, Agent>,
@@ -78,7 +80,7 @@ impl Ruler {
     }
 
     pub async fn handle_waiting_state(&self, agent_id: &str, capture: &str) -> Result<()> {
-        let agent = self.get_agent(agent_id).await?;
+        self.get_agent(agent_id).await?; // Ensure agent exists
         let rules = self.rule_engine.get_rules().await;
         let action = decide_action(capture, &rules);
 

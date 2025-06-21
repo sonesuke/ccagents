@@ -1,4 +1,4 @@
-use crate::rule_engine::{load_rules, CompiledRule};
+use crate::ruler::rule_engine::{load_rules, CompiledRule};
 use anyhow::Result;
 use notify::{RecommendedWatcher, RecursiveMode, Result as NotifyResult, Watcher};
 use std::path::Path;

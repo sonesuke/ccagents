@@ -1,4 +1,4 @@
-use crate::rule_engine::{resolve_capture_groups_in_vec, ActionType, CmdKind, CompiledRule};
+use crate::ruler::rule_engine::{resolve_capture_groups_in_vec, ActionType, CmdKind, CompiledRule};
 
 /// Matches capture text against compiled rules and returns the appropriate action.
 ///
