@@ -32,7 +32,9 @@ Resume work on the current pull request by checking its status and providing upd
 4. **Final Verification**
    - Ensure all checks pass
    - Verify PR is ready for review/merge
-   - Update PR description if needed
+   - Update PR title and description to reflect actual implementation
+   - Ensure PR body includes comprehensive feature summary
+   - Check that usage examples and test results are current
    - Display "MISSION COMPLETE!" when everything is perfect
 
 ## Example Output
@@ -44,6 +46,7 @@ The command will show:
 - Any failing tests with details
 - Merge conflict detection and resolution
 - Rebase progress if needed
+- PR description update recommendations
 - Suggested actions to resolve issues
 - Progress updates as fixes are applied
 - **"MISSION COMPLETE!"** when all tasks are successfully finished
@@ -63,6 +66,7 @@ The command will show:
 - **Addressing feedback**: Handle reviewer comments and suggestions
 - **Fixing CI failures**: Resolve failing tests or build issues
 - **Resolving conflicts**: Rebase against updated main branch
-- **Final review prep**: Ensure PR is ready for merge
+- **Updating documentation**: Refresh PR description with latest implementation details
+- **Final review prep**: Ensure PR is ready for merge with comprehensive documentation
 
 This command is particularly useful when returning to work on a PR after some time, or when addressing reviewer feedback and potential conflicts with the main branch.
