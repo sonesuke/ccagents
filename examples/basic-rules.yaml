@@ -3,10 +3,6 @@ rules:
     pattern: "issue\\s+(\\d+)"
     command: "entry"
     args: []
-  - priority: 20
-    pattern: "cancel"
-    command: "cancel"
-    args: []
   - priority: 30
     pattern: "resume"
     command: "resume"

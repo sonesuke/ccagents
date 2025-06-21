@@ -30,7 +30,6 @@ pub struct CompiledRule {
 #[derive(Debug, Clone, PartialEq)]
 pub enum CmdKind {
     Entry,
-    Cancel,
     Resume,
 }
 
@@ -61,7 +60,6 @@ fn compile_rule(rule: &Rule) -> Result<CompiledRule> {
 
     let command = match rule.command.as_str() {
         "entry" => CmdKind::Entry,
-        "cancel" => CmdKind::Cancel,
         "resume" => CmdKind::Resume,
         _ => anyhow::bail!("Unknown command: {}", rule.command),
     };
