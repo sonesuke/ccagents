@@ -2,7 +2,7 @@ pub mod compiled_rule;
 pub mod rule_file;
 
 pub use compiled_rule::CompiledRule;
-pub use rule_file::RuleFile;
+pub use rule_file::{load_rules, CmdKind, RuleFile};
 
 use anyhow::Result;
 
