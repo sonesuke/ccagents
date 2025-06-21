@@ -18,13 +18,9 @@ struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
 
-    /// Path to rules YAML file (used when no subcommand is provided)
+    /// Path to rules YAML file
     #[arg(short, long, global = true)]
     rules: Option<PathBuf>,
-
-    /// Interval between simulated captures in seconds (used when no subcommand is provided)
-    #[arg(short, long, default_value = "5", global = true)]
-    interval: u64,
 }
 
 #[derive(Subcommand, Debug)]
@@ -33,10 +29,6 @@ enum Commands {
     Show(ShowArgs),
     /// Test rule matching against capture text
     Test(TestArgs),
-    /// Run daemon with hot-reload capability
-    Daemon(DaemonArgs),
-    /// Run manager simulation with agent scenarios
-    Manager(ManagerArgs),
 }
 
 #[derive(Args, Debug)]
@@ -56,22 +48,6 @@ struct TestArgs {
     capture: String,
 }
 
-#[derive(Args, Debug)]
-struct DaemonArgs {
-    /// Path to rules YAML file
-    #[arg(short, long, default_value = "examples/basic-rules.yaml")]
-    rules: PathBuf,
-    /// Interval between simulated captures (seconds)
-    #[arg(short, long, default_value = "5")]
-    interval: u64,
-}
-
-#[derive(Args, Debug)]
-struct ManagerArgs {
-    /// Path to rules YAML file
-    #[arg(short, long, default_value = "examples/basic-rules.yaml")]
-    rules: PathBuf,
-}
 
 async fn setup_signal_handler() {
     let sigint = signal::ctrl_c();
@@ -94,37 +70,47 @@ async fn main() -> Result<()> {
 
     match cli.command {
         None => {
-            // Default to daemon mode
+            // When no subcommand is provided, run manager mode (default)
             let rules_path = cli
                 .rules
                 .unwrap_or_else(|| PathBuf::from("examples/basic-rules.yaml"));
-            let engine = HotReloader::new(rules_path.to_str().unwrap())
-                .await
-                .context("Failed to create hot reloader")?;
+            
+            let mut ruler = Ruler::new(rules_path.to_str().unwrap()).await?;
+            let workflow = Workflow::new(false, Some(rules_path.to_str().unwrap())).await?;
 
-            println!("🚀 RuleAgents daemon started (default mode)");
-            println!("📂 Watching rules file: {}", rules_path.display());
-            println!("⏱️  Simulation interval: {}s", cli.interval);
-            println!("📝 Edit the rules file to see hot-reload in action");
+            // Create agents for simulation
+            ruler.create_agent("agent-001").await?;
+            ruler.create_agent("agent-002").await?;
+            ruler.create_agent("agent-003").await?;
+            ruler.create_agent("agent-004").await?;
+
+            // Set up Ctrl+C signal handler
+            setup_signal_handler().await;
+
+            println!("🎯 RuleAgents started");
+            println!("📂 Rules file: {}", rules_path.display());
+            println!("🤖 Simulating agent waiting scenarios...");
             println!("🛑 Press Ctrl+C to stop");
 
-            let mut counter = 0;
-            loop {
-                tokio::time::sleep(tokio::time::Duration::from_secs(cli.interval)).await;
+            // Simulate different agent waiting scenarios
+            let scenarios = vec![
+                ("agent-001", "issue 456 detected in process"),
+                ("agent-002", "network connection failed"),
+                ("agent-003", "resume normal operation"),
+                ("agent-004", "unknown error occurred"),
+            ];
 
-                // Simulate different capture scenarios
-                let test_captures = ["issue 123", "resume task", "unknown scenario"];
+            for (agent_id, capture) in scenarios {
+                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
-                let capture = test_captures[counter % test_captures.len()];
-                let rules = engine.get_rules().await;
-                let action = decide_action(capture, &rules);
-
-                counter += 1;
-                println!(
-                    "[{}] Capture: \"{}\" → {:?}",
-                    counter, capture, action
-                );
+                let agent = ruler.get_agent(agent_id).await?;
+                let action = ruler.decide_action_for_capture(capture).await;
+                if let Err(e) = workflow.handle_waiting_state(agent, capture, action).await {
+                    eprintln!("❌ Error handling agent {}: {}", agent_id, e);
+                }
             }
+
+            println!("✅ Simulation complete");
         }
         Some(command) => match command {
             Commands::Show(args) => {
@@ -165,73 +151,6 @@ async fn main() -> Result<()> {
                         break;
                     }
                 }
-            }
-            Commands::Daemon(args) => {
-                let engine = HotReloader::new(args.rules.to_str().unwrap())
-                    .await
-                    .context("Failed to create hot reloader")?;
-
-                println!("🚀 RuleAgents daemon started");
-                println!("📂 Watching rules file: {}", args.rules.display());
-                println!("⏱️  Simulation interval: {}s", args.interval);
-                println!("📝 Edit the rules file to see hot-reload in action");
-                println!("🛑 Press Ctrl+C to stop");
-
-                let mut counter = 0;
-                loop {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(args.interval)).await;
-
-                    // Simulate different capture scenarios
-                    let test_captures = ["issue 123", "resume task", "unknown scenario"];
-
-                    let capture = test_captures[counter % test_captures.len()];
-                    let rules = engine.get_rules().await;
-                    let action = decide_action(capture, &rules);
-
-                    counter += 1;
-                    println!(
-                        "[{}] Capture: \"{}\" → {:?}",
-                        counter, capture, action
-                    );
-                }
-            }
-            Commands::Manager(args) => {
-                let mut ruler = Ruler::new(args.rules.to_str().unwrap()).await?;
-                let workflow = Workflow::new(false, Some(args.rules.to_str().unwrap())).await?;
-
-                // Create agents for simulation
-                ruler.create_agent("agent-001").await?;
-                ruler.create_agent("agent-002").await?;
-                ruler.create_agent("agent-003").await?;
-                ruler.create_agent("agent-004").await?;
-
-                // Set up Ctrl+C signal handler
-                setup_signal_handler().await;
-
-                println!("🎯 RuleAgents Ruler started");
-                println!("📂 Rules file: {}", args.rules.display());
-                println!("🤖 Simulating agent waiting scenarios...");
-                println!("🛑 Press Ctrl+C to stop");
-
-                // Simulate different agent waiting scenarios
-                let scenarios = vec![
-                    ("agent-001", "issue 456 detected in process"),
-                    ("agent-002", "network connection failed"),
-                    ("agent-003", "resume normal operation"),
-                    ("agent-004", "unknown error occurred"),
-                ];
-
-                for (agent_id, capture) in scenarios {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-
-                    let agent = ruler.get_agent(agent_id).await?;
-                    let action = ruler.decide_action_for_capture(capture).await;
-                    if let Err(e) = workflow.handle_waiting_state(agent, capture, action).await {
-                        eprintln!("❌ Error handling agent {}: {}", agent_id, e);
-                    }
-                }
-
-                println!("✅ Ruler simulation complete");
             }
         },
     }

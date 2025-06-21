@@ -51,11 +51,7 @@ mod tests {
     use super::*;
     use regex::Regex;
 
-    fn create_test_rule(
-        priority: u32,
-        pattern: &str,
-        keys: Vec<String>,
-    ) -> CompiledRule {
+    fn create_test_rule(priority: u32, pattern: &str, keys: Vec<String>) -> CompiledRule {
         CompiledRule {
             priority,
             regex: Regex::new(pattern).unwrap(),
@@ -79,12 +75,19 @@ mod tests {
     #[test]
     fn test_decide_action_exact_match() {
         let rules = vec![
-            create_test_rule(10, r"issue\s+(\d+)", vec!["open_issue".to_string(), "${1}".to_string()]),
+            create_test_rule(
+                10,
+                r"issue\s+(\d+)",
+                vec!["open_issue".to_string(), "${1}".to_string()],
+            ),
             create_test_rule(20, r"resume", vec!["resume_task".to_string()]),
         ];
 
         let action = decide_action("issue 123", &rules);
-        assert_eq!(action, ActionType::SendKeys(vec!["open_issue".to_string(), "123".to_string()]));
+        assert_eq!(
+            action,
+            ActionType::SendKeys(vec!["open_issue".to_string(), "123".to_string()])
+        );
     }
 
     #[test]
@@ -96,7 +99,10 @@ mod tests {
 
         // Should match the first rule (higher priority - lower number)
         let action = decide_action("test", &rules);
-        assert_eq!(action, ActionType::SendKeys(vec!["high_priority".to_string()]));
+        assert_eq!(
+            action,
+            ActionType::SendKeys(vec!["high_priority".to_string()])
+        );
     }
 
     #[test]
@@ -137,7 +143,14 @@ mod tests {
         )];
 
         let action = decide_action("deploy app to production", &rules);
-        assert_eq!(action, ActionType::SendKeys(vec!["deploy".to_string(), "app".to_string(), "production".to_string()]));
+        assert_eq!(
+            action,
+            ActionType::SendKeys(vec![
+                "deploy".to_string(),
+                "app".to_string(),
+                "production".to_string()
+            ])
+        );
     }
 
     #[test]
@@ -150,7 +163,10 @@ mod tests {
         )];
 
         let action = decide_action("fix issue 456", &rules);
-        assert_eq!(action, ActionType::Workflow("github_issue_fix".to_string(), vec!["456".to_string()]));
+        assert_eq!(
+            action,
+            ActionType::Workflow("github_issue_fix".to_string(), vec!["456".to_string()])
+        );
     }
 
     #[test]
