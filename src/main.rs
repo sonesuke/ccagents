@@ -1,12 +1,16 @@
 mod agent;
 mod ruler;
+mod workflow;
 
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
-use ruler::rule_engine::{decide_cmd, load_rules, RuleEngine};
+use ruler::decision::decide_cmd;
+use ruler::rule_loader::load_rules;
 use ruler::Ruler;
 use std::path::PathBuf;
 use tokio::signal;
+use workflow::hot_reload::HotReloader;
+use workflow::Workflow;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -94,9 +98,9 @@ async fn main() -> Result<()> {
             let rules_path = cli
                 .rules
                 .unwrap_or_else(|| PathBuf::from("examples/basic-rules.yaml"));
-            let engine = RuleEngine::new(rules_path.to_str().unwrap())
+            let engine = HotReloader::new(rules_path.to_str().unwrap())
                 .await
-                .context("Failed to create rule engine")?;
+                .context("Failed to create hot reloader")?;
 
             println!("🚀 RuleAgents daemon started (default mode)");
             println!("📂 Watching rules file: {}", rules_path.display());
@@ -163,9 +167,9 @@ async fn main() -> Result<()> {
                 }
             }
             Commands::Daemon(args) => {
-                let engine = RuleEngine::new(args.rules.to_str().unwrap())
+                let engine = HotReloader::new(args.rules.to_str().unwrap())
                     .await
-                    .context("Failed to create rule engine")?;
+                    .context("Failed to create hot reloader")?;
 
                 println!("🚀 RuleAgents daemon started");
                 println!("📂 Watching rules file: {}", args.rules.display());
@@ -193,6 +197,7 @@ async fn main() -> Result<()> {
             }
             Commands::Manager(args) => {
                 let mut ruler = Ruler::new(args.rules.to_str().unwrap()).await?;
+                let workflow = Workflow::new(false, Some(args.rules.to_str().unwrap())).await?;
 
                 // Create agents for simulation
                 ruler.create_agent("agent-001").await?;
@@ -219,7 +224,9 @@ async fn main() -> Result<()> {
                 for (agent_id, capture) in scenarios {
                     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
-                    if let Err(e) = ruler.handle_waiting_state(agent_id, capture).await {
+                    let agent = ruler.get_agent(agent_id).await?;
+                    let action = ruler.decide_action_for_capture(capture).await;
+                    if let Err(e) = workflow.handle_waiting_state(agent, capture, action).await {
                         eprintln!("❌ Error handling agent {}: {}", agent_id, e);
                     }
                 }
