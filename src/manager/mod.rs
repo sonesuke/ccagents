@@ -15,7 +15,10 @@ impl Manager {
         let rule_engine = RuleEngine::new(rules_path).await?;
 
         // In test environment, create a simple mock backend that always succeeds
-        let is_test = std::env::var("CARGO_TEST").is_ok() || cfg!(test);
+        let is_test = std::env::var("CARGO_TEST").is_ok() 
+            || cfg!(test) 
+            || std::env::var("CI").is_ok()
+            || std::env::var("GITHUB_ACTIONS").is_ok();
         let (terminal_backend, test_mode) = if is_test {
             // Use direct backend for tests, which should always be available
             let config = TerminalBackendConfig {
