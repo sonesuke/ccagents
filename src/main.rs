@@ -78,39 +78,57 @@ async fn main() -> Result<()> {
             let mut ruler = Ruler::new(rules_path.to_str().unwrap()).await?;
             let workflow = Workflow::new(false, Some(rules_path.to_str().unwrap())).await?;
 
-            // Create agents for simulation
-            ruler.create_agent("agent-001").await?;
-            ruler.create_agent("agent-002").await?;
-            ruler.create_agent("agent-003").await?;
-            ruler.create_agent("agent-004").await?;
+            // Create a single agent for mock.sh testing
+            ruler.create_agent("main").await?;
 
             // Set up Ctrl+C signal handler
             setup_signal_handler().await;
 
             println!("🎯 RuleAgents started");
             println!("📂 Rules file: {}", rules_path.display());
-            println!("🤖 Simulating agent waiting scenarios...");
+            println!("🌐 Terminal available at: http://localhost:9990");
+            println!("💡 Type 'entry' in the terminal to start mock.sh");
             println!("🛑 Press Ctrl+C to stop");
 
-            // Simulate different agent waiting scenarios
-            let scenarios = vec![
-                ("agent-001", "issue 456 detected in process"),
-                ("agent-002", "network connection failed"),
-                ("agent-003", "resume normal operation"),
-                ("agent-004", "unknown error occurred"),
-            ];
-
-            for (agent_id, capture) in scenarios {
-                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-
-                let agent = ruler.get_agent(agent_id).await?;
-                let action = ruler.decide_action_for_capture(capture).await;
-                if let Err(e) = workflow.handle_waiting_state(agent, capture, action).await {
-                    eprintln!("❌ Error handling agent {}: {}", agent_id, e);
+            // Monitor terminal output and apply rules
+            let agent = ruler.get_agent("main").await?;
+            
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                
+                // Get terminal output
+                if let Ok(output) = agent.get_output().await {
+                    if !output.trim().is_empty() {
+                        // Check if output matches any rule
+                        let action = ruler.decide_action_for_capture(&output).await;
+                        
+                        match action {
+                            ruler::rule_types::ActionType::SendKeys(keys) => {
+                                if !keys.is_empty() {
+                                    println!("🤖 Matched: '{}' → Sending: {:?}", output.trim(), keys);
+                                    
+                                    // Send the keys to the terminal
+                                    for key in keys {
+                                        if key == "\\r" || key == "\r" {
+                                            if let Err(e) = agent.send_keys("\r").await {
+                                                eprintln!("❌ Error sending key: {}", e);
+                                            }
+                                        } else {
+                                            if let Err(e) = agent.send_keys(&key).await {
+                                                eprintln!("❌ Error sending key: {}", e);
+                                            }
+                                        }
+                                        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                                    }
+                                }
+                            }
+                            ruler::rule_types::ActionType::Workflow(workflow_name, args) => {
+                                println!("🔄 Matched: '{}' → Workflow: {} {:?}", output.trim(), workflow_name, args);
+                            }
+                        }
+                    }
                 }
             }
-
-            println!("✅ Simulation complete");
         }
         Some(command) => match command {
             Commands::Show(args) => {
