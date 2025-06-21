@@ -10,10 +10,11 @@ Handles GitHub issues by creating a worktree, draft PR, and implementing the sol
 
 ## Workflow
 
-1. **Create Branch and Worktree**
-   - Create a new branch named `issue-<issue-number>` from the main branch
-   - Create a git worktree under `.worktree/` directory with the same name as the branch
-   - Switch to the new worktree
+1. **Check Existing Work and Setup**
+   - Check if worktree `.worktree/issue-<issue-number>` already exists
+   - If exists: Switch to existing worktree and review current progress
+   - If not exists: Create new branch from latest main and create worktree
+   - Always ensure main branch is up-to-date before creating new branches
 
 2. **Create Draft Pull Request**
    - Create an empty commit using `git commit --allow-empty` to enable PR creation
@@ -41,10 +42,17 @@ Handles GitHub issues by creating a worktree, draft PR, and implementing the sol
 ## Example Commands
 
 ```bash
-# Create branch and worktree
-git checkout -b issue-<issue-number>
-git worktree add .worktree/issue-<issue-number> issue-<issue-number>
-cd .worktree/issue-<issue-number>
+# Check if worktree already exists
+if [ -d ".worktree/issue-<issue-number>" ]; then
+  echo "Existing worktree found. Switching to continue work..."
+  cd .worktree/issue-<issue-number>
+else
+  echo "Creating new worktree..."
+  git checkout main
+  git pull origin main
+  git checkout -b issue-<issue-number>
+  git worktree add .worktree/issue-<issue-number> issue-<issue-number>
+fi
 
 # Create empty commit for draft PR
 git commit --allow-empty -m "<issue-title>"

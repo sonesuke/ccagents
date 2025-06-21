@@ -1,25 +1,5 @@
-use super::rule_file::Rule;
-use anyhow::Result;
+// This file is now integrated into rule_file.rs
+// CompiledRule and related structures are defined there
+// This file is kept for module structure compatibility
 
-#[derive(Debug)]
-pub struct CompiledRule {
-    pub name: String,
-    pub description: String,
-    // TODO: Add compiled rule structures
-}
-
-impl CompiledRule {
-    pub fn compile(rule: Rule) -> Result<Self> {
-        Ok(Self {
-            name: rule.name,
-            description: rule.description,
-            // TODO: Implement rule compilation
-        })
-    }
-}
-
-impl From<Rule> for CompiledRule {
-    fn from(rule: Rule) -> Self {
-        Self::compile(rule).expect("Failed to compile rule")
-    }
-}
+pub use super::rule_file::{CompiledRule, CmdKind};

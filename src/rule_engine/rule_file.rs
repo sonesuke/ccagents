@@ -1,50 +1,75 @@
-use anyhow::Result;
-use serde::{Deserialize, Serialize};
+use anyhow::{Context, Result};
+use regex::Regex;
+use serde::Deserialize;
 use std::path::Path;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+// YAML structures for loading rules
+#[derive(Debug, Deserialize)]
 pub struct RuleFile {
-    pub version: String,
-    pub name: String,
     pub rules: Vec<Rule>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct Rule {
-    pub name: String,
-    pub description: String,
-    pub trigger: Trigger,
+    pub priority: u32,
+    pub pattern: String,
+    pub command: String,
     #[serde(default)]
-    pub conditions: Vec<Condition>,
-    pub actions: Vec<Action>,
+    pub args: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum Trigger {
-    FileChange { patterns: Vec<String> },
-    Interval { seconds: u64 },
+// Compiled structures for runtime use
+#[derive(Debug, Clone)]
+pub struct CompiledRule {
+    pub priority: u32,
+    pub regex: Regex,
+    pub command: CmdKind,
+    pub args: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum Condition {
-    PatternMatch { pattern: String },
+#[derive(Debug, Clone, PartialEq)]
+pub enum CmdKind {
+    SolveIssue,
+    Cancel,
+    Resume,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum Action {
-    Log { level: String, message: String },
-    Notify { channel: String },
-    Command { command: String, timeout: u64 },
-    CollectMetrics { metrics: Vec<String> },
-}
-
-impl RuleFile {
-    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let content = std::fs::read_to_string(path)?;
-        let rule_file = serde_yaml::from_str(&content)?;
-        Ok(rule_file)
+/// Load rules from a YAML file and compile them
+pub fn load_rules(path: &Path) -> Result<Vec<CompiledRule>> {
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read rules file: {}", path.display()))?;
+    
+    let rule_file: RuleFile = serde_yaml::from_str(&content)
+        .with_context(|| "Failed to parse YAML rules file")?;
+    
+    let mut compiled_rules = Vec::new();
+    for rule in rule_file.rules {
+        let compiled = compile_rule(&rule)
+            .with_context(|| format!("Failed to compile rule with pattern: {}", rule.pattern))?;
+        compiled_rules.push(compiled);
     }
+    
+    // Sort by priority (ascending order - lower number = higher priority)
+    compiled_rules.sort_by_key(|rule| rule.priority);
+    
+    Ok(compiled_rules)
+}
+
+fn compile_rule(rule: &Rule) -> Result<CompiledRule> {
+    let regex = Regex::new(&rule.pattern)
+        .with_context(|| format!("Invalid regex pattern: {}", rule.pattern))?;
+    
+    let command = match rule.command.as_str() {
+        "solve-issue" => CmdKind::SolveIssue,
+        "cancel" => CmdKind::Cancel,
+        "resume" => CmdKind::Resume,
+        _ => anyhow::bail!("Unknown command: {}", rule.command),
+    };
+    
+    Ok(CompiledRule {
+        priority: rule.priority,
+        regex,
+        command,
+        args: rule.args.clone(),
+    })
 }
