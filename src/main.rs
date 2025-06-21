@@ -49,16 +49,6 @@ struct TestArgs {
 }
 
 
-async fn setup_signal_handler() {
-    let sigint = signal::ctrl_c();
-
-    tokio::spawn(async move {
-        if let Ok(()) = sigint.await {
-            println!("\nReceived Ctrl+C, shutting down...");
-            std::process::exit(0);
-        }
-    });
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -81,9 +71,6 @@ async fn main() -> Result<()> {
             // Create a single agent for mock.sh testing
             ruler.create_agent("main").await?;
 
-            // Set up Ctrl+C signal handler
-            setup_signal_handler().await;
-
             println!("🎯 RuleAgents started");
             println!("📂 Rules file: {}", rules_path.display());
             println!("🌐 Terminal available at: http://localhost:9990");
@@ -93,37 +80,54 @@ async fn main() -> Result<()> {
             // Monitor terminal output and apply rules
             let agent = ruler.get_agent("main").await?;
             
+            // Wait a moment for terminal to be ready, then start mock.sh
+            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+            println!("🚀 Starting mock.sh automatically...");
+            if let Err(e) = agent.send_keys("entry\r").await {
+                eprintln!("❌ Error starting mock.sh: {}", e);
+            }
+            
             loop {
-                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                
-                // Get terminal output
-                if let Ok(output) = agent.get_output().await {
-                    if !output.trim().is_empty() {
-                        // Check if output matches any rule
-                        let action = ruler.decide_action_for_capture(&output).await;
-                        
-                        match action {
-                            ruler::rule_types::ActionType::SendKeys(keys) => {
-                                if !keys.is_empty() {
-                                    println!("🤖 Matched: '{}' → Sending: {:?}", output.trim(), keys);
-                                    
-                                    // Send the keys to the terminal
-                                    for key in keys {
-                                        if key == "\\r" || key == "\r" {
-                                            if let Err(e) = agent.send_keys("\r").await {
-                                                eprintln!("❌ Error sending key: {}", e);
-                                            }
-                                        } else {
-                                            if let Err(e) = agent.send_keys(&key).await {
-                                                eprintln!("❌ Error sending key: {}", e);
+                tokio::select! {
+                    _ = signal::ctrl_c() => {
+                        println!("\n🛑 Received Ctrl+C, cleaning up...");
+                        if let Err(e) = agent.cleanup().await {
+                            eprintln!("❌ Error during cleanup: {}", e);
+                        }
+                        println!("✅ Cleanup complete, exiting...");
+                        break;
+                    }
+                    _ = tokio::time::sleep(tokio::time::Duration::from_millis(500)) => {
+                        // Get terminal output
+                        if let Ok(output) = agent.get_output().await {
+                            if !output.trim().is_empty() {
+                                // Check if output matches any rule
+                                let action = ruler.decide_action_for_capture(&output).await;
+                                
+                                match action {
+                                    ruler::rule_types::ActionType::SendKeys(keys) => {
+                                        if !keys.is_empty() {
+                                            println!("🤖 Matched: '{}' → Sending: {:?}", output.trim(), keys);
+                                            
+                                            // Send the keys to the terminal
+                                            for key in keys {
+                                                if key == "\\r" || key == "\r" {
+                                                    if let Err(e) = agent.send_keys("\r").await {
+                                                        eprintln!("❌ Error sending key: {}", e);
+                                                    }
+                                                } else {
+                                                    if let Err(e) = agent.send_keys(&key).await {
+                                                        eprintln!("❌ Error sending key: {}", e);
+                                                    }
+                                                }
+                                                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
                                             }
                                         }
-                                        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                                    }
+                                    ruler::rule_types::ActionType::Workflow(workflow_name, args) => {
+                                        println!("🔄 Matched: '{}' → Workflow: {} {:?}", output.trim(), workflow_name, args);
                                     }
                                 }
-                            }
-                            ruler::rule_types::ActionType::Workflow(workflow_name, args) => {
-                                println!("🔄 Matched: '{}' → Workflow: {} {:?}", output.trim(), workflow_name, args);
                             }
                         }
                     }

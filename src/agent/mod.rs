@@ -33,7 +33,7 @@ impl Agent {
                     .map_err(|_| anyhow::anyhow!("ht binary not found in PATH"))?
                     .to_string_lossy()
                     .to_string(),
-                shell_command: Some("bash".to_string()),
+                shell_command: Some(std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string())),
                 restart_attempts: 3,
                 restart_delay_ms: 1000,
                 port,
