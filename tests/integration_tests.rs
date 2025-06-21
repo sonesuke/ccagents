@@ -9,7 +9,7 @@ use tempfile::NamedTempFile;
 #[test]
 fn test_binary_help_command() {
     let output = Command::new("cargo")
-        .args(&["run", "--", "--help"])
+        .args(["run", "--", "--help"])
         .output()
         .expect("Failed to execute command");
 
@@ -22,7 +22,7 @@ fn test_binary_help_command() {
 #[test]
 fn test_binary_show_command() {
     let output = Command::new("cargo")
-        .args(&["run", "--", "show", "--rules", "examples/basic-rules.yaml"])
+        .args(["run", "--", "show", "--rules", "examples/basic-rules.yaml"])
         .output()
         .expect("Failed to execute command");
 
@@ -35,7 +35,7 @@ fn test_binary_show_command() {
 #[test]
 fn test_binary_test_command() {
     let output = Command::new("cargo")
-        .args(&[
+        .args([
             "run",
             "--",
             "test",
@@ -56,7 +56,7 @@ fn test_binary_test_command() {
 #[test]
 fn test_binary_with_invalid_rules_file() {
     let output = Command::new("cargo")
-        .args(&["run", "--", "show", "--rules", "nonexistent.yaml"])
+        .args(["run", "--", "show", "--rules", "nonexistent.yaml"])
         .output()
         .expect("Failed to execute command");
 
@@ -79,7 +79,7 @@ rules:
     write!(temp_file, "{}", yaml_content).unwrap();
 
     let output = Command::new("cargo")
-        .args(&[
+        .args([
             "run",
             "--",
             "test",
@@ -100,7 +100,7 @@ rules:
 #[test]
 fn test_binary_version() {
     let output = Command::new("cargo")
-        .args(&["run", "--", "--version"])
+        .args(["run", "--", "--version"])
         .output()
         .expect("Failed to execute command");
 

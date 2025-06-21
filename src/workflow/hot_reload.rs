@@ -1,25 +1,26 @@
-use crate::ruler::rule_engine::{load_rules, CompiledRule};
+use crate::ruler::rule_loader::load_rules;
+use crate::ruler::rule_types::CompiledRule;
 use anyhow::Result;
 use notify::{RecommendedWatcher, RecursiveMode, Result as NotifyResult, Watcher};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-pub struct RuleEngine {
+pub struct HotReloader {
     rules: Arc<RwLock<Vec<CompiledRule>>>,
     _watcher: RecommendedWatcher,
 }
 
-impl std::fmt::Debug for RuleEngine {
+impl std::fmt::Debug for HotReloader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("RuleEngine")
+        f.debug_struct("HotReloader")
             .field("rules", &"<rules>")
             .field("_watcher", &"<watcher>")
             .finish()
     }
 }
 
-impl RuleEngine {
+impl HotReloader {
     pub async fn new(rules_path: &str) -> Result<Self> {
         // Load initial rules using existing function from #3
         let initial_rules = load_rules(Path::new(rules_path))?;
@@ -45,7 +46,7 @@ impl RuleEngine {
         let mut watcher = watcher;
         watcher.watch(Path::new(rules_path), RecursiveMode::NonRecursive)?;
 
-        Ok(RuleEngine {
+        Ok(HotReloader {
             rules,
             _watcher: watcher,
         })
