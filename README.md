@@ -29,7 +29,7 @@ Create a YAML file with your rules. See `examples/basic-rules.yaml` for referenc
 rules:
   - priority: 10
     pattern: "issue\\s+(\\d+)"
-    command: "solve-issue"
+    command: "entry"
     args: []
   - priority: 20
     pattern: "cancel"
@@ -45,7 +45,7 @@ rules:
 
 - **priority**: Lower numbers = higher priority (rules are sorted by priority)
 - **pattern**: Regular expression to match against input
-- **command**: Command to execute when pattern matches (`solve-issue`, `cancel`, `resume`)
+- **command**: Command to execute when pattern matches (`entry`, `cancel`, `resume`)
 - **args**: Optional arguments for the command (defaults to empty array)
 
 ## Development

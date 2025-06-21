@@ -49,7 +49,7 @@ Rules are defined in YAML format with the following simplified structure:
 rules:
   - priority: 10
     pattern: "issue\\s+(\\d+)"
-    command: "solve-issue"
+    command: "entry"
     args: []
   - priority: 20
     pattern: "cancel"
@@ -64,7 +64,7 @@ rules:
 - **args**: Optional command arguments (defaults to empty array)
 
 ### Supported Commands
-- `solve-issue`: Handle GitHub issue resolution workflow
+- `entry`: Handle GitHub issue resolution workflow
 - `cancel`: Cancel current operation
 - `resume`: Resume interrupted operation
 
