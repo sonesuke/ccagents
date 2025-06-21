@@ -146,10 +146,6 @@ impl Manager {
                 );
                 self.execute_entry_command(agent_id, args).await?;
             }
-            CmdKind::Cancel => {
-                println!("→ Sending cancel to agent {}", agent_id);
-                self.execute_cancel_command(agent_id).await?;
-            }
             CmdKind::Resume => {
                 println!("→ Sending resume to agent {}", agent_id);
                 self.execute_resume_command(agent_id).await?;
@@ -185,26 +181,6 @@ impl Manager {
         self.coordinate_implementation(&issue_number).await?;
 
         println!("✅ Entry workflow completed for issue #{}", issue_number);
-        Ok(())
-    }
-
-    async fn execute_cancel_command(&self, agent_id: &str) -> Result<()> {
-        println!("🛑 Executing cancel command for agent {}", agent_id);
-
-        // In test mode, just log the cancel action
-        if self.test_mode {
-            println!("ℹ️ Test mode: cancel command simulated");
-            return Ok(());
-        }
-
-        let backend = self.terminal_backend.backend();
-
-        // Send Ctrl+C to interrupt any running processes
-        backend
-            .send_keys("^C")
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to send cancel signal: {}", e))?;
-
         Ok(())
     }
 

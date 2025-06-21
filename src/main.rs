@@ -3,6 +3,8 @@ use clap::{Args, Parser, Subcommand};
 use rule_agents::rule_engine::{decide_cmd, load_rules, RuleEngine};
 use rule_agents::Manager;
 use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::signal;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -65,6 +67,20 @@ struct ManagerArgs {
     rules: PathBuf,
 }
 
+async fn setup_signal_handler(manager: Arc<Manager>) {
+    let sigint = signal::ctrl_c();
+
+    tokio::spawn(async move {
+        if let Ok(()) = sigint.await {
+            println!("\nReceived Ctrl+C, initiating emergency stop...");
+            if let Err(e) = manager.emergency_stop_all().await {
+                eprintln!("Emergency stop failed: {}", e);
+            }
+            std::process::exit(0);
+        }
+    });
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize logging
@@ -94,12 +110,7 @@ async fn main() -> Result<()> {
                 tokio::time::sleep(tokio::time::Duration::from_secs(cli.interval)).await;
 
                 // Simulate different capture scenarios
-                let test_captures = [
-                    "issue 123",
-                    "cancel operation",
-                    "resume task",
-                    "unknown scenario",
-                ];
+                let test_captures = ["issue 123", "resume task", "unknown scenario"];
 
                 let capture = test_captures[counter % test_captures.len()];
                 let rules = engine.get_rules().await;
@@ -168,12 +179,7 @@ async fn main() -> Result<()> {
                     tokio::time::sleep(tokio::time::Duration::from_secs(args.interval)).await;
 
                     // Simulate different capture scenarios
-                    let test_captures = [
-                        "issue 123",
-                        "cancel operation",
-                        "resume task",
-                        "unknown scenario",
-                    ];
+                    let test_captures = ["issue 123", "resume task", "unknown scenario"];
 
                     let capture = test_captures[counter % test_captures.len()];
                     let rules = engine.get_rules().await;
@@ -187,19 +193,22 @@ async fn main() -> Result<()> {
                 }
             }
             Commands::Manager(args) => {
-                let manager = Manager::new(args.rules.to_str().unwrap()).await?;
+                let manager = Arc::new(Manager::new(args.rules.to_str().unwrap()).await?);
+
+                // Set up Ctrl+C signal handler for emergency stop
+                setup_signal_handler(manager.clone()).await;
 
                 println!("🎯 RuleAgents Manager started");
                 println!("📂 Rules file: {}", args.rules.display());
                 println!("🤖 Simulating agent waiting scenarios...");
+                println!("🛑 Press Ctrl+C for emergency stop");
 
                 // Simulate different agent waiting scenarios
                 let scenarios = vec![
                     ("agent-001", "issue 456 detected in process"),
                     ("agent-002", "network connection failed"),
-                    ("agent-003", "cancel current operation"),
-                    ("agent-004", "resume normal operation"),
-                    ("agent-005", "unknown error occurred"),
+                    ("agent-003", "resume normal operation"),
+                    ("agent-004", "unknown error occurred"),
                 ];
 
                 for (agent_id, capture) in scenarios {
