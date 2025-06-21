@@ -1,7 +1,10 @@
+mod agent;
+mod ruler;
+
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
-use rule_agents::ruler::rule_engine::{decide_cmd, load_rules, RuleEngine};
-use rule_agents::Ruler;
+use ruler::rule_engine::{decide_cmd, load_rules, RuleEngine};
+use ruler::Ruler;
 use std::path::PathBuf;
 use tokio::signal;
 
