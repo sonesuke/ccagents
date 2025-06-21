@@ -109,6 +109,9 @@ impl HtProcess {
 
         let mut command = Command::new(&self.config.ht_binary_path);
 
+        // Always enable web interface on port 9999
+        command.arg("-l").arg("0.0.0.0:9999");
+
         if let Some(shell_cmd) = &self.config.shell_command {
             command.arg(shell_cmd);
         }
@@ -168,6 +171,7 @@ impl HtProcess {
         // }
 
         info!("HT process started successfully");
+        println!("🌐 HT terminal web interface available at: http://localhost:9999");
         Ok(())
     }
 

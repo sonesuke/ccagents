@@ -87,6 +87,23 @@ Real-time agent state detection based on HT (terminal) process output analysis:
 
 See [docs/terminal_output_monitoring.md](docs/terminal_output_monitoring.md) for detailed documentation.
 
+### Web Interface
+
+The HT terminal process automatically starts with a web interface for real-time monitoring:
+
+- **Live Terminal View**: Watch agent terminal sessions via web browser
+- **Remote Access**: Monitor from any device on the network
+- **Multi-user Support**: Multiple people can observe sessions simultaneously
+- **Debug Support**: Real-time visibility into agent behavior
+
+#### Access URLs
+
+After starting rule-agents, the terminal web interface is available at:
+- **Local**: http://localhost:9999
+- **Network**: http://[machine-ip]:9999
+
+The web interface URL is automatically displayed when the HT process starts.
+
 #### Quick Example
 
 ```rust
