@@ -26,6 +26,7 @@ impl Manager {
             || std::thread::current()
                 .name()
                 .is_some_and(|name| name.contains("test"))
+            || std::env::args().any(|arg| arg.contains("test"))
             || std::env::current_exe()
                 .map(|exe| {
                     exe.file_name()
