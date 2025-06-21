@@ -49,32 +49,32 @@ mod tests {
     #[test]
     fn test_decide_cmd_exact_match() {
         let rules = vec![
-            create_test_rule(10, r"issue\s+(\d+)", CmdKind::SolveIssue, vec![]),
+            create_test_rule(10, r"issue\s+(\d+)", CmdKind::Entry, vec![]),
             create_test_rule(20, r"cancel", CmdKind::Cancel, vec![]),
         ];
 
         let (command, args) = decide_cmd("issue 123", &rules);
-        assert_eq!(command, CmdKind::SolveIssue);
+        assert_eq!(command, CmdKind::Entry);
         assert!(args.is_empty());
     }
 
     #[test]
     fn test_decide_cmd_priority_ordering() {
         let rules = vec![
-            create_test_rule(10, r"test", CmdKind::SolveIssue, vec!["high".to_string()]),
+            create_test_rule(10, r"test", CmdKind::Entry, vec!["high".to_string()]),
             create_test_rule(20, r"test", CmdKind::Cancel, vec!["low".to_string()]),
         ];
 
         // Should match the first rule (higher priority - lower number)
         let (command, args) = decide_cmd("test", &rules);
-        assert_eq!(command, CmdKind::SolveIssue);
+        assert_eq!(command, CmdKind::Entry);
         assert_eq!(args, vec!["high"]);
     }
 
     #[test]
     fn test_decide_cmd_no_match() {
         let rules = vec![
-            create_test_rule(10, r"issue\s+(\d+)", CmdKind::SolveIssue, vec![]),
+            create_test_rule(10, r"issue\s+(\d+)", CmdKind::Entry, vec![]),
             create_test_rule(20, r"cancel", CmdKind::Cancel, vec![]),
         ];
 
@@ -88,7 +88,7 @@ mod tests {
         let rules = vec![create_test_rule(
             10,
             r"issue\s+(\d+)",
-            CmdKind::SolveIssue,
+            CmdKind::Entry,
             vec![],
         )];
 

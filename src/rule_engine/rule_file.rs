@@ -29,7 +29,7 @@ pub struct CompiledRule {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CmdKind {
-    SolveIssue,
+    Entry,
     Cancel,
     Resume,
 }
@@ -60,7 +60,7 @@ fn compile_rule(rule: &Rule) -> Result<CompiledRule> {
         .with_context(|| format!("Invalid regex pattern: {}", rule.pattern))?;
 
     let command = match rule.command.as_str() {
-        "solve-issue" => CmdKind::SolveIssue,
+        "entry" => CmdKind::Entry,
         "cancel" => CmdKind::Cancel,
         "resume" => CmdKind::Resume,
         _ => anyhow::bail!("Unknown command: {}", rule.command),

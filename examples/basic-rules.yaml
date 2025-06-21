@@ -1,7 +1,7 @@
 rules:
   - priority: 10
     pattern: "issue\\s+(\\d+)"
-    command: "solve-issue"
+    command: "entry"
     args: []
   - priority: 20
     pattern: "cancel"

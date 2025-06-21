@@ -18,7 +18,10 @@ impl Manager {
         let is_test = std::env::var("CARGO_TEST").is_ok()
             || cfg!(test)
             || std::env::var("CI").is_ok()
-            || std::env::var("GITHUB_ACTIONS").is_ok();
+            || std::env::var("GITHUB_ACTIONS").is_ok()
+            || std::thread::current()
+                .name()
+                .is_some_and(|name| name.contains("test"));
         let (terminal_backend, test_mode) = if is_test {
             // Use direct backend for tests, which should always be available
             let config = TerminalBackendConfig {
@@ -74,12 +77,12 @@ impl Manager {
         args: Vec<String>,
     ) -> Result<()> {
         match command {
-            CmdKind::SolveIssue => {
+            CmdKind::Entry => {
                 println!(
-                    "→ Executing solve-issue for agent {} with args: {:?}",
+                    "→ Executing entry for agent {} with args: {:?}",
                     agent_id, args
                 );
-                self.execute_solve_issue_command(agent_id, args).await?;
+                self.execute_entry_command(agent_id, args).await?;
             }
             CmdKind::Cancel => {
                 println!("→ Sending cancel to agent {}", agent_id);
@@ -94,7 +97,7 @@ impl Manager {
         Ok(())
     }
 
-    async fn execute_solve_issue_command(&self, agent_id: &str, args: Vec<String>) -> Result<()> {
+    async fn execute_entry_command(&self, agent_id: &str, args: Vec<String>) -> Result<()> {
         let _backend = self.terminal_backend.backend();
 
         // Extract issue number from args or parse from agent_id
@@ -105,10 +108,7 @@ impl Manager {
             agent_id.split('-').next_back().unwrap_or("1").to_string()
         };
 
-        println!(
-            "🚀 Starting solve-issue workflow for issue #{}",
-            issue_number
-        );
+        println!("🚀 Starting entry workflow for issue #{}", issue_number);
 
         // Step 1: Git operations
         self.handle_git_operations(&issue_number).await?;
@@ -122,10 +122,7 @@ impl Manager {
         // Step 4: Implementation phase (this would integrate with actual implementation logic)
         self.coordinate_implementation(&issue_number).await?;
 
-        println!(
-            "✅ Solve-issue workflow completed for issue #{}",
-            issue_number
-        );
+        println!("✅ Entry workflow completed for issue #{}", issue_number);
         Ok(())
     }
 

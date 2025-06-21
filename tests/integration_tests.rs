@@ -13,7 +13,7 @@ fn test_load_basic_rules() -> Result<()> {
     assert!(!rules.is_empty());
     // Verify first rule has lowest priority number
     assert_eq!(rules[0].priority, 10);
-    assert_eq!(rules[0].command, CmdKind::SolveIssue);
+    assert_eq!(rules[0].command, CmdKind::Entry);
     Ok(())
 }
 
@@ -80,7 +80,7 @@ rules:
     args: []
   - priority: 10
     pattern: "first"
-    command: "solve-issue"
+    command: "entry"
     args: []
   - priority: 20
     pattern: "second"
@@ -116,7 +116,7 @@ fn test_decide_cmd_exact_match() -> Result<()> {
 
     // Test match with "issue 123" pattern
     let (command, args) = decide_cmd("issue 123", &rules);
-    assert_eq!(command, CmdKind::SolveIssue);
+    assert_eq!(command, CmdKind::Entry);
     assert!(args.is_empty()); // Args should match what's in the YAML
     Ok(())
 }
@@ -131,7 +131,7 @@ rules:
     args: ["low"]
   - priority: 10
     pattern: "test"
-    command: "solve-issue"
+    command: "entry"
     args: ["high"]
 "#;
 
@@ -142,7 +142,7 @@ rules:
 
     // Test that higher priority (lower number) rules match first
     let (command, args) = decide_cmd("test", &rules);
-    assert_eq!(command, CmdKind::SolveIssue);
+    assert_eq!(command, CmdKind::Entry);
     assert_eq!(args, vec!["high"]);
     Ok(())
 }
@@ -207,7 +207,7 @@ fn test_decide_cmd_with_all_basic_rule_patterns() -> Result<()> {
 
     // Test issue pattern
     let (command, args) = decide_cmd("issue 456", &rules);
-    assert_eq!(command, CmdKind::SolveIssue);
+    assert_eq!(command, CmdKind::Entry);
     assert!(args.is_empty());
 
     // Test cancel pattern
@@ -232,7 +232,7 @@ async fn test_rule_engine_initial_load() -> Result<()> {
     assert!(!rules.is_empty());
     // Should match actual content from examples/basic-rules.yaml
     assert_eq!(rules[0].priority, 10);
-    assert_eq!(rules[0].command, CmdKind::SolveIssue);
+    assert_eq!(rules[0].command, CmdKind::Entry);
     Ok(())
 }
 
@@ -376,7 +376,7 @@ async fn test_manager_with_custom_rules() -> Result<()> {
 rules:
   - priority: 10
     pattern: "test-pattern"
-    command: "solve-issue"
+    command: "entry"
     args: ["test-arg"]
   - priority: 20
     pattern: "cancel-test"
@@ -414,7 +414,7 @@ async fn test_manager_with_hot_reload() -> Result<()> {
 rules:
   - priority: 10
     pattern: "test-hot-reload"
-    command: "solve-issue"
+    command: "entry"
     args: []
 "#;
 
