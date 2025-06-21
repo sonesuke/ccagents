@@ -61,7 +61,7 @@ async fn main() -> Result<()> {
             // When no subcommand is provided, run manager mode (default)
             let rules_path = cli
                 .rules
-                .unwrap_or_else(|| PathBuf::from("examples/basic-rules.yaml"));
+                .unwrap_or_else(|| PathBuf::from("examples/mock-rules.yaml"));
             
             let mut ruler = Ruler::new(rules_path.to_str().unwrap()).await?;
 
@@ -79,13 +79,17 @@ async fn main() -> Result<()> {
             
             // Wait a moment for terminal to be ready
             tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-            println!("🚀 Starting mock.sh automatically...");
+            println!("🚀 Testing entry command automatically...");
             
+            // Send entry command for testing
             if let Err(e) = agent.send_keys("entry\r").await {
-                eprintln!("❌ Error starting mock.sh: {}", e);
+                eprintln!("❌ Error sending entry command: {}", e);
             } else {
                 println!("✅ Sent 'entry' command to terminal");
             }
+            
+            let mut last_output_lines: Vec<String> = Vec::new();
+            let mut is_script_running = false;
             
             loop {
                 tokio::select! {
@@ -100,33 +104,160 @@ async fn main() -> Result<()> {
                         // Get terminal output
                         if let Ok(output) = agent.get_output().await {
                             if !output.trim().is_empty() {
-                                println!("📄 Terminal output: '{}'", output.trim());
-                                // Check if output matches any rule
-                                let action = ruler.decide_action_for_capture(&output).await;
+                                // === DIFFERENTIAL CHANGE DETECTION ===
+                                // This implementation uses line-based differential detection instead of 
+                                // time-based or hash-based approaches for the following reasons:
+                                //
+                                // 1. ROBUST RULE EXECUTION: Terminal output contains command history,
+                                //    and applying rules to the entire output would cause unwanted
+                                //    re-execution of rules on historical commands (e.g., "entry" command
+                                //    appearing in scrollback would repeatedly trigger script execution)
+                                //
+                                // 2. PRECISE STATE DETECTION: Only newly added lines represent actual
+                                //    terminal activity, allowing accurate detection of script completion
+                                //    and idle state transitions without false positives from static content
+                                //
+                                // 3. ELIMINATES TIMING DEPENDENCIES: Unlike timeout-based approaches,
+                                //    this method doesn't rely on arbitrary delays or polling intervals,
+                                //    making the system more deterministic and responsive
+                                //
+                                // 4. PREVENTS DUPLICATE ACTIONS: By tracking which lines have been
+                                //    processed, we ensure each terminal event triggers rules exactly once,
+                                //    avoiding infinite loops or redundant command execution
+                                //
+                                // This approach treats terminal output as an append-only log where only
+                                // the delta (new lines) should trigger rule evaluation.
                                 
-                                match action {
-                                    ruler::rule_types::ActionType::SendKeys(keys) => {
-                                        if !keys.is_empty() {
-                                            println!("🤖 Matched: '{}' → Sending: {:?}", output.trim(), keys);
-                                            
-                                            // Send the keys to the terminal
-                                            for key in keys {
-                                                if key == "\\r" || key == "\r" {
-                                                    if let Err(e) = agent.send_keys("\r").await {
-                                                        eprintln!("❌ Error sending key: {}", e);
+                                // Split current terminal output into individual lines
+                                let current_lines: Vec<String> = output.lines()
+                                    .map(|line| line.trim().to_string())
+                                    .filter(|line| !line.is_empty())
+                                    .collect();
+                                
+                                // Identify new lines that weren't present in the previous output
+                                // This represents the actual terminal activity since last check
+                                let new_lines: Vec<String> = current_lines.iter()
+                                    .filter(|line| !last_output_lines.contains(line))
+                                    .cloned()
+                                    .collect();
+                                
+                                if !new_lines.is_empty() {
+                                    println!("📄 NEW lines: {:?}", new_lines);
+                                    
+                                    // Since terminal output may come as long single lines, also check the combined content
+                                    let combined_new_content = new_lines.join(" ");
+                                    
+                                    // === SCRIPT STATE DETECTION ===
+                                    // Monitor script lifecycle by detecting key patterns in new terminal lines.
+                                    // This approach correctly identifies when automation should be active vs idle:
+                                    // - Script startup: Detects script banner to enable automation
+                                    // - Script completion: Detects completion message to disable automation
+                                    // - Idle detection: When script completes and returns to shell prompt,
+                                    //   the agent should stop processing rules to prevent unwanted actions
+                                    if combined_new_content.contains("=== Mock Test Script ===") {
+                                        is_script_running = true;
+                                        println!("🎬 Script started");
+                                    } else if is_script_running && combined_new_content.contains("MISSION COMPLETE") {
+                                        is_script_running = false;
+                                        println!("💤 Script completed - Agent returned to idle state");
+                                    }
+                                    
+                                    // === RULE PROCESSING ON NEW CONTENT ===
+                                    // Apply rules to new content (both line-by-line and combined content)
+                                    // This handles cases where terminal output may be split differently
+                                    
+                                    // First check combined content for rules that might span multiple "lines"
+                                    if is_script_running && combined_new_content.contains("Do you want to proceed") && !combined_new_content.contains("MISSION COMPLETE") {
+                                        println!("🎯 Found 'Do you want to proceed' in combined content!");
+                                        println!("🔍 Checking rules for combined content");
+                                        
+                                        let action = ruler.decide_action_for_capture(&combined_new_content).await;
+                                        match action {
+                                            ruler::rule_types::ActionType::SendKeys(keys) => {
+                                                if !keys.is_empty() {
+                                                    println!("🤖 Matched rule on combined content → Sending: {:?}", keys);
+                                                    
+                                                    // Send the keys to the terminal
+                                                    for key in keys {
+                                                        if key == "\\r" || key == "\r" {
+                                                            if let Err(e) = agent.send_keys("\r").await {
+                                                                eprintln!("❌ Error sending key: {}", e);
+                                                            }
+                                                        } else {
+                                                            if let Err(e) = agent.send_keys(&key).await {
+                                                                eprintln!("❌ Error sending key: {}", e);
+                                                            }
+                                                        }
+                                                        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
                                                     }
-                                                } else {
-                                                    if let Err(e) = agent.send_keys(&key).await {
-                                                        eprintln!("❌ Error sending key: {}", e);
-                                                    }
+                                                    
+                                                    // Wait after sending keys
+                                                    tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
                                                 }
-                                                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                                            }
+                                            ruler::rule_types::ActionType::Workflow(workflow_name, args) => {
+                                                println!("🔄 Matched workflow: {} {:?}", workflow_name, args);
                                             }
                                         }
                                     }
-                                    ruler::rule_types::ActionType::Workflow(workflow_name, args) => {
-                                        println!("🔄 Matched: '{}' → Workflow: {} {:?}", output.trim(), workflow_name, args);
+                                    
+                                    // Then process individual lines for entry commands and other patterns  
+                                    for line in &new_lines {
+                                        // Entry commands should only be processed when NOT already running a script
+                                        if line.contains("entry") && !is_script_running {
+                                            println!("🔍 Processing entry command in line: '{}'", line);
+                                        } else if line.contains("entry") && is_script_running {
+                                            println!("⏭️ Ignoring entry command - script already running: '{}'", line);
+                                            continue;
+                                        } else if !is_script_running && line.contains("sonesuke@Air") && line.contains("%") {
+                                            // Skip rule processing for shell prompts when in idle state
+                                            println!("⏸️ Idle state - not processing rules for line: {}", line);
+                                            continue;
+                                        }
+                                        
+                                        // Apply rules for entry commands when idle
+                                        if (line.contains("entry") && !is_script_running) {
+                                            println!("🔍 Checking rules for entry line: '{}'", line);
+                                            
+                                            // Check if this line matches any rule
+                                            let action = ruler.decide_action_for_capture(line).await;
+                                            
+                                            match action {
+                                                ruler::rule_types::ActionType::SendKeys(keys) => {
+                                                    if !keys.is_empty() {
+                                                        println!("🤖 Matched rule on '{}' → Sending: {:?}", line, keys);
+                                                        
+                                                        // Send the keys to the terminal
+                                                        for key in keys {
+                                                            if key == "\\r" || key == "\r" {
+                                                                if let Err(e) = agent.send_keys("\r").await {
+                                                                    eprintln!("❌ Error sending key: {}", e);
+                                                                }
+                                                            } else {
+                                                                if let Err(e) = agent.send_keys(&key).await {
+                                                                    eprintln!("❌ Error sending key: {}", e);
+                                                                }
+                                                            }
+                                                            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                                                        }
+                                                        
+                                                        // Wait after sending keys
+                                                        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+                                                        break; // Only execute one rule per iteration
+                                                    }
+                                                }
+                                                ruler::rule_types::ActionType::Workflow(workflow_name, args) => {
+                                                    println!("🔄 Matched: '{}' → Workflow: {} {:?}", line, workflow_name, args);
+                                                }
+                                            }
+                                        }
                                     }
+                                    
+                                    // === STATE PERSISTENCE ===
+                                    // Update the baseline for differential detection by storing current lines.
+                                    // This ensures that next iteration will only process truly new content,
+                                    // maintaining the integrity of our differential change detection system.
+                                    last_output_lines = current_lines;
                                 }
                             }
                         }

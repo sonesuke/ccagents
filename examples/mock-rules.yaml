@@ -1,17 +1,17 @@
 # Mock rules for testing agent automation
 
 rules:
-  # Entry command - starts the mock script
+  # Auto-respond to proceed prompt (HIGHEST PRIORITY)
   - priority: 1
-    pattern: "^entry$"
-    action: "send_keys"
-    keys: ["bash examples/mock.sh", "\r"]
-    
-  # Auto-respond to proceed prompt
-  - priority: 5
-    pattern: "Do you want to proceed\\?"
+    pattern: "Do you want to proceed"
     action: "send_keys"
     keys: ["1", "\r"]
+    
+  # Entry command - starts the mock script (lower priority)
+  - priority: 5
+    pattern: "entry"
+    action: "send_keys"
+    keys: ["bash examples/mock.sh", "\r"]
     
   # Exit command - sends /exit to the script
   - priority: 10

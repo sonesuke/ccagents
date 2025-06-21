@@ -7,6 +7,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 pub struct HotReloader {
+    #[allow(dead_code)]
     rules: Arc<RwLock<Vec<CompiledRule>>>,
     _watcher: RecommendedWatcher,
 }
@@ -52,6 +53,7 @@ impl HotReloader {
         })
     }
 
+    #[allow(dead_code)]
     pub async fn get_rules(&self) -> Vec<CompiledRule> {
         self.rules.read().await.clone()
     }

@@ -38,6 +38,9 @@ dirs = "5.0"
 # Binary location
 which = "6.0"
 
+# Hash for output deduplication
+md5 = "0.7"
+
 [dev-dependencies]
 tempfile = "3.0"
 tokio-test = "0.4"

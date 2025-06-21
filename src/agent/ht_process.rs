@@ -30,14 +30,29 @@ pub enum HtProcessError {
 pub enum HtMessage {
     #[serde(rename = "input")]
     Input { payload: String },
-    #[serde(rename = "getView")]
-    GetView,
+    #[serde(rename = "takeSnapshot")]
+    TakeSnapshot,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HtResponse {
-    pub view: Option<String>,
-    pub status: String,
+#[serde(untagged)]
+pub enum HtResponse {
+    View {
+        view: Option<String>,
+        status: String,
+    },
+    Snapshot {
+        #[serde(rename = "type")]
+        response_type: String,
+        data: SnapshotData,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SnapshotData {
+    pub seq: String,
+    pub cols: u32,
+    pub rows: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -242,9 +257,10 @@ impl HtProcess {
         let sender_lock = self.sender.lock().await;
 
         if let Some(sender) = sender_lock.as_ref() {
-            let message = HtMessage::GetView;
-            sender.send(message).map_err(|e| {
-                HtProcessError::CommunicationError(format!("Failed to request view: {}", e))
+            // Take a snapshot to get current terminal state
+            let snapshot_message = HtMessage::TakeSnapshot;
+            sender.send(snapshot_message).map_err(|e| {
+                HtProcessError::CommunicationError(format!("Failed to request snapshot: {}", e))
             })?;
 
             // Wait for response
@@ -253,9 +269,16 @@ impl HtProcess {
 
             if let Some(receiver) = receiver_lock.as_mut() {
                 match receiver.recv().await {
-                    Some(response) => response.view.ok_or_else(|| {
-                        HtProcessError::CommunicationError("No view data in response".to_string())
-                    }),
+                    Some(response) => match response {
+                        HtResponse::View { view, .. } => view.ok_or_else(|| {
+                            HtProcessError::CommunicationError("No view data in response".to_string())
+                        }),
+                        HtResponse::Snapshot { data, .. } => {
+                            // Clean up terminal output by removing ANSI escape sequences
+                            let cleaned = Self::clean_terminal_output(&data.seq);
+                            Ok(cleaned)
+                        }
+                    },
                     None => Err(HtProcessError::CommunicationError(
                         "No response received".to_string(),
                     )),
@@ -384,6 +407,25 @@ impl HtProcess {
                 }
             }
         }
+    }
+
+    fn clean_terminal_output(raw_output: &str) -> String {
+        // Remove ANSI escape sequences (improved pattern)
+        let ansi_regex = regex::Regex::new(r"\x1B\[[0-9;]*[a-zA-Z]|\x1B\[[\?]?[0-9;]*[hlm]|\x1B[>\=]|\x1B[c\d]|\x1B\][0-9];|\x1B\[[0-9A-Z]|\x1B[789]|\x1B\([AB]|\x1B\[[0-9]*[HJKfABCDGR`]|\x1B\[[0-9;]*[rW]|\x1B\[[0-9;]*H").unwrap();
+        let without_ansi = ansi_regex.replace_all(raw_output, "");
+        
+        // Remove control characters and non-printable characters
+        let control_regex = regex::Regex::new(r"[\x00-\x1F\x7F]+").unwrap();
+        let clean_text = control_regex.replace_all(&without_ansi, " ");
+        
+        // Remove excessive whitespace and empty lines
+        let lines: Vec<&str> = clean_text
+            .lines()
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty())
+            .collect();
+        
+        lines.join("\n")
     }
 
     #[allow(dead_code)]
