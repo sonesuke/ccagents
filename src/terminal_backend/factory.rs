@@ -6,7 +6,7 @@ use super::{
 use crate::ht_client::HtClient;
 use crate::ht_process::HtProcess;
 use std::sync::Arc;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 pub struct TerminalBackendFactory;
 
@@ -15,22 +15,13 @@ impl TerminalBackendFactory {
         config: &TerminalBackendConfig,
     ) -> TerminalBackendResult<Box<dyn TerminalBackend>> {
         match config.backend_type {
-            BackendType::Ht => {
-                Self::create_ht_backend(
-                    &config.ht_config,
-                    config.fallback_enabled,
-                    &config.direct_config,
-                )
-                .await
-            }
+            BackendType::Ht => Self::create_ht_backend(&config.ht_config).await,
             BackendType::Direct => Self::create_direct_backend(&config.direct_config).await,
         }
     }
 
     pub async fn create_ht_backend(
         ht_config: &HtBackendConfig,
-        fallback_enabled: bool,
-        direct_config: &DirectBackendConfig,
     ) -> TerminalBackendResult<Box<dyn TerminalBackend>> {
         info!("Creating HT terminal backend");
         debug!("HT binary path: {}", ht_config.ht_binary_path.display());
@@ -41,13 +32,7 @@ impl TerminalBackendFactory {
                 "HT binary not found at path: {}",
                 ht_config.ht_binary_path.display()
             );
-
-            if fallback_enabled {
-                warn!("{}, falling back to direct backend", error_msg);
-                return Self::create_direct_backend(direct_config).await;
-            } else {
-                return Err(TerminalBackendError::BackendUnavailable(error_msg));
-            }
+            return Err(TerminalBackendError::BackendUnavailable(error_msg));
         }
 
         // Create HT process
@@ -72,13 +57,7 @@ impl TerminalBackendFactory {
             }
             Err(e) => {
                 let error_msg = format!("Failed to start HT client: {}", e);
-
-                if fallback_enabled {
-                    warn!("{}, falling back to direct backend", error_msg);
-                    Self::create_direct_backend(direct_config).await
-                } else {
-                    Err(TerminalBackendError::ExecutionError(error_msg))
-                }
+                Err(TerminalBackendError::ExecutionError(error_msg))
             }
         }
     }
@@ -106,17 +85,8 @@ impl TerminalBackendFactory {
         Self::create_backend(&config).await
     }
 
-    pub async fn create_ht_or_fallback() -> TerminalBackendResult<Box<dyn TerminalBackend>> {
-        let config = TerminalBackendConfig::new()
-            .with_backend_type(BackendType::Ht)
-            .with_fallback(true);
-        Self::create_backend(&config).await
-    }
-
     pub async fn create_direct_only() -> TerminalBackendResult<Box<dyn TerminalBackend>> {
-        let config = TerminalBackendConfig::new()
-            .with_backend_type(BackendType::Direct)
-            .with_fallback(false);
+        let config = TerminalBackendConfig::new().with_backend_type(BackendType::Direct);
         Self::create_backend(&config).await
     }
 }
