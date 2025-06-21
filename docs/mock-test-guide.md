@@ -28,10 +28,14 @@ The mock test scenario provides a concrete example of how `rule-agents` can auto
 Run rule-agents with the mock rules:
 
 ```bash
+# For current implementation (legacy format)
+rule-agents --rules examples/mock-rules-legacy.yaml
+
+# For future implementation (new format)
 rule-agents --rules examples/mock-rules.yaml
 ```
 
-Note: The current version uses the `send_keys` action to send keystrokes to the terminal.
+Note: The current implementation uses legacy command format. The new `send_keys` action format is provided for future compatibility.
 
 ### Test Flow
 
