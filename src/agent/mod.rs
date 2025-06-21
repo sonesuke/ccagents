@@ -16,7 +16,7 @@ pub struct Agent {
 
 #[allow(dead_code)]
 impl Agent {
-    pub async fn new(id: String, test_mode: bool) -> Result<Self> {
+    pub async fn new(id: String, test_mode: bool, port: u16) -> Result<Self> {
         let config = if test_mode {
             // Test configuration
             HtProcessConfig {
@@ -24,6 +24,7 @@ impl Agent {
                 shell_command: Some("bash".to_string()),
                 restart_attempts: 1,
                 restart_delay_ms: 100,
+                port,
             }
         } else {
             // Production configuration
@@ -35,6 +36,7 @@ impl Agent {
                 shell_command: Some("bash".to_string()),
                 restart_attempts: 3,
                 restart_delay_ms: 1000,
+                port,
             }
         };
 
@@ -186,14 +188,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_agent_creation() {
-        let agent = Agent::new("test-agent".to_string(), true).await.unwrap();
+        let agent = Agent::new("test-agent".to_string(), true, 9999).await.unwrap();
         assert_eq!(agent.id(), "test-agent");
         assert_eq!(agent.backend_type(), "ht");
     }
 
     #[tokio::test]
     async fn test_agent_availability() {
-        let agent = Agent::new("test-agent".to_string(), true).await.unwrap();
+        let agent = Agent::new("test-agent".to_string(), true, 9999).await.unwrap();
         // In test mode, agent may not be available since we don't start the process
         // This test mainly verifies that the agent can be created without panicking
         let _available = agent.is_available().await;

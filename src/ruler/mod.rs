@@ -14,6 +14,7 @@ pub struct Ruler {
     rules: Arc<RwLock<Vec<CompiledRule>>>,
     agents: HashMap<String, Agent>,
     test_mode: bool,
+    next_port: u16,
 }
 
 #[allow(dead_code)]
@@ -46,6 +47,7 @@ impl Ruler {
             rules,
             agents: HashMap::new(),
             test_mode: is_test,
+            next_port: 9990, // Start from port 9990
         })
     }
 
@@ -54,7 +56,10 @@ impl Ruler {
             return Err(anyhow::anyhow!("Agent {} already exists", agent_id));
         }
 
-        let agent = Agent::new(agent_id.to_string(), self.test_mode).await?;
+        let port = self.next_port;
+        self.next_port += 1; // Increment for next agent
+        
+        let agent = Agent::new(agent_id.to_string(), self.test_mode, port).await?;
         self.agents.insert(agent_id.to_string(), agent);
         Ok(())
     }

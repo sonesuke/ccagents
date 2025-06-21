@@ -46,6 +46,7 @@ pub struct HtProcessConfig {
     pub shell_command: Option<String>,
     pub restart_attempts: u32,
     pub restart_delay_ms: u64,
+    pub port: u16,
 }
 
 impl Default for HtProcessConfig {
@@ -55,6 +56,7 @@ impl Default for HtProcessConfig {
             shell_command: Some(std::env::var("SHELL").unwrap_or_else(|_| "bash".to_string())),
             restart_attempts: 3,
             restart_delay_ms: 1000,
+            port: 9999,
         }
     }
 }
@@ -110,12 +112,12 @@ impl HtProcess {
 
         let shell = self.config.shell_command.as_deref().unwrap_or("unknown");
         println!("🐚 Starting HT with shell: {}", shell);
-        println!("🌐 HT terminal web interface available at: http://localhost:9999");
+        println!("🌐 HT terminal web interface available at: http://localhost:{}", self.config.port);
 
         let mut command = Command::new(&self.config.ht_binary_path);
 
-        // Always enable web interface on port 9999
-        command.arg("-l").arg("0.0.0.0:9999");
+        // Enable web interface on configured port
+        command.arg("-l").arg(format!("0.0.0.0:{}", self.config.port));
 
         if let Some(shell_cmd) = &self.config.shell_command {
             command.arg(shell_cmd);
