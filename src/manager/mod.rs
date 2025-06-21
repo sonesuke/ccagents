@@ -9,8 +9,7 @@ pub struct Manager {
 
 impl Manager {
     pub async fn new(rules_path: &str) -> Result<Self> {
-        let mut rule_engine = RuleEngine::new(rules_path).await?;
-        rule_engine.start().await?;
+        let rule_engine = RuleEngine::new(rules_path).await?;
         Ok(Manager {
             rule_engine: Arc::new(rule_engine),
         })
