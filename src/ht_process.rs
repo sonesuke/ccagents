@@ -52,7 +52,7 @@ impl Default for HtProcessConfig {
     fn default() -> Self {
         Self {
             ht_binary_path: "ht".to_string(),
-            shell_command: Some(std::env::var("SHELL").unwrap()),
+            shell_command: Some(std::env::var("SHELL").unwrap_or_else(|_| "bash".to_string())),
             restart_attempts: 3,
             restart_delay_ms: 1000,
         }
