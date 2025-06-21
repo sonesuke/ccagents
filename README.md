@@ -72,3 +72,44 @@ cargo fmt                      # Auto-format code
 ### Architecture
 
 See [docs/architecture.md](docs/architecture.md) for system design details.
+
+## Features
+
+### Terminal Output Monitoring
+
+Real-time agent state detection based on HT (terminal) process output analysis:
+
+- **State Detection**: Automatically detects Idle, Wait, and Active agent states
+- **Shell Prompt Recognition**: Configurable regex patterns for various shell prompts
+- **Output Change Monitoring**: Compares terminal snapshots to detect activity
+- **Timeout Handling**: Detects stuck commands and provides warnings
+- **Event-Driven Architecture**: Efficient monitoring with minimal CPU overhead
+
+See [docs/terminal_output_monitoring.md](docs/terminal_output_monitoring.md) for detailed documentation.
+
+#### Quick Example
+
+```rust
+use rule_agents::{HtClient, HtProcess, HtProcessConfig, TerminalOutputMonitor};
+use std::sync::Arc;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Setup HT client
+    let ht_process = HtProcess::new(HtProcessConfig::default());
+    let ht_client = Arc::new(HtClient::new(ht_process));
+    ht_client.start().await?;
+
+    // Create and start monitor
+    let mut monitor = TerminalOutputMonitor::new(ht_client.clone()).await?;
+    let mut state_receiver = monitor.start_monitoring();
+    
+    // Handle state transitions
+    while let Some(transition) = state_receiver.recv().await {
+        println!("Agent state: {} -> {}", 
+            transition.from, transition.to);
+    }
+    
+    Ok(())
+}
+```
