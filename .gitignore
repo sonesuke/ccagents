@@ -1,2 +1,13 @@
 .worktree/*
 !.worktree/.gitkeep
+
+
+# Added by cargo
+
+/target
+Cargo.lock
+*.pdb
+.env
+.vscode/
+.idea/
+*.log

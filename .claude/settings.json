@@ -5,8 +5,15 @@
       "Bash(git push:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
+      "Bash(git worktree:*)",
+      "Bash(gh issue view:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr edit:*)",
       "Bash(ls:*)",
-      "WebFetch(domain:*)"
+      "WebFetch(domain:*)",
+      "Bash(mkdir:*)",
+      "Bash(cargo:*)",
+      "Bash(rm:*)"
     ],
     "deny": []
   }
