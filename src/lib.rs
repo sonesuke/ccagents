@@ -4,6 +4,7 @@ pub mod manager;
 pub mod rule_engine;
 pub mod session_manager;
 pub mod terminal_backend;
+pub mod terminal_output_monitor;
 
 pub use ht_client::{HtClient, HtClientError, HtCommand, HtEvent, TerminalSnapshot};
 pub use ht_process::HtProcess;
@@ -15,4 +16,8 @@ pub use terminal_backend::{
     HtTerminalBackend, TerminalBackend, TerminalBackendConfig, TerminalBackendError,
     TerminalBackendFactory, TerminalBackendManager, TerminalBackendResult,
     TerminalSnapshot as BackendTerminalSnapshot,
+};
+pub use terminal_output_monitor::{
+    AgentState, MonitorConfig, MonitorError, MonitorStatistics, StateTransition,
+    TerminalOutputMonitor,
 };
