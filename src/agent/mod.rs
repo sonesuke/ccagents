@@ -55,12 +55,16 @@ impl Agent {
     }
 
     pub async fn send_keys(&self, keys: &str) -> Result<()> {
-        self.ht_process.send_input(keys.to_string()).await
+        self.ht_process
+            .send_input(keys.to_string())
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to send keys: {}", e))
     }
 
     pub async fn get_output(&self) -> Result<String> {
-        self.ht_process.get_view().await
+        self.ht_process
+            .get_view()
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to get output: {}", e))
     }
 
@@ -93,7 +97,7 @@ impl Agent {
 
     pub async fn take_snapshot(&self) -> Result<TerminalSnapshot> {
         let content = self.ht_process.get_view().await?;
-        
+
         // Get terminal size (simplified - would query actual size in production)
         let (width, height) = (80, 24);
 
@@ -123,7 +127,7 @@ impl Agent {
         // Send env command and parse output
         self.send_keys("env\n").await?;
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-        
+
         let output = self.get_output().await?;
         let mut env_vars = HashMap::new();
 

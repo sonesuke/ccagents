@@ -514,7 +514,12 @@ impl Ruler {
         Ok(())
     }
 
-    pub async fn manage_editor_session(&self, agent_id: &str, file_path: &str, editor: Option<&str>) -> Result<()> {
+    pub async fn manage_editor_session(
+        &self,
+        agent_id: &str,
+        file_path: &str,
+        editor: Option<&str>,
+    ) -> Result<()> {
         let agent = self.get_agent(agent_id).await?;
         let editor_cmd = editor.unwrap_or("vim");
 
@@ -647,11 +652,7 @@ impl Ruler {
 
     pub async fn list_sessions(&self) -> Vec<crate::ruler::session::SessionState> {
         let sessions = self.sessions.lock().await;
-        sessions
-            .list_sessions()
-            .into_iter()
-            .cloned()
-            .collect()
+        sessions.list_sessions().into_iter().cloned().collect()
     }
 
     pub async fn remove_session(&self, agent_id: &str) -> Result<bool> {

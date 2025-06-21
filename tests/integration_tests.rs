@@ -380,10 +380,7 @@ async fn test_ruler_handles_multiple_scenarios() -> Result<()> {
     }
 
     for (agent_id, capture) in scenarios {
-        assert!(ruler
-            .handle_waiting_state(agent_id, capture)
-            .await
-            .is_ok());
+        assert!(ruler.handle_waiting_state(agent_id, capture).await.is_ok());
     }
 
     Ok(())
@@ -482,7 +479,7 @@ rules:
 async fn test_concurrent_agents() -> Result<()> {
     std::env::set_var("CARGO_TEST", "1");
     let mut ruler = Ruler::new("examples/basic-rules.yaml").await?;
-    
+
     // Create agents first
     for i in 0..10 {
         ruler.create_agent(&format!("agent-{}", i)).await?;

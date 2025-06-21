@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for (agent_id, capture) in scenarios {
         tokio::time::sleep(Duration::from_millis(500)).await;
-        
+
         match ruler.handle_waiting_state(agent_id, capture).await {
             Ok(()) => {
                 info!("Successfully handled scenario: '{}'", capture);
@@ -59,7 +59,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("=== Demo 3: Health Check ===");
     match ruler.health_check().await {
         Ok(healthy) => {
-            info!("Health check result: {}", if healthy { "Healthy" } else { "Unhealthy" });
+            info!(
+                "Health check result: {}",
+                if healthy { "Healthy" } else { "Unhealthy" }
+            );
         }
         Err(e) => {
             error!("Health check failed: {}", e);

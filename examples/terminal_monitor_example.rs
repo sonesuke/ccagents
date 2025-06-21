@@ -21,14 +21,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         change_detection_interval: Duration::from_millis(100),
         output_stable_duration: Duration::from_secs(1),
         prompt_patterns: vec![
-            r"\$\s*$".to_string(),       // Bash prompt
-            r">\s*$".to_string(),        // CMD prompt
-            r"#\s*$".to_string(),        // Root prompt
+            r"\$\s*$".to_string(), // Bash prompt
+            r">\s*$".to_string(),  // CMD prompt
+            r"#\s*$".to_string(),  // Root prompt
         ],
         max_snapshot_history: 5,
     };
 
-    let mut custom_monitor = TerminalOutputMonitor::with_config("custom-agent".to_string(), monitor_config);
+    let mut custom_monitor =
+        TerminalOutputMonitor::with_config("custom-agent".to_string(), monitor_config);
     info!("Created custom monitor for agent: custom-agent");
 
     // Demo 3: Start monitoring and simulate terminal snapshots
@@ -70,7 +71,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Process snapshots and monitor state transitions
     for (i, snapshot) in test_snapshots.iter().enumerate() {
         info!("Processing snapshot {}", i + 1);
-        
+
         if let Err(e) = custom_monitor.process_snapshot(snapshot.clone()).await {
             error!("Failed to process snapshot: {}", e);
         }
@@ -92,7 +93,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         info!("Current state: {:?}", custom_monitor.current_state());
-        
+
         // Small delay between snapshots
         tokio::time::sleep(Duration::from_millis(200)).await;
     }

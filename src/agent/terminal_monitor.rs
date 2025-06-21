@@ -63,12 +63,12 @@ impl Default for MonitorConfig {
             change_detection_interval: Duration::from_millis(500),
             output_stable_duration: Duration::from_secs(3),
             prompt_patterns: vec![
-                r"\$\s*$".to_string(),           // Bash prompt
-                r">\s*$".to_string(),            // Windows prompt
-                r"#\s*$".to_string(),            // Root prompt
-                r"%\s*$".to_string(),            // Zsh default
-                r"❯\s*$".to_string(),            // Popular custom prompt
-                r"➜\s*$".to_string(),            // Another common prompt
+                r"\$\s*$".to_string(), // Bash prompt
+                r">\s*$".to_string(),  // Windows prompt
+                r"#\s*$".to_string(),  // Root prompt
+                r"%\s*$".to_string(),  // Zsh default
+                r"❯\s*$".to_string(),  // Popular custom prompt
+                r"➜\s*$".to_string(),  // Another common prompt
             ],
             max_snapshot_history: 10,
         }
@@ -134,7 +134,10 @@ impl TerminalOutputMonitor {
         self.running = true;
         self.last_output_change = Instant::now();
 
-        info!("Terminal output monitoring started for agent {}", self.agent_id);
+        info!(
+            "Terminal output monitoring started for agent {}",
+            self.agent_id
+        );
         rx
     }
 
@@ -142,11 +145,17 @@ impl TerminalOutputMonitor {
     pub fn stop_monitoring(&mut self) {
         self.running = false;
         self.state_tx = None;
-        info!("Terminal output monitoring stopped for agent {}", self.agent_id);
+        info!(
+            "Terminal output monitoring stopped for agent {}",
+            self.agent_id
+        );
     }
 
     /// Process a new terminal snapshot and detect state changes
-    pub async fn process_snapshot(&mut self, snapshot: TerminalSnapshot) -> Result<(), MonitorError> {
+    pub async fn process_snapshot(
+        &mut self,
+        snapshot: TerminalSnapshot,
+    ) -> Result<(), MonitorError> {
         if !self.running {
             return Err(MonitorError::NotRunning);
         }
