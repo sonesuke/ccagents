@@ -1,10 +1,11 @@
-use crate::rule_engine::{decide_cmd, CmdKind, RuleEngine};
+use crate::rule_engine::{decide_action, ActionType, CmdKind, RuleEngine};
 use crate::session_manager::SessionManager;
 use crate::terminal_backend::{BackendType, TerminalBackendConfig, TerminalBackendManager};
 use anyhow::Result;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio::time::Duration;
 
 #[derive(Clone)]
 pub struct Manager {
@@ -102,25 +103,22 @@ impl Manager {
 
     pub async fn handle_waiting_state(&self, agent_id: &str, capture: &str) -> Result<()> {
         let rules = self.rule_engine.get_rules().await;
-        let (command, args) = decide_cmd(capture, &rules);
+        let action = decide_action(capture, &rules);
 
-        println!(
-            "Agent {}: Capture \"{}\" → {:?} {:?}",
-            agent_id, capture, command, args
-        );
+        println!("Agent {}: Capture \"{}\" → {:?}", agent_id, capture, action);
 
-        // Save session state before executing command (for potential recovery)
+        // Save session state before executing action (for potential recovery)
         self.save_current_session_state(agent_id, capture)
             .await
             .unwrap_or_else(|e| {
                 eprintln!("Warning: Could not save session state: {}", e);
             });
 
-        // Execute command with graceful error handling
-        match self.send_command_to_agent(agent_id, command, args).await {
+        // Execute action with graceful error handling
+        match self.execute_action(agent_id, action).await {
             Ok(()) => Ok(()),
             Err(e) => {
-                eprintln!("❌ Command execution failed for agent {}: {}", agent_id, e);
+                eprintln!("❌ Action execution failed for agent {}: {}", agent_id, e);
 
                 // Try to recover from the error
                 if let Err(recovery_error) = self.handle_interrupted_session(agent_id, &e).await {
@@ -130,6 +128,77 @@ impl Manager {
                 Err(e)
             }
         }
+    }
+
+    /// Execute an action based on the new ActionType system
+    async fn execute_action(&self, agent_id: &str, action: ActionType) -> Result<()> {
+        match action {
+            ActionType::SendKeys(keys) => {
+                println!("→ Sending keys to agent {}: {:?}", agent_id, keys);
+                self.send_keys_to_agent(agent_id, keys).await?;
+            }
+            ActionType::Workflow(workflow_name, args) => {
+                println!(
+                    "→ Executing workflow '{}' for agent {} with args: {:?}",
+                    workflow_name, agent_id, args
+                );
+                self.execute_workflow(agent_id, &workflow_name, args)
+                    .await?;
+            }
+            ActionType::Legacy(cmd_kind, args) => {
+                // Handle legacy commands during transition period
+                println!(
+                    "→ Executing legacy command {:?} for agent {} with args: {:?}",
+                    cmd_kind, agent_id, args
+                );
+                self.send_command_to_agent(agent_id, cmd_kind, args).await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Send keys directly to the terminal
+    async fn send_keys_to_agent(&self, agent_id: &str, keys: Vec<String>) -> Result<()> {
+        if self.test_mode {
+            println!(
+                "ℹ️ Test mode: would send keys {:?} to agent {}",
+                keys, agent_id
+            );
+            return Ok(());
+        }
+
+        let backend = self.terminal_backend.backend();
+
+        for key in keys {
+            println!("  → Sending key: '{}'", key);
+            backend
+                .send_keys(&key)
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to send key '{}': {}", key, e))?;
+            // Small delay between keys to avoid overwhelming the terminal
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+
+        Ok(())
+    }
+
+    /// Execute a workflow by name
+    async fn execute_workflow(
+        &self,
+        agent_id: &str,
+        workflow_name: &str,
+        args: Vec<String>,
+    ) -> Result<()> {
+        match workflow_name {
+            "github_issue_resolution" => {
+                // Use the existing entry command logic for GitHub issue resolution
+                self.execute_entry_command(agent_id, args).await?;
+            }
+            _ => {
+                return Err(anyhow::anyhow!("Unknown workflow: {}", workflow_name));
+            }
+        }
+        Ok(())
     }
 
     async fn send_command_to_agent(

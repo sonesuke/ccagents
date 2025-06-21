@@ -1,9 +1,25 @@
 rules:
+  # New flexible action-based rules
+  - priority: 5
+    pattern: "Do you want to proceed\\?.*❯ 1\\. Yes"
+    action: "send_keys"
+    keys: ["1", "\r"]
   - priority: 10
     pattern: "issue\\s+(\\d+)"
-    command: "entry"
-    args: []
-  - priority: 30
+    action: "workflow"
+    workflow: "github_issue_resolution"
+    args: ["${1}"]
+  - priority: 15
+    pattern: "Continue\\?.*❯\\s*(\\d+)\\."
+    action: "send_keys"
+    keys: ["${1}", "\r"]
+  - priority: 20
     pattern: "resume"
+    action: "send_keys"
+    keys: ["/resume", "\r"]
+  
+  # Legacy format for backward compatibility during transition  
+  - priority: 110
+    pattern: "legacy_resume"
     command: "resume"
     args: []

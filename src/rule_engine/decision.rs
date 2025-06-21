@@ -1,40 +1,71 @@
-use crate::rule_engine::{CmdKind, CompiledRule};
+use crate::rule_engine::{resolve_capture_groups_in_vec, ActionType, CmdKind, CompiledRule};
 
-/// Matches capture text against compiled rules and returns the appropriate command and arguments.
+/// Matches capture text against compiled rules and returns the appropriate action.
 ///
 /// This function iterates through rules in priority order (already sorted by load_rules)
-/// and returns the first matching rule's command and arguments.
-/// If no rules match, returns (CmdKind::Resume, vec![]) as the default.
+/// and returns the first matching rule's action with resolved capture groups.
+/// If no rules match, returns ActionType::Legacy(CmdKind::Resume, vec![]) as the default.
 ///
 /// # Arguments
 /// * `capture` - The text to match against rule patterns
 /// * `rules` - Slice of compiled rules, assumed to be sorted by priority
 ///
 /// # Returns
-/// A tuple of (CmdKind, Vec<String>) representing the command and its arguments
+/// An ActionType representing the action to take
 ///
 /// # Performance
 /// Early termination on first match ensures optimal performance.
 /// Should complete within 1ms for 100 rules with typical patterns.
-pub fn decide_cmd(capture: &str, rules: &[CompiledRule]) -> (CmdKind, Vec<String>) {
+pub fn decide_action(capture: &str, rules: &[CompiledRule]) -> ActionType {
     for rule in rules {
         if let Some(captures) = rule.regex.captures(capture) {
-            let mut args = rule.args.clone();
+            // Extract capture groups
+            let captured_groups: Vec<String> = captures
+                .iter()
+                .skip(1) // Skip the full match (index 0)
+                .filter_map(|m| m.map(|m| m.as_str().to_string()))
+                .collect();
 
-            // Extract capture groups and add them to args
-            // Skip the first capture (index 0) which is the full match
-            for i in 1..captures.len() {
-                if let Some(captured) = captures.get(i) {
-                    args.push(captured.as_str().to_string());
+            // Resolve capture groups in the action
+            let resolved_action = match &rule.action {
+                ActionType::SendKeys(keys) => {
+                    ActionType::SendKeys(resolve_capture_groups_in_vec(keys, &captured_groups))
                 }
-            }
+                ActionType::Workflow(workflow, args) => {
+                    let resolved_args = resolve_capture_groups_in_vec(args, &captured_groups);
+                    ActionType::Workflow(workflow.clone(), resolved_args)
+                }
+                ActionType::Legacy(cmd_kind, args) => {
+                    let mut resolved_args = args.clone();
+                    // Add captured groups to legacy args for backward compatibility
+                    resolved_args.extend(captured_groups);
+                    ActionType::Legacy(cmd_kind.clone(), resolved_args)
+                }
+            };
 
-            return (rule.command.clone(), args);
+            return resolved_action;
         }
     }
 
     // Default case: no rules matched
-    (CmdKind::Resume, vec![])
+    ActionType::Legacy(CmdKind::Resume, vec![])
+}
+
+/// Legacy wrapper function for backward compatibility
+///
+/// This function maintains compatibility with existing code that expects
+/// the old (CmdKind, Vec<String>) return type. It should be used during
+/// the transition period.
+pub fn decide_cmd(capture: &str, rules: &[CompiledRule]) -> (CmdKind, Vec<String>) {
+    let action = decide_action(capture, rules);
+    match action {
+        ActionType::Legacy(cmd_kind, args) => (cmd_kind, args),
+        _ => {
+            // For non-legacy actions, return Resume to maintain compatibility
+            // The new system should use decide_action directly
+            (CmdKind::Resume, vec![])
+        }
+    }
 }
 
 #[cfg(test)]
@@ -51,8 +82,7 @@ mod tests {
         CompiledRule {
             priority,
             regex: Regex::new(pattern).unwrap(),
-            command,
-            args,
+            action: ActionType::Legacy(command, args),
         }
     }
 
