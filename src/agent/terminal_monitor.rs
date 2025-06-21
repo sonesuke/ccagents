@@ -16,6 +16,7 @@ pub struct TerminalSnapshot {
 }
 
 #[derive(Debug, Error)]
+#[allow(dead_code)]
 pub enum MonitorError {
     #[error("Monitoring error: {0}")]
     MonitoringError(String),
@@ -38,6 +39,7 @@ pub enum AgentState {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct StateTransition {
     pub from: AgentState,
     pub to: AgentState,
@@ -46,6 +48,7 @@ pub struct StateTransition {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct MonitorConfig {
     /// Interval between terminal snapshots for change detection
     pub change_detection_interval: Duration,
@@ -76,6 +79,7 @@ impl Default for MonitorConfig {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct MonitorStatistics {
     pub total_transitions: usize,
     pub idle_duration_ms: u64,
@@ -83,6 +87,7 @@ pub struct MonitorStatistics {
     pub active_duration_ms: u64,
 }
 
+#[allow(dead_code)]
 pub struct TerminalOutputMonitor {
     agent_id: String,
     config: MonitorConfig,
@@ -94,6 +99,7 @@ pub struct TerminalOutputMonitor {
     running: bool,
 }
 
+#[allow(dead_code)]
 impl TerminalOutputMonitor {
     /// Create a new TerminalOutputMonitor
     pub fn new(agent_id: String) -> Self {

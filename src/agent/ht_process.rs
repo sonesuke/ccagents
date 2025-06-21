@@ -69,6 +69,7 @@ pub struct HtProcess {
     auto_restart: Arc<AtomicBool>,
 }
 
+#[allow(dead_code)]
 impl HtProcess {
     pub fn new(config: HtProcessConfig) -> Self {
         Self {

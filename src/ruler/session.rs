@@ -40,6 +40,7 @@ pub struct SessionStore {
     sessions: HashMap<String, SessionState>,
 }
 
+#[allow(dead_code)]
 impl SessionStore {
     pub fn new<P: AsRef<Path>>(persistence_file: P) -> Self {
         Self {

@@ -104,29 +104,20 @@ After starting rule-agents, the terminal web interface is available at:
 
 The web interface URL is automatically displayed when the HT process starts.
 
-#### Quick Example
+#### Command Line Interface
 
-```rust
-use rule_agents::{HtClient, HtProcess, HtProcessConfig, TerminalOutputMonitor};
-use std::sync::Arc;
+Access the web interface by running the rule-agents binary:
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Setup HT client
-    let ht_process = HtProcess::new(HtProcessConfig::default());
-    let ht_client = Arc::new(HtClient::new(ht_process));
-    ht_client.start().await?;
+```bash
+# Start with default configuration
+./target/release/rule-agents
 
-    // Create and start monitor
-    let mut monitor = TerminalOutputMonitor::new(ht_client.clone()).await?;
-    let mut state_receiver = monitor.start_monitoring();
-    
-    // Handle state transitions
-    while let Some(transition) = state_receiver.recv().await {
-        println!("Agent state: {} -> {}", 
-            transition.from, transition.to);
-    }
-    
-    Ok(())
-}
+# Start with custom rules and settings
+./target/release/rule-agents daemon --rules examples/basic-rules.yaml --interval 5
+
+# Test rule matching
+./target/release/rule-agents test --rules examples/basic-rules.yaml --capture "issue 123"
+
+# View loaded rules
+./target/release/rule-agents show --rules examples/basic-rules.yaml
 ```
