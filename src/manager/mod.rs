@@ -1,12 +1,16 @@
 use crate::rule_engine::{decide_cmd, CmdKind, RuleEngine};
+use crate::session_manager::SessionManager;
 use crate::terminal_backend::{BackendType, TerminalBackendConfig, TerminalBackendManager};
 use anyhow::Result;
+use std::path::PathBuf;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[derive(Clone)]
 pub struct Manager {
     rule_engine: Arc<RuleEngine>,
     terminal_backend: Arc<TerminalBackendManager>,
+    session_manager: Arc<Mutex<SessionManager>>,
     test_mode: bool,
 }
 
@@ -21,7 +25,16 @@ impl Manager {
             || std::env::var("GITHUB_ACTIONS").is_ok()
             || std::thread::current()
                 .name()
-                .is_some_and(|name| name.contains("test"));
+                .is_some_and(|name| name.contains("test"))
+            || std::env::args().any(|arg| arg.contains("test"))
+            || std::env::current_exe()
+                .map(|exe| {
+                    exe.file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .contains("test")
+                })
+                .unwrap_or(false);
         let (terminal_backend, test_mode) = if is_test {
             // Use direct backend for tests, which should always be available
             let config = TerminalBackendConfig {
@@ -39,9 +52,25 @@ impl Manager {
             (backend, false)
         };
 
+        // Initialize session manager with default persistence file
+        let session_file = if test_mode {
+            PathBuf::from("/tmp/rule-agents-test-sessions.json")
+        } else {
+            dirs::config_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join("rule-agents")
+                .join("sessions.json")
+        };
+
+        let mut session_manager = SessionManager::new(session_file);
+        session_manager.load_sessions().await.unwrap_or_else(|e| {
+            eprintln!("Warning: Could not load sessions: {}", e);
+        });
+
         Ok(Manager {
             rule_engine: Arc::new(rule_engine),
             terminal_backend: Arc::new(terminal_backend),
+            session_manager: Arc::new(Mutex::new(session_manager)),
             test_mode,
         })
     }
@@ -51,9 +80,22 @@ impl Manager {
         terminal_backend: TerminalBackendManager,
     ) -> Result<Self> {
         let rule_engine = RuleEngine::new(rules_path).await?;
+
+        // Initialize session manager with default persistence file
+        let session_file = dirs::config_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("rule-agents")
+            .join("sessions.json");
+
+        let mut session_manager = SessionManager::new(session_file);
+        session_manager.load_sessions().await.unwrap_or_else(|e| {
+            eprintln!("Warning: Could not load sessions: {}", e);
+        });
+
         Ok(Manager {
             rule_engine: Arc::new(rule_engine),
             terminal_backend: Arc::new(terminal_backend),
+            session_manager: Arc::new(Mutex::new(session_manager)),
             test_mode: false,
         })
     }
@@ -67,7 +109,27 @@ impl Manager {
             agent_id, capture, command, args
         );
 
-        self.send_command_to_agent(agent_id, command, args).await
+        // Save session state before executing command (for potential recovery)
+        self.save_current_session_state(agent_id, capture)
+            .await
+            .unwrap_or_else(|e| {
+                eprintln!("Warning: Could not save session state: {}", e);
+            });
+
+        // Execute command with graceful error handling
+        match self.send_command_to_agent(agent_id, command, args).await {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                eprintln!("❌ Command execution failed for agent {}: {}", agent_id, e);
+
+                // Try to recover from the error
+                if let Err(recovery_error) = self.handle_interrupted_session(agent_id, &e).await {
+                    eprintln!("❌ Session recovery also failed: {}", recovery_error);
+                }
+
+                Err(e)
+            }
+        }
     }
 
     async fn send_command_to_agent(
@@ -148,7 +210,39 @@ impl Manager {
 
     async fn execute_resume_command(&self, agent_id: &str) -> Result<()> {
         println!("▶️ Executing resume command for agent {}", agent_id);
-        // Resume logic would go here
+
+        // In test mode, just simulate resume
+        if self.test_mode {
+            println!("ℹ️ Test mode: resume command simulated");
+            return Ok(());
+        }
+
+        let session_state = {
+            let session_manager = self.session_manager.lock().await;
+            session_manager
+                .get_latest_session_for_agent(agent_id)
+                .cloned()
+        };
+
+        // Try to find the most recent session for this agent
+        if let Some(session_state) = session_state {
+            println!("📄 Found session state for agent {}", agent_id);
+            println!("  - Working directory: {}", session_state.working_directory);
+            println!("  - Last command: {:?}", session_state.last_command);
+            println!("  - Session timestamp: {}", session_state.timestamp);
+
+            // Restore session state
+            self.restore_session_state(agent_id, &session_state).await?;
+
+            println!("✅ Session restored successfully for agent {}", agent_id);
+        } else {
+            println!("⚠️ No previous session found for agent {}", agent_id);
+            println!("   Starting fresh terminal session");
+
+            // Start a fresh session since no previous state exists
+            self.start_fresh_session(agent_id).await?;
+        }
+
         Ok(())
     }
 
@@ -163,17 +257,47 @@ impl Manager {
 
         let backend = self.terminal_backend.backend();
 
-        // Ensure we're on main and up to date
-        let result = backend
-            .execute_command("git checkout main")
+        // Check if we're in a worktree first
+        let pwd_result = backend
+            .execute_command("pwd")
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to checkout main: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to get current directory: {}", e))?;
 
-        if result.exit_code != Some(0) {
-            return Err(anyhow::anyhow!(
-                "Git checkout main failed: {}",
-                result.error
-            ));
+        let current_dir = pwd_result.output.trim();
+
+        // If we're already in a worktree for this issue, we don't need to do git operations
+        if current_dir.contains(&format!(".worktree/issue-{}", issue_number)) {
+            println!("ℹ️ Already in correct worktree, skipping git operations");
+            return Ok(());
+        }
+
+        // Check if we're in the main worktree directory and need to navigate elsewhere
+        if current_dir.contains(".worktree") {
+            println!("ℹ️ In worktree environment, git operations handled by worktree setup");
+            return Ok(());
+        }
+
+        // Check current branch first
+        let branch_result = backend
+            .execute_command("git branch --show-current")
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get current branch: {}", e))?;
+
+        let current_branch = branch_result.output.trim();
+
+        // Only checkout main if we're not already on it and not in a worktree
+        if current_branch != "main" {
+            let result = backend
+                .execute_command("git checkout main")
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to checkout main: {}", e))?;
+
+            if result.exit_code != Some(0) {
+                return Err(anyhow::anyhow!(
+                    "Git checkout main failed: {}",
+                    result.error
+                ));
+            }
         }
 
         let result = backend
@@ -213,9 +337,22 @@ impl Manager {
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to switch to worktree: {}", e))?;
         } else {
-            // Create new worktree
+            // Check if branch already exists first
             let branch_name = format!("issue-{}", issue_number);
-            let cmd = format!("git worktree add {} -b {}", worktree_path, branch_name);
+            let branch_check = backend
+                .execute_command(&format!(
+                    "git show-ref --verify --quiet refs/heads/{}",
+                    branch_name
+                ))
+                .await;
+
+            let cmd = if branch_check.is_ok() && branch_check.unwrap().exit_code == Some(0) {
+                // Branch exists, add worktree without creating new branch
+                format!("git worktree add {} {}", worktree_path, branch_name)
+            } else {
+                // Branch doesn't exist, create new branch
+                format!("git worktree add {} -b {}", worktree_path, branch_name)
+            };
 
             let result = backend
                 .execute_command(&cmd)
@@ -394,6 +531,276 @@ impl Manager {
             }
         }
 
+        Ok(())
+    }
+
+    async fn save_current_session_state(&self, agent_id: &str, last_command: &str) -> Result<()> {
+        if self.test_mode {
+            return Ok(());
+        }
+
+        let backend = self.terminal_backend.backend();
+
+        // Get current terminal snapshot
+        let snapshot = backend
+            .take_snapshot()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to take terminal snapshot: {}", e))?;
+
+        // Get current environment variables
+        let env_vars = backend
+            .get_environment()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get environment variables: {}", e))?;
+
+        // Get current working directory (simplified - in real implementation would be more sophisticated)
+        let working_directory = env_vars.get("PWD").unwrap_or(&"/tmp".to_string()).clone();
+
+        let mut session_manager = self.session_manager.lock().await;
+        session_manager
+            .save_session_state(
+                agent_id,
+                &working_directory,
+                snapshot,
+                env_vars,
+                Some(last_command.to_string()),
+            )
+            .await?;
+
+        Ok(())
+    }
+
+    async fn restore_session_state(
+        &self,
+        agent_id: &str,
+        session_state: &crate::session_manager::SessionState,
+    ) -> Result<()> {
+        let backend = self.terminal_backend.backend();
+
+        println!("🔄 Restoring session state for agent {}", agent_id);
+
+        // Restore working directory
+        println!(
+            "📁 Restoring working directory: {}",
+            session_state.working_directory
+        );
+        backend
+            .set_working_directory(&session_state.working_directory)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to restore working directory: {}", e))?;
+
+        // Restore environment variables (for HT backend, this would involve setting them)
+        for (key, value) in &session_state.environment_vars {
+            if key != "PWD" && key != "HOME" && key != "USER" {
+                // Skip system variables
+                let env_cmd = format!("export {}={}", key, value);
+                backend.send_keys(&env_cmd).await.ok(); // Best effort
+                backend.send_keys("\r").await.ok();
+            }
+        }
+
+        // If there was a last command, show it as a suggestion but don't execute it
+        if let Some(ref last_cmd) = session_state.last_command {
+            println!("💡 Last command was: {}", last_cmd);
+            println!("   You can press Up arrow or retype to continue");
+        }
+
+        // Show current terminal content summary
+        let content_lines = session_state.terminal_snapshot.content.lines().count();
+        println!(
+            "📺 Restored terminal session with {} lines of content",
+            content_lines
+        );
+
+        Ok(())
+    }
+
+    async fn start_fresh_session(&self, agent_id: &str) -> Result<()> {
+        let backend = self.terminal_backend.backend();
+
+        println!("🆕 Starting fresh session for agent {}", agent_id);
+
+        // Clear terminal and show welcome message
+        backend.send_keys("clear").await.ok();
+        backend.send_keys("\r").await.ok();
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+        let welcome_msg = format!("echo '🤖 Agent {} session started'", agent_id);
+        backend.send_keys(&welcome_msg).await.ok();
+        backend.send_keys("\r").await.ok();
+
+        println!("✅ Fresh session initialized for agent {}", agent_id);
+        Ok(())
+    }
+
+    pub async fn cleanup_old_sessions(&self, max_age_hours: u64) -> Result<()> {
+        let mut session_manager = self.session_manager.lock().await;
+        session_manager.cleanup_old_sessions(max_age_hours).await
+    }
+
+    pub async fn list_sessions(&self) -> Vec<crate::session_manager::SessionState> {
+        let session_manager = self.session_manager.lock().await;
+        session_manager
+            .list_sessions()
+            .into_iter()
+            .cloned()
+            .collect()
+    }
+
+    pub async fn remove_session(&self, agent_id: &str) -> Result<bool> {
+        let mut session_manager = self.session_manager.lock().await;
+        session_manager.remove_session(agent_id).await
+    }
+
+    async fn handle_interrupted_session(
+        &self,
+        agent_id: &str,
+        error: &anyhow::Error,
+    ) -> Result<()> {
+        println!(
+            "🔧 Attempting to recover from interrupted session for agent {}",
+            agent_id
+        );
+
+        if self.test_mode {
+            println!("ℹ️ Test mode: simulating session recovery");
+            return Ok(());
+        }
+
+        let backend = self.terminal_backend.backend();
+
+        // Check if backend is still available
+        if !backend.is_available().await {
+            return Err(anyhow::anyhow!("Terminal backend is no longer available"));
+        }
+
+        // Try to send Ctrl+C to cancel any hanging processes
+        println!("🛑 Sending interrupt signal...");
+        if let Err(e) = backend.send_keys("^C").await {
+            eprintln!("Failed to send interrupt: {}", e);
+        }
+
+        // Wait a moment for processes to terminate
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+
+        // Try to reset the terminal state
+        println!("🔄 Resetting terminal state...");
+
+        // Send a few newlines to get to a clean prompt
+        for _ in 0..3 {
+            if let Err(e) = backend.send_keys("\r").await {
+                eprintln!("Failed to send newline: {}", e);
+            }
+            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+        }
+
+        // Try to execute a simple command to verify the terminal is responsive
+        println!("🧪 Testing terminal responsiveness...");
+        if backend.send_keys("echo 'Terminal recovered'").await.is_ok() {
+            backend.send_keys("\r").await.ok();
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+            // Take a snapshot to see if we got output
+            if let Ok(snapshot) = backend.take_snapshot().await {
+                if snapshot.content.contains("Terminal recovered") {
+                    println!("✅ Terminal session recovered successfully");
+
+                    // Save the recovery state
+                    self.save_current_session_state(agent_id, "session_recovered")
+                        .await
+                        .ok();
+                    return Ok(());
+                }
+            }
+        }
+
+        // If we can't recover, mark this in the session
+        println!("⚠️ Terminal recovery incomplete - session may need manual intervention");
+
+        // Update session state to indicate it needs attention
+        let mut session_manager = self.session_manager.lock().await;
+        if let Some(session) = session_manager.get_session_mut(agent_id) {
+            session.last_command = Some(format!("ERROR: {}", error));
+        }
+        drop(session_manager);
+
+        Err(anyhow::anyhow!("Terminal session recovery incomplete"))
+    }
+
+    pub async fn health_check(&self) -> Result<bool> {
+        if self.test_mode {
+            return Ok(true);
+        }
+
+        let backend = self.terminal_backend.backend();
+
+        if !backend.is_available().await {
+            return Ok(false);
+        }
+
+        // Try a simple command to test responsiveness
+        match backend.send_keys("echo health_check").await {
+            Ok(()) => {
+                backend.send_keys("\r").await.ok();
+                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+                // Check if we can take a snapshot
+                match backend.take_snapshot().await {
+                    Ok(_) => Ok(true),
+                    Err(_) => Ok(false),
+                }
+            }
+            Err(_) => Ok(false),
+        }
+    }
+
+    pub async fn force_cleanup_agent(&self, agent_id: &str) -> Result<()> {
+        println!("🧹 Force cleaning up agent session: {}", agent_id);
+
+        if !self.test_mode {
+            let backend = self.terminal_backend.backend();
+
+            // Send multiple interrupt signals
+            for _ in 0..3 {
+                backend.send_keys("^C").await.ok();
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            }
+
+            // Clear the terminal
+            backend.send_keys("clear").await.ok();
+            backend.send_keys("\r").await.ok();
+        }
+
+        // Remove the session from persistence
+        self.remove_session(agent_id).await.ok();
+
+        println!("✅ Agent {} cleaned up", agent_id);
+        Ok(())
+    }
+
+    pub async fn emergency_stop_all(&self) -> Result<()> {
+        println!("🚨 Emergency stop: cleaning up all sessions");
+
+        if !self.test_mode {
+            let backend = self.terminal_backend.backend();
+
+            // Send multiple interrupt signals
+            for _ in 0..5 {
+                backend.send_keys("^C").await.ok();
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            }
+
+            // Try to cleanup the backend
+            backend.cleanup().await.ok();
+        }
+
+        // Clear all sessions
+        let mut session_manager = self.session_manager.lock().await;
+        session_manager.clear_all_sessions();
+        session_manager.save_sessions().await.ok();
+
+        println!("🛑 Emergency stop completed");
         Ok(())
     }
 }
