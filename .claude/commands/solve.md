@@ -53,8 +53,8 @@ else
   echo "Creating new worktree..."
   git checkout main
   git pull origin main
-  git checkout -b issue-<issue-number>
-  git worktree add .worktree/issue-<issue-number> issue-<issue-number>
+  git worktree add .worktree/issue-<issue-number> -b issue-<issue-number>
+  cd .worktree/issue-<issue-number>
 fi
 
 # Create empty commit for draft PR

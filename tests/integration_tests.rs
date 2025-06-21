@@ -1,5 +1,6 @@
 use anyhow::Result;
-use rule_agents::rule_engine::{load_rules, CmdKind};
+use regex::Regex;
+use rule_agents::rule_engine::{decide_cmd, load_rules, CmdKind, CompiledRule};
 use std::io::Write;
 use std::path::Path;
 use tempfile::NamedTempFile;
@@ -104,4 +105,118 @@ fn test_file_not_found() {
         .unwrap_err()
         .to_string()
         .contains("Failed to read rules file"));
+}
+
+// Integration tests for decide_cmd function
+#[test]
+fn test_decide_cmd_exact_match() -> Result<()> {
+    let rules = load_rules(Path::new("examples/basic-rules.yaml"))?;
+
+    // Test match with "issue 123" pattern
+    let (command, args) = decide_cmd("issue 123", &rules);
+    assert_eq!(command, CmdKind::SolveIssue);
+    assert!(args.is_empty()); // Args should match what's in the YAML
+    Ok(())
+}
+
+#[test]
+fn test_decide_cmd_priority_ordering_with_loaded_rules() -> Result<()> {
+    let yaml_content = r#"
+rules:
+  - priority: 20
+    pattern: "test"
+    command: "cancel"
+    args: ["low"]
+  - priority: 10
+    pattern: "test"
+    command: "solve-issue"
+    args: ["high"]
+"#;
+
+    let mut temp_file = NamedTempFile::new()?;
+    write!(temp_file, "{}", yaml_content)?;
+
+    let rules = load_rules(temp_file.path())?;
+
+    // Test that higher priority (lower number) rules match first
+    let (command, args) = decide_cmd("test", &rules);
+    assert_eq!(command, CmdKind::SolveIssue);
+    assert_eq!(args, vec!["high"]);
+    Ok(())
+}
+
+#[test]
+fn test_decide_cmd_no_match_with_loaded_rules() -> Result<()> {
+    let rules = load_rules(Path::new("examples/basic-rules.yaml"))?;
+    let (command, args) = decide_cmd("no matching pattern here", &rules);
+
+    assert_eq!(command, CmdKind::Resume);
+    assert!(args.is_empty());
+    Ok(())
+}
+
+#[test]
+fn test_decide_cmd_empty_capture_with_loaded_rules() -> Result<()> {
+    let rules = load_rules(Path::new("examples/basic-rules.yaml"))?;
+    let (command, args) = decide_cmd("", &rules);
+
+    assert_eq!(command, CmdKind::Resume);
+    assert!(args.is_empty());
+    Ok(())
+}
+
+#[test]
+fn test_decide_cmd_empty_rules() {
+    let (command, args) = decide_cmd("any text", &[]);
+
+    assert_eq!(command, CmdKind::Resume);
+    assert!(args.is_empty());
+}
+
+#[test]
+fn test_performance_100_rules() {
+    use std::time::Instant;
+
+    // Generate 100 test rules and measure performance
+    let rules: Vec<CompiledRule> = (0..100)
+        .map(|i| CompiledRule {
+            priority: i,
+            regex: Regex::new(&format!("unique_pattern_{}", i)).unwrap(),
+            command: CmdKind::Resume,
+            args: vec![],
+        })
+        .collect();
+
+    let start = Instant::now();
+    let (command, _) = decide_cmd("non-matching test input", &rules);
+    let duration = start.elapsed();
+
+    assert_eq!(command, CmdKind::Resume);
+    assert!(
+        duration.as_millis() < 100,
+        "Should complete within 100ms for 100 rules, took {}ms",
+        duration.as_millis()
+    );
+}
+
+#[test]
+fn test_decide_cmd_with_all_basic_rule_patterns() -> Result<()> {
+    let rules = load_rules(Path::new("examples/basic-rules.yaml"))?;
+
+    // Test issue pattern
+    let (command, args) = decide_cmd("issue 456", &rules);
+    assert_eq!(command, CmdKind::SolveIssue);
+    assert!(args.is_empty());
+
+    // Test cancel pattern
+    let (command, args) = decide_cmd("cancel", &rules);
+    assert_eq!(command, CmdKind::Cancel);
+    assert!(args.is_empty());
+
+    // Test resume pattern
+    let (command, args) = decide_cmd("resume", &rules);
+    assert_eq!(command, CmdKind::Resume);
+    assert!(args.is_empty());
+
+    Ok(())
 }
