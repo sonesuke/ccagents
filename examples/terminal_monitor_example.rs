@@ -1,7 +1,5 @@
-use rule_agents::{
-    AgentState, HtClient, HtProcess, MonitorConfig, TerminalOutputMonitor,
-};
 use rule_agents::ht_process::HtProcessConfig;
+use rule_agents::{AgentState, HtClient, HtProcess, MonitorConfig, TerminalOutputMonitor};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::{sleep, timeout};
