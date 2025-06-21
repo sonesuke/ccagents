@@ -1,0 +1,188 @@
+use crate::agent::ht_process::{HtProcess, HtProcessConfig};
+use crate::agent::terminal_monitor::{TerminalOutputMonitor, TerminalSnapshot};
+use anyhow::Result;
+use std::collections::HashMap;
+use tracing::info;
+
+pub struct Agent {
+    id: String,
+    ht_process: HtProcess,
+    terminal_monitor: Option<TerminalOutputMonitor>,
+}
+
+impl Agent {
+    pub async fn new(id: String, test_mode: bool) -> Result<Self> {
+        let config = if test_mode {
+            // Test configuration
+            HtProcessConfig {
+                ht_binary_path: "mock_ht".to_string(),
+                shell_command: Some("bash".to_string()),
+                restart_attempts: 1,
+                restart_delay_ms: 100,
+            }
+        } else {
+            // Production configuration
+            HtProcessConfig {
+                ht_binary_path: which::which("ht")
+                    .map_err(|_| anyhow::anyhow!("ht binary not found in PATH"))?
+                    .to_string_lossy()
+                    .to_string(),
+                shell_command: Some("bash".to_string()),
+                restart_attempts: 3,
+                restart_delay_ms: 1000,
+            }
+        };
+
+        let ht_process = HtProcess::new(config);
+
+        // Start the HT process
+        if !test_mode {
+            ht_process.start().await?;
+        }
+
+        Ok(Agent {
+            id,
+            ht_process,
+            terminal_monitor: None,
+        })
+    }
+
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
+    pub async fn send_keys(&self, keys: &str) -> Result<()> {
+        self.ht_process.send_input(keys.to_string()).await
+    }
+
+    pub async fn get_output(&self) -> Result<String> {
+        self.ht_process.get_view().await
+    }
+
+    pub async fn execute_command(&self, command: &str) -> Result<CommandResult> {
+        info!("Agent {} executing command: {}", self.id, command);
+
+        // Send command
+        self.ht_process.send_input(format!("{}\n", command)).await?;
+
+        // Wait for command to complete (simplified - in production would need better detection)
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+        // Get output
+        let output = self.ht_process.get_view().await?;
+
+        // Try to parse exit code from output (simplified)
+        let exit_code = if output.contains("command not found") {
+            Some(127)
+        } else {
+            Some(0)
+        };
+
+        Ok(CommandResult {
+            exit_code,
+            output: output.clone(),
+            error: String::new(),
+            snapshot: Some(self.take_snapshot().await?),
+        })
+    }
+
+    pub async fn take_snapshot(&self) -> Result<TerminalSnapshot> {
+        let content = self.ht_process.get_view().await?;
+        
+        // Get terminal size (simplified - would query actual size in production)
+        let (width, height) = (80, 24);
+
+        Ok(TerminalSnapshot {
+            content,
+            cursor_position: None, // Would parse from HT in production
+            width,
+            height,
+        })
+    }
+
+    pub async fn resize(&self, width: u32, height: u32) -> Result<()> {
+        // HT process would handle resize in production
+        info!("Agent {} resizing to {}x{}", self.id, width, height);
+        Ok(())
+    }
+
+    pub async fn is_available(&self) -> bool {
+        self.ht_process.is_running().await
+    }
+
+    pub fn backend_type(&self) -> &'static str {
+        "ht"
+    }
+
+    pub async fn get_environment(&self) -> Result<HashMap<String, String>> {
+        // Send env command and parse output
+        self.send_keys("env\n").await?;
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        
+        let output = self.get_output().await?;
+        let mut env_vars = HashMap::new();
+
+        // Parse environment variables from output
+        for line in output.lines() {
+            if let Some((key, value)) = line.split_once('=') {
+                env_vars.insert(key.to_string(), value.to_string());
+            }
+        }
+
+        Ok(env_vars)
+    }
+
+    pub async fn set_working_directory(&self, path: &str) -> Result<()> {
+        let cmd = format!("cd {}\n", path);
+        self.send_keys(&cmd).await
+    }
+
+    pub async fn cleanup(&self) -> Result<()> {
+        info!("Agent {} cleaning up", self.id);
+        self.ht_process.stop().await?;
+        Ok(())
+    }
+
+    pub async fn start_monitoring(&mut self) -> Result<()> {
+        if self.terminal_monitor.is_none() {
+            let monitor = TerminalOutputMonitor::new(self.id.clone());
+            self.terminal_monitor = Some(monitor);
+        }
+        Ok(())
+    }
+
+    pub async fn stop_monitoring(&mut self) {
+        self.terminal_monitor = None;
+    }
+
+    pub fn get_monitor(&self) -> Option<&TerminalOutputMonitor> {
+        self.terminal_monitor.as_ref()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CommandResult {
+    pub exit_code: Option<i32>,
+    pub output: String,
+    pub error: String,
+    pub snapshot: Option<TerminalSnapshot>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_agent_creation() {
+        let agent = Agent::new("test-agent".to_string(), true).await.unwrap();
+        assert_eq!(agent.id(), "test-agent");
+        assert_eq!(agent.backend_type(), "ht");
+    }
+
+    #[tokio::test]
+    async fn test_agent_availability() {
+        let agent = Agent::new("test-agent".to_string(), true).await.unwrap();
+        // In test mode, agent should be available
+        assert!(agent.is_available().await);
+    }
+}

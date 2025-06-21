@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
-use rule_agents::rule_engine::{decide_cmd, load_rules, RuleEngine};
-use rule_agents::Manager;
+use rule_agents::ruler::rule_engine::{decide_cmd, load_rules, RuleEngine};
+use rule_agents::Ruler;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::signal;
@@ -67,13 +67,13 @@ struct ManagerArgs {
     rules: PathBuf,
 }
 
-async fn setup_signal_handler(manager: Arc<Manager>) {
+async fn setup_signal_handler(ruler: Arc<Ruler>) {
     let sigint = signal::ctrl_c();
 
     tokio::spawn(async move {
         if let Ok(()) = sigint.await {
             println!("\nReceived Ctrl+C, initiating emergency stop...");
-            if let Err(e) = manager.emergency_stop_all().await {
+            if let Err(e) = ruler.emergency_stop_all().await {
                 eprintln!("Emergency stop failed: {}", e);
             }
             std::process::exit(0);
@@ -193,12 +193,20 @@ async fn main() -> Result<()> {
                 }
             }
             Commands::Manager(args) => {
-                let manager = Arc::new(Manager::new(args.rules.to_str().unwrap()).await?);
+                let mut ruler = Ruler::new(args.rules.to_str().unwrap()).await?;
+
+                // Create agents for simulation
+                ruler.create_agent("agent-001").await?;
+                ruler.create_agent("agent-002").await?;
+                ruler.create_agent("agent-003").await?;
+                ruler.create_agent("agent-004").await?;
+
+                let ruler_arc = Arc::new(ruler);
 
                 // Set up Ctrl+C signal handler for emergency stop
-                setup_signal_handler(manager.clone()).await;
+                setup_signal_handler(ruler_arc.clone()).await;
 
-                println!("🎯 RuleAgents Manager started");
+                println!("🎯 RuleAgents Ruler started");
                 println!("📂 Rules file: {}", args.rules.display());
                 println!("🤖 Simulating agent waiting scenarios...");
                 println!("🛑 Press Ctrl+C for emergency stop");
@@ -214,12 +222,12 @@ async fn main() -> Result<()> {
                 for (agent_id, capture) in scenarios {
                     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
-                    if let Err(e) = manager.handle_waiting_state(agent_id, capture).await {
+                    if let Err(e) = ruler_arc.handle_waiting_state(agent_id, capture).await {
                         eprintln!("❌ Error handling agent {}: {}", agent_id, e);
                     }
                 }
 
-                println!("✅ Manager simulation complete");
+                println!("✅ Ruler simulation complete");
             }
         },
     }
