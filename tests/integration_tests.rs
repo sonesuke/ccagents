@@ -1,7 +1,9 @@
 use anyhow::Result;
 use regex::Regex;
 use rule_agents::ht_process::{HtProcessConfig, HtProcessError};
-use rule_agents::rule_engine::{decide_cmd, load_rules, CmdKind, CompiledRule, RuleEngine};
+use rule_agents::rule_engine::{
+    decide_cmd, load_rules, ActionType, CmdKind, CompiledRule, RuleEngine,
+};
 use rule_agents::{HtProcess, Manager};
 use std::io::Write;
 use std::path::Path;
@@ -11,9 +13,14 @@ use tempfile::NamedTempFile;
 fn test_load_basic_rules() -> Result<()> {
     let rules = load_rules(Path::new("examples/basic-rules.yaml"))?;
     assert!(!rules.is_empty());
-    // Verify first rule has lowest priority number
-    assert_eq!(rules[0].priority, 10);
-    assert_eq!(rules[0].command, CmdKind::Entry);
+    // Check that the first rule is the one with priority 5 (send_keys action)
+    assert_eq!(rules[0].priority, 5);
+    if let ActionType::SendKeys(keys) = &rules[0].action {
+        assert_eq!(keys[0], "1");
+        assert_eq!(keys[1], "\r");
+    } else {
+        panic!("Expected SendKeys action for first rule");
+    }
     Ok(())
 }
 
@@ -114,10 +121,11 @@ fn test_file_not_found() {
 fn test_decide_cmd_exact_match() -> Result<()> {
     let rules = load_rules(Path::new("examples/basic-rules.yaml"))?;
 
-    // Test match with "issue 123" pattern
+    // Test match with "issue 123" pattern - should match the workflow rule with priority 10
     let (command, args) = decide_cmd("issue 123", &rules);
-    assert_eq!(command, CmdKind::Entry);
-    assert_eq!(args, vec!["123"]); // Should capture the issue number from regex
+    // Since issue pattern uses workflow action, decide_cmd returns Resume for compatibility
+    assert_eq!(command, CmdKind::Resume);
+    assert_eq!(args, Vec::<String>::new()); // No args for Resume compatibility mode
     Ok(())
 }
 
@@ -184,8 +192,7 @@ fn test_performance_100_rules() {
         .map(|i| CompiledRule {
             priority: i,
             regex: Regex::new(&format!("unique_pattern_{}", i)).unwrap(),
-            command: CmdKind::Resume,
-            args: vec![],
+            action: ActionType::Legacy(CmdKind::Resume, vec![]),
         })
         .collect();
 
@@ -205,18 +212,23 @@ fn test_performance_100_rules() {
 fn test_decide_cmd_with_all_basic_rule_patterns() -> Result<()> {
     let rules = load_rules(Path::new("examples/basic-rules.yaml"))?;
 
-    // Test issue pattern
+    // Test issue pattern - new system uses workflow action, so decide_cmd returns Resume
     let (command, args) = decide_cmd("issue 456", &rules);
-    assert_eq!(command, CmdKind::Entry);
-    assert_eq!(args, vec!["456"]); // Should capture issue number
+    assert_eq!(command, CmdKind::Resume);
+    assert_eq!(args, Vec::<String>::new()); // No args for workflow compatibility mode
 
-    // Test cancel pattern
-    let (command, args) = decide_cmd("cancel", &rules);
+    // Test legacy cancel pattern (priority 100)
+    let (command, args) = decide_cmd("legacy_cancel", &rules);
     assert_eq!(command, CmdKind::Cancel);
     assert!(args.is_empty()); // No capture groups
 
-    // Test resume pattern
+    // Test resume pattern - uses send_keys action, so decide_cmd returns Resume
     let (command, args) = decide_cmd("resume", &rules);
+    assert_eq!(command, CmdKind::Resume);
+    assert_eq!(args, Vec::<String>::new()); // No args for send_keys compatibility mode
+
+    // Test legacy resume pattern (priority 110)
+    let (command, args) = decide_cmd("legacy_resume", &rules);
     assert_eq!(command, CmdKind::Resume);
     assert!(args.is_empty()); // No capture groups
 
@@ -230,9 +242,14 @@ async fn test_rule_engine_initial_load() -> Result<()> {
     let rules = engine.get_rules().await;
 
     assert!(!rules.is_empty());
-    // Should match actual content from examples/basic-rules.yaml
-    assert_eq!(rules[0].priority, 10);
-    assert_eq!(rules[0].command, CmdKind::Entry);
+    // Should match actual content from examples/basic-rules.yaml (priority 5 is first)
+    assert_eq!(rules[0].priority, 5);
+    if let ActionType::SendKeys(keys) = &rules[0].action {
+        assert_eq!(keys[0], "1");
+        assert_eq!(keys[1], "\r");
+    } else {
+        panic!("Expected SendKeys action for first rule");
+    }
     Ok(())
 }
 

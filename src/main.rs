@@ -123,7 +123,7 @@ async fn main() -> Result<()> {
                         "  Priority {}: {} -> {:?}",
                         rule.priority,
                         rule.regex.as_str(),
-                        rule.command
+                        rule.action
                     );
                 }
 
