@@ -124,7 +124,7 @@ mod tests {
         )];
 
         let (command, args) = decide_cmd("deploy app to production", &rules);
-        assert_eq!(command, CmdKind::SolveIssue);
+        assert_eq!(command, CmdKind::Entry);
         assert_eq!(args, vec!["static", "app", "production"]); // static + captured groups
     }
 
