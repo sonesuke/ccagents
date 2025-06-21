@@ -311,3 +311,76 @@ rules:
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_manager_with_hot_reload() -> Result<()> {
+    use std::fs;
+
+    let yaml_content = r#"
+rules:
+  - priority: 10
+    pattern: "test-hot-reload"
+    command: "solve-issue"
+    args: []
+"#;
+
+    let mut temp_file = NamedTempFile::new()?;
+    write!(temp_file, "{}", yaml_content)?;
+
+    let manager = Manager::new(temp_file.path().to_str().unwrap()).await?;
+
+    // Initially should match the test pattern
+    assert!(manager
+        .handle_waiting_state("test-agent", "test-hot-reload")
+        .await
+        .is_ok());
+
+    // Give the file watcher time to set up
+    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
+    // Update the rules file
+    let new_yaml_content = r#"
+rules:
+  - priority: 10
+    pattern: "updated-hot-reload"
+    command: "cancel"
+    args: []
+"#;
+
+    fs::write(temp_file.path(), new_yaml_content)?;
+
+    // Give hot-reload time to process the change
+    tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+
+    // Test that rules have been updated
+    assert!(manager
+        .handle_waiting_state("test-agent", "updated-hot-reload")
+        .await
+        .is_ok());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_concurrent_agents() -> Result<()> {
+    let manager = Manager::new("examples/basic-rules.yaml").await?;
+
+    // Simulate multiple agents hitting waiting state simultaneously
+    let handles: std::vec::Vec<_> = (0..10)
+        .map(|i| {
+            let manager = manager.clone();
+            tokio::spawn(async move {
+                manager
+                    .handle_waiting_state(&format!("agent-{}", i), "issue 123")
+                    .await
+            })
+        })
+        .collect();
+
+    // All should complete successfully
+    for handle in handles {
+        assert!(handle.await.unwrap().is_ok());
+    }
+
+    Ok(())
+}

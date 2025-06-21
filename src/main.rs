@@ -17,6 +17,8 @@ enum Commands {
     Show(ShowArgs),
     /// Test rule matching against capture text
     Test(TestArgs),
+    /// Run daemon with hot-reload capability
+    Daemon(DaemonArgs),
     /// Run manager simulation with agent scenarios
     Manager(ManagerArgs),
 }
@@ -36,6 +38,13 @@ struct TestArgs {
     /// Capture text to test against rules
     #[arg(short, long)]
     capture: String,
+}
+
+#[derive(Args, Debug)]
+struct DaemonArgs {
+    /// Path to rules YAML file
+    #[arg(short, long, default_value = "examples/basic-rules.yaml")]
+    rules: PathBuf,
 }
 
 #[derive(Args, Debug)]
@@ -92,6 +101,23 @@ async fn main() -> Result<()> {
                     break;
                 }
             }
+        }
+        Commands::Daemon(args) => {
+            use rule_agents::rule_engine::RuleEngine;
+
+            let mut rule_engine = RuleEngine::new(args.rules.to_str().unwrap()).await?;
+            rule_engine.start().await?;
+
+            println!("🚀 RuleAgents Daemon started");
+            println!("📂 Rules file: {}", args.rules.display());
+            println!("👀 Hot-reload enabled - rules will update automatically");
+            println!("Press Ctrl+C to stop");
+
+            // Keep daemon running
+            tokio::signal::ctrl_c().await?;
+
+            println!("🛑 Daemon shutting down...");
+            rule_engine.stop().await?;
         }
         Commands::Manager(args) => {
             let manager = Manager::new(args.rules.to_str().unwrap()).await?;

@@ -1,19 +1,24 @@
-use crate::rule_engine::{decide_cmd, load_rules, CmdKind, CompiledRule};
+use crate::rule_engine::{decide_cmd, CmdKind, RuleEngine};
 use anyhow::Result;
+use std::sync::Arc;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Manager {
-    rules: Vec<CompiledRule>,
+    rule_engine: Arc<RuleEngine>,
 }
 
 impl Manager {
     pub async fn new(rules_path: &str) -> Result<Self> {
-        let rules = load_rules(std::path::Path::new(rules_path))?;
-        Ok(Manager { rules })
+        let mut rule_engine = RuleEngine::new(rules_path).await?;
+        rule_engine.start().await?;
+        Ok(Manager {
+            rule_engine: Arc::new(rule_engine),
+        })
     }
 
     pub async fn handle_waiting_state(&self, agent_id: &str, capture: &str) -> Result<()> {
-        let (command, args) = decide_cmd(capture, &self.rules);
+        let rules = self.rule_engine.get_rules().await;
+        let (command, args) = decide_cmd(capture, &rules);
 
         println!(
             "Agent {}: Capture \"{}\" → {:?} {:?}",
@@ -49,7 +54,11 @@ impl Manager {
 }
 
 pub trait AgentInterface {
-    fn send_command(&self, command: CmdKind, args: Vec<String>) -> impl std::future::Future<Output = AgentResult> + Send;
+    fn send_command(
+        &self,
+        command: CmdKind,
+        args: Vec<String>,
+    ) -> impl std::future::Future<Output = AgentResult> + Send;
 }
 
 #[derive(Debug)]
