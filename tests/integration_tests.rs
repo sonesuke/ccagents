@@ -6,7 +6,7 @@ use tempfile::NamedTempFile;
 
 #[test]
 fn test_load_basic_rules() -> Result<()> {
-    let rules = load_rules(Path::new("examples/simple-rules.yaml"))?;
+    let rules = load_rules(Path::new("examples/basic-rules.yaml"))?;
     assert!(!rules.is_empty());
     // Verify first rule has lowest priority number
     assert_eq!(rules[0].priority, 10);

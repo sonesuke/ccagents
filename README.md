@@ -15,7 +15,7 @@ cargo build --release
 ./target/release/rule-agents
 
 # Run with specific rules file
-./target/release/rule-agents --rules examples/simple-rules.yaml
+./target/release/rule-agents --rules examples/basic-rules.yaml
 
 # Show help
 ./target/release/rule-agents --help
@@ -23,7 +23,7 @@ cargo build --release
 
 ## Configuration
 
-Create a YAML file with your rules. See `examples/simple-rules.yaml` for reference:
+Create a YAML file with your rules. See `examples/basic-rules.yaml` for reference:
 
 ```yaml
 rules:
