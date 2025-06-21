@@ -9,8 +9,6 @@ use ruler::rule_loader::load_rules;
 use ruler::Ruler;
 use std::path::PathBuf;
 use tokio::signal;
-use workflow::hot_reload::HotReloader;
-use workflow::Workflow;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -66,7 +64,6 @@ async fn main() -> Result<()> {
                 .unwrap_or_else(|| PathBuf::from("examples/basic-rules.yaml"));
             
             let mut ruler = Ruler::new(rules_path.to_str().unwrap()).await?;
-            let workflow = Workflow::new(false, Some(rules_path.to_str().unwrap())).await?;
 
             // Create a single agent for mock.sh testing
             ruler.create_agent("main").await?;
@@ -90,11 +87,10 @@ async fn main() -> Result<()> {
             loop {
                 tokio::select! {
                     _ = signal::ctrl_c() => {
-                        println!("\n🛑 Received Ctrl+C, cleaning up...");
-                        if let Err(e) = agent.cleanup().await {
-                            eprintln!("❌ Error during cleanup: {}", e);
-                        }
-                        println!("✅ Cleanup complete, exiting...");
+                        println!("\n🛑 Received Ctrl+C, shutting down...");
+                        // Note: Child processes (HT) are automatically cleaned up by the OS
+                        // when the parent process (rule-agents) terminates due to the 
+                        // standard parent-child process relationship established by spawn()
                         break;
                     }
                     _ = tokio::time::sleep(tokio::time::Duration::from_millis(500)) => {

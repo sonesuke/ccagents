@@ -150,11 +150,6 @@ impl Agent {
         self.send_keys(&cmd).await
     }
 
-    pub async fn cleanup(&self) -> Result<()> {
-        info!("Agent {} cleaning up", self.id);
-        self.ht_process.stop().await?;
-        Ok(())
-    }
 
     pub async fn start_monitoring(&mut self) -> Result<()> {
         if self.terminal_monitor.is_none() {
