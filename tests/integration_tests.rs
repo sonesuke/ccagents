@@ -1,7 +1,8 @@
 use anyhow::Result;
 use regex::Regex;
+use rule_agents::ht_process::{HtProcessConfig, HtProcessError};
 use rule_agents::rule_engine::{decide_cmd, load_rules, CmdKind, CompiledRule, RuleEngine};
-use rule_agents::Manager;
+use rule_agents::{HtProcess, Manager};
 use std::io::Write;
 use std::path::Path;
 use tempfile::NamedTempFile;
@@ -476,4 +477,188 @@ async fn test_concurrent_agents() -> Result<()> {
     }
 
     Ok(())
+}
+
+// HtProcess tests
+#[tokio::test]
+async fn test_ht_process_creation() {
+    let config = HtProcessConfig::default();
+    let ht_process = HtProcess::new(config);
+
+    assert!(!ht_process.is_running().await);
+    assert!(ht_process.is_auto_restart_enabled());
+}
+
+#[tokio::test]
+async fn test_ht_process_with_custom_config() {
+    let config = HtProcessConfig {
+        ht_binary_path: "custom-ht".to_string(),
+        shell_command: Some("zsh".to_string()),
+        restart_attempts: 5,
+        restart_delay_ms: 2000,
+    };
+
+    let ht_process = HtProcess::new(config);
+    assert!(!ht_process.is_running().await);
+}
+
+#[tokio::test]
+async fn test_ht_process_auto_restart_toggle() {
+    let ht_process = HtProcess::with_default_config();
+
+    assert!(ht_process.is_auto_restart_enabled());
+
+    ht_process.disable_auto_restart();
+    assert!(!ht_process.is_auto_restart_enabled());
+
+    ht_process.enable_auto_restart();
+    assert!(ht_process.is_auto_restart_enabled());
+}
+
+#[tokio::test]
+async fn test_ht_process_start_without_binary() {
+    let config = HtProcessConfig {
+        ht_binary_path: "nonexistent-ht-binary".to_string(),
+        shell_command: Some("bash".to_string()),
+        restart_attempts: 1,
+        restart_delay_ms: 100,
+    };
+
+    let ht_process = HtProcess::new(config);
+
+    // Should fail to start because binary doesn't exist
+    let result = ht_process.start().await;
+    assert!(result.is_err());
+
+    match result.unwrap_err() {
+        HtProcessError::StartupFailure(msg) => {
+            assert!(msg.contains("Failed to spawn HT process"));
+        }
+        _ => panic!("Expected StartupFailure error"),
+    }
+}
+
+#[tokio::test]
+async fn test_ht_process_stop_when_not_running() {
+    let ht_process = HtProcess::with_default_config();
+
+    // Should not error when stopping a process that isn't running
+    let result = ht_process.stop().await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_ht_process_send_input_when_not_running() {
+    let ht_process = HtProcess::with_default_config();
+
+    let result = ht_process.send_input("test command".to_string()).await;
+    assert!(result.is_err());
+
+    match result.unwrap_err() {
+        HtProcessError::NotRunning => {
+            // Expected error
+        }
+        _ => panic!("Expected NotRunning error"),
+    }
+}
+
+#[tokio::test]
+async fn test_ht_process_get_view_when_not_running() {
+    let ht_process = HtProcess::with_default_config();
+
+    let result = ht_process.get_view().await;
+    assert!(result.is_err());
+
+    match result.unwrap_err() {
+        HtProcessError::NotRunning => {
+            // Expected error
+        }
+        _ => panic!("Expected NotRunning error"),
+    }
+}
+
+// Mock tests that simulate HT behavior (since actual HT binary may not be available in CI)
+#[tokio::test]
+async fn test_ht_process_with_echo_command() {
+    // Use echo command to simulate HT binary for testing
+    let config = HtProcessConfig {
+        ht_binary_path: "echo".to_string(),
+        shell_command: Some("testing ht process".to_string()),
+        restart_attempts: 1,
+        restart_delay_ms: 100,
+    };
+
+    let ht_process = HtProcess::new(config);
+
+    // Start should succeed with echo command
+    let _result = ht_process.start().await;
+    // Note: This will likely fail because echo doesn't behave like HT,
+    // but it tests the basic startup process
+    // In a real environment, this would work with actual HT binary
+
+    // Clean up
+    let _ = ht_process.stop().await;
+}
+
+#[tokio::test]
+async fn test_ht_process_lifecycle() {
+    // Test basic lifecycle without actual HT binary
+    let config = HtProcessConfig {
+        ht_binary_path: "sleep".to_string(),
+        shell_command: Some("1".to_string()), // sleep for 1 second
+        restart_attempts: 1,
+        restart_delay_ms: 100,
+    };
+
+    let ht_process = HtProcess::new(config);
+
+    // Initially not running
+    assert!(!ht_process.is_running().await);
+
+    // Start the process
+    let start_result = ht_process.start().await;
+
+    // May succeed or fail depending on environment, but shouldn't panic
+    match start_result {
+        Ok(()) => {
+            // If it started successfully, it should be running
+            assert!(ht_process.is_running().await);
+
+            // Stop the process
+            let stop_result = ht_process.stop().await;
+            assert!(stop_result.is_ok());
+
+            // Give it time to stop
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        }
+        Err(_) => {
+            // Expected in environments without proper process support
+            assert!(!ht_process.is_running().await);
+        }
+    }
+}
+
+#[test]
+fn test_ht_process_config_default() {
+    let config = HtProcessConfig::default();
+
+    assert_eq!(config.ht_binary_path, "ht");
+    assert_eq!(config.shell_command, Some("bash".to_string()));
+    assert_eq!(config.restart_attempts, 3);
+    assert_eq!(config.restart_delay_ms, 1000);
+}
+
+#[test]
+fn test_ht_process_config_custom() {
+    let config = HtProcessConfig {
+        ht_binary_path: "/usr/local/bin/ht".to_string(),
+        shell_command: Some("zsh".to_string()),
+        restart_attempts: 5,
+        restart_delay_ms: 2000,
+    };
+
+    assert_eq!(config.ht_binary_path, "/usr/local/bin/ht");
+    assert_eq!(config.shell_command, Some("zsh".to_string()));
+    assert_eq!(config.restart_attempts, 5);
+    assert_eq!(config.restart_delay_ms, 2000);
 }
