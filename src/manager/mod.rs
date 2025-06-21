@@ -19,7 +19,9 @@ impl Manager {
             || cfg!(test)
             || std::env::var("CI").is_ok()
             || std::env::var("GITHUB_ACTIONS").is_ok()
-            || std::thread::current().name().is_some_and(|name| name.contains("test"));
+            || std::thread::current()
+                .name()
+                .is_some_and(|name| name.contains("test"));
         let (terminal_backend, test_mode) = if is_test {
             // Use direct backend for tests, which should always be available
             let config = TerminalBackendConfig {
