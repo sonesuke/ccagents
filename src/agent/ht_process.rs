@@ -118,6 +118,9 @@ impl HtProcess {
 
         // Enable web interface on configured port
         command.arg("-l").arg(format!("0.0.0.0:{}", self.config.port));
+        
+        // Subscribe to snapshot events for terminal output monitoring
+        command.arg("--subscribe").arg("snapshot");
 
         if let Some(shell_cmd) = &self.config.shell_command {
             command.arg(shell_cmd);

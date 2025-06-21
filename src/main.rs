@@ -77,11 +77,14 @@ async fn main() -> Result<()> {
             // Monitor terminal output and apply rules
             let agent = ruler.get_agent("main").await?;
             
-            // Wait a moment for terminal to be ready, then start mock.sh
+            // Wait a moment for terminal to be ready
             tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
             println!("🚀 Starting mock.sh automatically...");
+            
             if let Err(e) = agent.send_keys("entry\r").await {
                 eprintln!("❌ Error starting mock.sh: {}", e);
+            } else {
+                println!("✅ Sent 'entry' command to terminal");
             }
             
             loop {
@@ -97,6 +100,7 @@ async fn main() -> Result<()> {
                         // Get terminal output
                         if let Ok(output) = agent.get_output().await {
                             if !output.trim().is_empty() {
+                                println!("📄 Terminal output: '{}'", output.trim());
                                 // Check if output matches any rule
                                 let action = ruler.decide_action_for_capture(&output).await;
                                 
