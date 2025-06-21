@@ -20,19 +20,22 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     // Load and compile rules from YAML file
-    let rules = load_rules(&args.rules)
-        .context("Failed to load rules")?;
-    
+    let rules = load_rules(&args.rules).context("Failed to load rules")?;
+
     println!("Loaded {} rules", rules.len());
     for rule in &rules {
-        println!("  Priority {}: {} -> {:?}", 
-                 rule.priority, 
-                 rule.regex.as_str(), 
-                 rule.command);
+        println!(
+            "  Priority {}: {} -> {:?}",
+            rule.priority,
+            rule.regex.as_str(),
+            rule.command
+        );
     }
 
     // TODO: Integrate with rule engine in future phases
-    tracing::info!("Rules loaded successfully. Integration with rule engine will be implemented in Phase 2.");
+    tracing::info!(
+        "Rules loaded successfully. Integration with rule engine will be implemented in Phase 2."
+    );
 
     Ok(())
 }

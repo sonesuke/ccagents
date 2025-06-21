@@ -19,7 +19,7 @@ fn test_invalid_yaml() {
     let yaml_content = "invalid yaml content [";
     let mut temp_file = NamedTempFile::new().unwrap();
     write!(temp_file, "{}", yaml_content).unwrap();
-    
+
     let result = load_rules(temp_file.path());
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("parse"));
@@ -34,10 +34,10 @@ rules:
     command: "resume"
     args: []
 "#;
-    
+
     let mut temp_file = NamedTempFile::new()?;
     write!(temp_file, "{}", yaml_content)?;
-    
+
     let result = load_rules(temp_file.path());
     assert!(result.is_err());
     let error_msg = result.unwrap_err().to_string();
@@ -55,10 +55,10 @@ rules:
     command: "unknown-command"
     args: []
 "#;
-    
+
     let mut temp_file = NamedTempFile::new()?;
     write!(temp_file, "{}", yaml_content)?;
-    
+
     let result = load_rules(temp_file.path());
     assert!(result.is_err());
     let error_msg = result.unwrap_err().to_string();
@@ -84,10 +84,10 @@ rules:
     command: "cancel"
     args: []
 "#;
-    
+
     let mut temp_file = NamedTempFile::new()?;
     write!(temp_file, "{}", yaml_content)?;
-    
+
     let rules = load_rules(temp_file.path())?;
     assert_eq!(rules.len(), 3);
     assert_eq!(rules[0].priority, 10);
@@ -100,5 +100,8 @@ rules:
 fn test_file_not_found() {
     let result = load_rules(Path::new("nonexistent.yaml"));
     assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("Failed to read rules file"));
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Failed to read rules file"));
 }

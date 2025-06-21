@@ -38,34 +38,34 @@ pub enum CmdKind {
 pub fn load_rules(path: &Path) -> Result<Vec<CompiledRule>> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("Failed to read rules file: {}", path.display()))?;
-    
-    let rule_file: RuleFile = serde_yaml::from_str(&content)
-        .with_context(|| "Failed to parse YAML rules file")?;
-    
+
+    let rule_file: RuleFile =
+        serde_yaml::from_str(&content).with_context(|| "Failed to parse YAML rules file")?;
+
     let mut compiled_rules = Vec::new();
     for rule in rule_file.rules {
         let compiled = compile_rule(&rule)
             .with_context(|| format!("Failed to compile rule with pattern: {}", rule.pattern))?;
         compiled_rules.push(compiled);
     }
-    
+
     // Sort by priority (ascending order - lower number = higher priority)
     compiled_rules.sort_by_key(|rule| rule.priority);
-    
+
     Ok(compiled_rules)
 }
 
 fn compile_rule(rule: &Rule) -> Result<CompiledRule> {
     let regex = Regex::new(&rule.pattern)
         .with_context(|| format!("Invalid regex pattern: {}", rule.pattern))?;
-    
+
     let command = match rule.command.as_str() {
         "solve-issue" => CmdKind::SolveIssue,
         "cancel" => CmdKind::Cancel,
         "resume" => CmdKind::Resume,
         _ => anyhow::bail!("Unknown command: {}", rule.command),
     };
-    
+
     Ok(CompiledRule {
         priority: rule.priority,
         regex,
