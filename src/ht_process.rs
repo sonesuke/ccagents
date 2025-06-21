@@ -372,6 +372,7 @@ impl HtProcess {
         }
     }
 
+    #[allow(dead_code)]
     fn start_process_monitor(&self) {
         self.monitor_running.store(true, Ordering::SeqCst);
 
