@@ -1,6 +1,6 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
-use rule_agents::{RuleEngine, RuleFile};
+use rule_agents::rule_engine::load_rules;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -19,32 +19,23 @@ async fn main() -> Result<()> {
     // Parse command line arguments
     let args = Args::parse();
 
-    // Load rules from YAML file
-    let rule_file = RuleFile::load(&args.rules)?;
-    tracing::info!(
-        "Loaded {} rules from {:?}",
-        rule_file.rules.len(),
-        args.rules
-    );
+    // Load and compile rules from YAML file
+    let rules = load_rules(&args.rules).context("Failed to load rules")?;
 
-    // Create rule engine
-    let mut engine = RuleEngine::new();
-
-    // Compile and register rules
-    for rule in rule_file.rules {
-        engine.register_rule(rule.into())?;
+    println!("Loaded {} rules", rules.len());
+    for rule in &rules {
+        println!(
+            "  Priority {}: {} -> {:?}",
+            rule.priority,
+            rule.regex.as_str(),
+            rule.command
+        );
     }
 
-    // Start the rule engine
-    engine.start().await?;
-
-    // Keep the engine running until Ctrl+C
-    tracing::info!("Rule engine started. Press Ctrl+C to stop.");
-    tokio::signal::ctrl_c().await?;
-
-    // Gracefully shutdown
-    engine.stop().await?;
-    tracing::info!("Rule engine stopped.");
+    // TODO: Integrate with rule engine in future phases
+    tracing::info!(
+        "Rules loaded successfully. Integration with rule engine will be implemented in Phase 2."
+    );
 
     Ok(())
 }

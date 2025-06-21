@@ -26,19 +26,27 @@ cargo build --release
 Create a YAML file with your rules. See `examples/basic-rules.yaml` for reference:
 
 ```yaml
-version: "1.0"
-name: "My Rules"
 rules:
-  - name: "example-rule"
-    description: "An example rule"
-    trigger:
-      type: "interval"
-      seconds: 60
-    actions:
-      - type: "log"
-        level: "info"
-        message: "Example message"
+  - priority: 10
+    pattern: "issue\\s+(\\d+)"
+    command: "solve-issue"
+    args: []
+  - priority: 20
+    pattern: "cancel"
+    command: "cancel"
+    args: []
+  - priority: 30
+    pattern: "resume"
+    command: "resume"
+    args: []
 ```
+
+### Rule Structure
+
+- **priority**: Lower numbers = higher priority (rules are sorted by priority)
+- **pattern**: Regular expression to match against input
+- **command**: Command to execute when pattern matches (`solve-issue`, `cancel`, `resume`)
+- **args**: Optional arguments for the command (defaults to empty array)
 
 ## Development
 

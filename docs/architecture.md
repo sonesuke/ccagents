@@ -43,41 +43,36 @@ Manages multiple agents that:
 
 ## Rule Structure
 
-Rules are defined in YAML format with the following structure:
+Rules are defined in YAML format with the following simplified structure:
 
 ```yaml
 rules:
-  - name: "rule-name"
-    description: "What this rule does"
-    trigger:
-      type: "trigger_type"
-      # trigger-specific configuration
-    conditions:  # optional
-      - type: "condition_type"
-        # condition-specific configuration
-    actions:
-      - type: "action_type"
-        # action-specific configuration
+  - priority: 10
+    pattern: "issue\\s+(\\d+)"
+    command: "solve-issue"
+    args: []
+  - priority: 20
+    pattern: "cancel"
+    command: "cancel"
+    args: []
 ```
 
-### Supported Triggers
-- `file_change`: Monitors file system changes
-- `interval`: Executes at regular intervals
+### Rule Fields
+- **priority**: Numeric priority (lower = higher priority, rules sorted ascending)  
+- **pattern**: Regular expression pattern to match against input
+- **command**: Command type to execute when pattern matches
+- **args**: Optional command arguments (defaults to empty array)
 
-### Supported Conditions
-- `pattern_match`: Regex pattern matching
-
-### Supported Actions
-- `log`: Log messages
-- `notify`: Send notifications
-- `command`: Execute shell commands
-- `collect_metrics`: Gather system metrics
+### Supported Commands
+- `solve-issue`: Handle GitHub issue resolution workflow
+- `cancel`: Cancel current operation
+- `resume`: Resume interrupted operation
 
 ## Data Flow
 
-1. **Startup**: Parse CLI args → Load YAML rules → Compile rules → Start engine
-2. **Runtime**: Event occurs → Match triggers → Evaluate conditions → Execute actions  
-3. **Shutdown**: Receive Ctrl+C signal → Stop engine → Clean up resources
+1. **Startup**: Parse CLI args → Load YAML rules → Compile regex patterns → Sort by priority
+2. **Runtime**: Input received → Match patterns (priority order) → Execute command
+3. **Shutdown**: Receive Ctrl+C signal → Clean up resources
 
 ## Future Enhancements
 
