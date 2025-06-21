@@ -7,12 +7,14 @@ use anyhow::Result;
 use std::collections::HashMap;
 use tracing::info;
 
+#[allow(dead_code)]
 pub struct Agent {
     id: String,
     ht_process: HtProcess,
     terminal_monitor: Option<TerminalOutputMonitor>,
 }
 
+#[allow(dead_code)]
 impl Agent {
     pub async fn new(id: String, test_mode: bool) -> Result<Self> {
         let config = if test_mode {
@@ -170,6 +172,7 @@ impl Agent {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct CommandResult {
     pub exit_code: Option<i32>,
     pub output: String,

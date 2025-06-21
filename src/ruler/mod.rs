@@ -18,6 +18,7 @@ pub struct Ruler {
     test_mode: bool,
 }
 
+#[allow(dead_code)]
 impl Ruler {
     pub async fn new(rules_path: &str) -> Result<Self> {
         let rule_engine = RuleEngine::new(rules_path).await?;
@@ -833,6 +834,7 @@ impl std::fmt::Debug for Ruler {
     }
 }
 
+#[allow(dead_code)]
 pub trait AgentInterface {
     fn send_command(
         &self,
@@ -842,12 +844,14 @@ pub trait AgentInterface {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum AgentResult {
     Success,
     Retry,
     Failed(String),
 }
 
+#[allow(dead_code)]
 pub async fn retry_with_backoff<F, Fut>(mut operation: F, max_attempts: u32) -> Result<()>
 where
     F: FnMut() -> Fut,
