@@ -1,6 +1,7 @@
 use anyhow::Result;
 use regex::Regex;
 use rule_agents::rule_engine::{decide_cmd, load_rules, CmdKind, CompiledRule};
+use rule_agents::Manager;
 use std::io::Write;
 use std::path::Path;
 use tempfile::NamedTempFile;
@@ -217,6 +218,96 @@ fn test_decide_cmd_with_all_basic_rule_patterns() -> Result<()> {
     let (command, args) = decide_cmd("resume", &rules);
     assert_eq!(command, CmdKind::Resume);
     assert!(args.is_empty());
+
+    Ok(())
+}
+
+// Manager integration tests
+#[tokio::test]
+async fn test_manager_integration() -> Result<()> {
+    let manager = Manager::new("examples/basic-rules.yaml").await?;
+
+    // Test agent waiting scenarios
+    assert!(manager
+        .handle_waiting_state("test-agent", "issue 123")
+        .await
+        .is_ok());
+    assert!(manager
+        .handle_waiting_state("test-agent", "cancel")
+        .await
+        .is_ok());
+    assert!(manager
+        .handle_waiting_state("test-agent", "unknown")
+        .await
+        .is_ok());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_manager_with_invalid_rules_file() {
+    let result = Manager::new("nonexistent.yaml").await;
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Failed to read rules file"));
+}
+
+#[tokio::test]
+async fn test_manager_handles_multiple_scenarios() -> Result<()> {
+    let manager = Manager::new("examples/basic-rules.yaml").await?;
+
+    let scenarios = vec![
+        ("agent-001", "issue 456 detected in process"),
+        ("agent-002", "network connection failed"),
+        ("agent-003", "cancel current operation"),
+        ("agent-004", "resume normal operation"),
+        ("agent-005", "unknown error occurred"),
+    ];
+
+    for (agent_id, capture) in scenarios {
+        assert!(manager
+            .handle_waiting_state(agent_id, capture)
+            .await
+            .is_ok());
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_manager_with_custom_rules() -> Result<()> {
+    let yaml_content = r#"
+rules:
+  - priority: 10
+    pattern: "test-pattern"
+    command: "solve-issue"
+    args: ["test-arg"]
+  - priority: 20
+    pattern: "cancel-test"
+    command: "cancel"
+    args: []
+"#;
+
+    let mut temp_file = NamedTempFile::new()?;
+    write!(temp_file, "{}", yaml_content)?;
+
+    let manager = Manager::new(temp_file.path().to_str().unwrap()).await?;
+
+    // Test that custom rules work correctly
+    assert!(manager
+        .handle_waiting_state("test-agent", "test-pattern")
+        .await
+        .is_ok());
+    assert!(manager
+        .handle_waiting_state("test-agent", "cancel-test")
+        .await
+        .is_ok());
+    assert!(manager
+        .handle_waiting_state("test-agent", "no-match")
+        .await
+        .is_ok());
 
     Ok(())
 }
