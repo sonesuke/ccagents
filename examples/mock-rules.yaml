@@ -2,36 +2,31 @@
 
 rules:
   # Entry command - starts the mock script
-  - name: "Entry Command"
-    actions:
-      - type: command
-        capture: "entry"
-        execute: "bash examples/mock.sh"
+  - priority: 1
+    pattern: "^entry$"
+    action: "send_keys"
+    keys: ["bash examples/mock.sh", "\r"]
     
   # Auto-respond to proceed prompt
-  - name: "Auto Proceed"
-    actions:
-      - type: response
-        capture: "Do you want to proceed?"
-        execute: "1"
+  - priority: 5
+    pattern: "Do you want to proceed\\?"
+    action: "send_keys"
+    keys: ["1", "\r"]
     
   # Exit command - sends /exit to the script
-  - name: "Exit Command"
-    actions:
-      - type: command
-        capture: "exit"
-        execute: "/exit"
+  - priority: 10
+    pattern: "^exit$"
+    action: "send_keys"
+    keys: ["/exit", "\r"]
     
   # Cancel command - sends Ctrl+C interrupt
-  - name: "Cancel Command"
-    actions:
-      - type: command
-        capture: "cancel"
-        execute: "\x03"  # Ctrl+C
+  - priority: 15
+    pattern: "^cancel$"
+    action: "send_keys"
+    keys: ["\x03"]
     
   # Resume command (legacy support)
-  - name: "Resume Command"
-    actions:
-      - type: command
-        capture: "resume"
-        execute: "echo 'Resume command is deprecated. Use entry instead.'"
+  - priority: 20
+    pattern: "^resume$"
+    action: "send_keys"
+    keys: ["echo 'Resume command is deprecated. Use entry instead.'", "\r"]

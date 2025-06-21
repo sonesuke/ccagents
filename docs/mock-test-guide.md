@@ -31,6 +31,8 @@ Run rule-agents with the mock rules:
 rule-agents --rules examples/mock-rules.yaml
 ```
 
+Note: The current version uses the `send_keys` action to send keystrokes to the terminal.
+
 ### Test Flow
 
 1. **Start the test**:
