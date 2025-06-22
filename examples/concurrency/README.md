@@ -1,83 +1,74 @@
-# Concurrency Control Examples
+# Concurrency Control Example
 
-This directory demonstrates the new concurrency control features for entries, including configurable base ports and entry-level concurrency limits.
+This directory demonstrates entry-level concurrency control with a simple, focused example.
+
+## What is Entry Concurrency?
+
+**Entry concurrency controls how many instances of the SAME entry can run simultaneously.**
+
+- `concurrency: 1` (default) = Only one instance at a time
+- `concurrency: 2` = Up to 2 instances of the same entry can run concurrently  
+- `concurrency: 5` = Up to 5 instances of the same entry can run concurrently
+
+**Important**: This does NOT create multiple agents. There is still only 1 agent, but it can execute the same entry multiple times in parallel.
 
 ## Files
 
 ### concurrency_demo.yaml
-Configuration demonstrating:
-- **Custom base port**: Monitor section with configurable port (8080 instead of default 9990)
-- **Entry concurrency limits**: Different concurrency settings for different task types
-- **Periodic triggers**: Multiple tasks running at different intervals
-- **Concurrency behavior**: How limits prevent system overload
+Minimal configuration with:
+- **1 periodic entry** that runs every 3 seconds with `concurrency: 2`
+- **Custom base port**: 8080 instead of default 9990
+- **Rule**: Reacts to task completion messages
 
-### Scripts
-
-#### heavy_task.sh
-Simulates resource-intensive tasks:
-- Takes 5-10 seconds to complete
-- Should have limited concurrency (2) to prevent system overload
-- Demonstrates why concurrency limits are needed for heavy operations
-
-#### light_task.sh  
-Simulates lightweight tasks:
-- Takes 1-3 seconds to complete
-- Can handle higher concurrency (5) since it's fast
-- Shows how different task types need different limits
-
-#### critical_task.sh
-Simulates critical operations:
-- Must run alone (concurrency = 1)
-- Uses file locking to demonstrate single-instance behavior
-- Shows error handling when concurrency limits are exceeded
+### heavy_task.sh
+The demo script that:
+- Takes 5-10 seconds to complete (simulates slow processing)
+- Prints start/completion messages with unique task IDs
+- Shows how multiple instances can overlap
 
 ## Usage
 
 ```bash
-# Run concurrency control demo
+# Run the concurrency demo
 cargo run -- --rules examples/concurrency/concurrency_demo.yaml
 
-# Access web interface at custom port
-# http://localhost:8080 (instead of default 9990)
+# Watch at http://localhost:8080 (custom port instead of default 9990)
 ```
 
-## How It Works
+## Expected Behavior
 
-### 1. Monitor Configuration
+### Timeline Example
+
+```
+Time 0s:  ✅ Task 1 starts (1/2 slots used)
+Time 3s:  ✅ Task 2 starts (2/2 slots used) 
+Time 6s:  ⏳ Task 3 waits (slots full)
+Time 8s:  ✅ Task 1 completes, Task 3 starts (2/2 slots used)
+Time 9s:  ⏳ Task 4 waits (slots full)
+Time 11s: ✅ Task 2 completes, Task 4 starts (2/2 slots used)
+```
+
+### What You'll See
+
+1. **Every 3 seconds**: A new `demo_task` is triggered
+2. **Maximum 2 running**: Even though tasks trigger every 3s but take 5-10s
+3. **Queuing behavior**: 3rd task waits until one of the first 2 completes
+4. **Task IDs**: Each task shows unique ID like `heavy-12345-1234567890`
+
+## Configuration Details
+
 ```yaml
 monitor:
-  base_port: 8080  # Custom base port
-```
+  base_port: 8080    # Custom port
 
-### 2. Entry Concurrency Settings
-```yaml
 entries:
-  - name: "heavy_task"
-    concurrency: 2    # Max 2 simultaneous executions
-    
-  - name: "light_task"  
-    concurrency: 5    # Max 5 simultaneous executions
-    
-  - name: "critical_task"
-    concurrency: 1    # Single execution only (default)
+  - name: "demo_task"
+    trigger: "periodic"
+    interval: "3s"     # Triggers every 3 seconds  
+    concurrency: 2     # Max 2 instances running simultaneously
+    action: "send_keys"
+    keys: ["bash examples/concurrency/heavy_task.sh", "\r"]
 ```
-
-### 3. Observed Behavior
-
-**Heavy Tasks (concurrency: 2)**:
-- Even with 3-second intervals, max 2 run simultaneously
-- Additional tasks wait for permits to become available
-- Prevents system overload from too many heavy operations
-
-**Light Tasks (concurrency: 5)**:
-- With 2-second intervals, up to 5 can run concurrently
-- Higher throughput for lightweight operations
-- Efficient resource utilization
-
-**Critical Tasks (concurrency: 1)**:
-- Only one instance runs at a time
-- New attempts wait for the current one to complete
-- Ensures exclusive access to shared resources
 
 ## Key Benefits
 

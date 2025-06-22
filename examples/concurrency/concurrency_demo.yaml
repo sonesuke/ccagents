@@ -1,9 +1,13 @@
 # Concurrency Control Example Configuration
 # 
 # This example demonstrates entry-level concurrency control:
-# 1. Configurable base port in monitor section
+# 1. Configurable base port in monitor section  
 # 2. Different concurrency limits for different entries
 # 3. How concurrency prevents overwhelming the system
+#
+# NOTE: concurrency controls how many instances of the SAME entry can run simultaneously
+# - concurrency: 1 = only one instance at a time (default)
+# - concurrency: 2 = up to 2 instances of the same entry can run at once
 #
 # Usage: cargo run -- --rules examples/concurrency/concurrency_demo.yaml
 
@@ -12,47 +16,19 @@ monitor:
   base_port: 8080  # Custom base port instead of default 9990
 
 entries:
-  # 1. High-frequency task with limited concurrency
-  # Only allows 2 simultaneous executions to prevent system overload
-  - name: "frequent_task"
+  # Simple demonstration: one entry with concurrency: 2
+  # This task takes 8 seconds to complete but triggers every 3 seconds
+  # With concurrency: 2, maximum 2 instances can run simultaneously
+  # The 3rd trigger will wait until one of the running instances completes
+  - name: "demo_task"
     trigger: "periodic"
-    interval: "3s"
+    interval: "3s"    # Triggers every 3 seconds
     action: "send_keys"
-    keys: ["bash examples/concurrency/heavy_task.sh", "\r"]
-    concurrency: 2  # Limit to 2 concurrent executions
-
-  # 2. Quick task with higher concurrency
-  # Allows more simultaneous executions since it's lightweight
-  - name: "quick_task"
-    trigger: "periodic"
-    interval: "2s"
-    action: "send_keys"
-    keys: ["bash examples/concurrency/light_task.sh", "\r"]
-    concurrency: 5  # Allow up to 5 concurrent executions
-
-  # 3. Critical task with single execution
-  # Only one instance can run at a time (default behavior)
-  - name: "critical_task"
-    trigger: "periodic"
-    interval: "10s"
-    action: "send_keys"
-    keys: ["bash examples/concurrency/critical_task.sh", "\r"]
-    concurrency: 1  # Single execution only (default value)
-
-  # 4. Startup task (no concurrency limit needed for one-time tasks)
-  - name: "startup_demo"
-    trigger: "on_start"
-    action: "send_keys"
-    keys: ["echo 'Concurrency demo started with base port 8080'", "\r"]
-    # concurrency field omitted = default value 1
+    keys: ["bash examples/concurrency/heavy_task.sh", "\r"]  # Takes 5-10 seconds
+    concurrency: 2    # Maximum 2 instances can run at the same time
 
 rules:
-  # Handle completion messages
+  # React to task completion messages
   - pattern: "Task completed: (\\w+)"
     action: "send_keys"
-    keys: ["echo 'Acknowledged completion of ${1}'", "\r"]
-
-  # Handle error cases
-  - pattern: "ERROR: Too many concurrent"
-    action: "send_keys"
-    keys: ["echo 'Concurrency limit reached - this is expected behavior'", "\r"]
+    keys: ["echo '✅ Acknowledged completion of ${1}'", "\r"]
