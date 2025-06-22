@@ -6,18 +6,6 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tracing::{debug, info};
 
-/// Events emitted by the queue system
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub enum QueueEvent {
-    /// Item was enqueued
-    ItemEnqueued { queue_name: String, item: String },
-    /// Item was dequeued
-    ItemDequeued { queue_name: String, item: String },
-    /// Queue was created
-    QueueCreated { queue_name: String },
-}
-
 /// Manages multiple named queues with event notification
 #[derive(Debug, Serialize, Deserialize)]
 pub struct QueueManager {
@@ -148,39 +136,6 @@ impl QueueManager {
         Ok(added_count)
     }
 
-    /// Dequeue an item from a named queue
-    #[allow(dead_code)]
-    pub fn dequeue(&mut self, queue_name: &str) -> Option<String> {
-        self.queues.get_mut(queue_name)?.pop_front().map(|item| {
-            debug!("Dequeued item from {}: {}", queue_name, item);
-            item
-        })
-    }
-
-    /// Peek at the front item without removing it
-    #[allow(dead_code)]
-    pub fn peek(&self, queue_name: &str) -> Option<&String> {
-        self.queues.get(queue_name)?.front()
-    }
-
-    /// Get the size of a queue
-    #[allow(dead_code)]
-    pub fn queue_size(&self, queue_name: &str) -> usize {
-        self.queues.get(queue_name).map_or(0, |q| q.len())
-    }
-
-    /// Check if a queue exists
-    #[allow(dead_code)]
-    pub fn queue_exists(&self, queue_name: &str) -> bool {
-        self.queues.contains_key(queue_name)
-    }
-
-    /// List all queue names
-    #[allow(dead_code)]
-    pub fn list_queues(&self) -> Vec<String> {
-        self.queues.keys().cloned().collect()
-    }
-
     /// Subscribe to queue events
     pub fn subscribe(&mut self, queue_name: &str) -> UnboundedReceiver<String> {
         let (tx, rx) = mpsc::unbounded_channel();
@@ -195,131 +150,5 @@ impl QueueManager {
             .push(tx);
 
         rx
-    }
-
-    /// Clear a specific queue
-    #[allow(dead_code)]
-    pub fn clear_queue(&mut self, queue_name: &str) -> Result<()> {
-        if let Some(queue) = self.queues.get_mut(queue_name) {
-            queue.clear();
-            info!("Cleared queue: {}", queue_name);
-            Ok(())
-        } else {
-            Err(anyhow!("Queue not found: {}", queue_name))
-        }
-    }
-
-    /// Remove a queue entirely
-    #[allow(dead_code)]
-    pub fn remove_queue(&mut self, queue_name: &str) -> Result<()> {
-        if self.queues.remove(queue_name).is_some() {
-            self.queue_listeners.remove(queue_name);
-            info!("Removed queue: {}", queue_name);
-            Ok(())
-        } else {
-            Err(anyhow!("Queue not found: {}", queue_name))
-        }
-    }
-
-    /// Get statistics for all queues
-    #[allow(dead_code)]
-    pub fn get_stats(&self) -> HashMap<String, usize> {
-        self.queues
-            .iter()
-            .map(|(name, queue)| (name.clone(), queue.len()))
-            .collect()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_queue_creation() {
-        let mut manager = QueueManager::new();
-        manager.create_queue("test");
-        assert!(manager.queue_exists("test"));
-        assert_eq!(manager.queue_size("test"), 0);
-    }
-
-    #[test]
-    fn test_enqueue_dequeue() {
-        let mut manager = QueueManager::new();
-
-        // Enqueue items
-        manager.enqueue("test", "item1".to_string()).unwrap();
-        manager.enqueue("test", "item2".to_string()).unwrap();
-
-        assert_eq!(manager.queue_size("test"), 2);
-
-        // Dequeue items
-        assert_eq!(manager.dequeue("test"), Some("item1".to_string()));
-        assert_eq!(manager.dequeue("test"), Some("item2".to_string()));
-        assert_eq!(manager.dequeue("test"), None);
-    }
-
-    #[test]
-    fn test_enqueue_lines() {
-        let mut manager = QueueManager::new();
-        let output = "line1\nline2\n\nline3\n";
-
-        let count = manager.enqueue_lines("test", output).unwrap();
-        assert_eq!(count, 3);
-        assert_eq!(manager.queue_size("test"), 3);
-
-        assert_eq!(manager.dequeue("test"), Some("line1".to_string()));
-        assert_eq!(manager.dequeue("test"), Some("line2".to_string()));
-        assert_eq!(manager.dequeue("test"), Some("line3".to_string()));
-    }
-
-    #[test]
-    fn test_peek() {
-        let mut manager = QueueManager::new();
-        manager.enqueue("test", "item1".to_string()).unwrap();
-
-        assert_eq!(manager.peek("test"), Some(&"item1".to_string()));
-        assert_eq!(manager.queue_size("test"), 1); // Item not removed
-    }
-
-    #[test]
-    fn test_multiple_queues() {
-        let mut manager = QueueManager::new();
-
-        manager.enqueue("queue1", "a".to_string()).unwrap();
-        manager.enqueue("queue2", "b".to_string()).unwrap();
-
-        assert_eq!(manager.dequeue("queue1"), Some("a".to_string()));
-        assert_eq!(manager.dequeue("queue2"), Some("b".to_string()));
-    }
-
-    #[test]
-    fn test_clear_queue() {
-        let mut manager = QueueManager::new();
-        manager.enqueue("test", "item".to_string()).unwrap();
-
-        manager.clear_queue("test").unwrap();
-        assert_eq!(manager.queue_size("test"), 0);
-        assert!(manager.queue_exists("test"));
-    }
-
-    #[test]
-    fn test_remove_queue() {
-        let mut manager = QueueManager::new();
-        manager.create_queue("test");
-
-        manager.remove_queue("test").unwrap();
-        assert!(!manager.queue_exists("test"));
-    }
-
-    #[tokio::test]
-    async fn test_subscribe() {
-        let mut manager = QueueManager::new();
-        let mut rx = manager.subscribe("test");
-
-        manager.enqueue("test", "item".to_string()).unwrap();
-
-        // Should receive the item
-        assert_eq!(rx.recv().await, Some("item".to_string()));
     }
 }

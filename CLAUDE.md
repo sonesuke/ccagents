@@ -34,6 +34,8 @@ cd .worktree/issue-<number>
 - Format your code: `cargo fmt`
 - Run the full CI check locally: `cargo test && cargo clippy -- -D warnings && cargo fmt -- --check`
 
+**Note**: Pre-commit hooks use `cargo fmt -- --check` (non-modifying) to prevent commit-time file modifications. Always run `cargo fmt` manually before committing to ensure proper formatting.
+
 ### 3. Commit message format
 - Use clear, descriptive commit messages
 - Reference issue numbers when applicable: "Fix #123: Description"

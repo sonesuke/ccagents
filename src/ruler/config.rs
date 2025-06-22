@@ -4,6 +4,32 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::path::Path;
 
+// Monitor configuration for base port and other monitoring settings
+#[derive(Debug, Deserialize)]
+pub struct MonitorConfig {
+    #[serde(default = "default_base_port")]
+    pub base_port: u16,
+    #[serde(default = "default_agent_pool_size")]
+    pub agent_pool_size: usize,
+}
+
+impl Default for MonitorConfig {
+    fn default() -> Self {
+        Self {
+            base_port: default_base_port(),
+            agent_pool_size: default_agent_pool_size(),
+        }
+    }
+}
+
+fn default_base_port() -> u16 {
+    9990
+}
+
+fn default_agent_pool_size() -> usize {
+    1
+}
+
 // YAML structure for loading complete configuration
 #[derive(Debug, Deserialize)]
 pub struct ConfigFile {
@@ -11,10 +37,12 @@ pub struct ConfigFile {
     pub entries: Vec<Entry>,
     #[serde(default)]
     pub rules: Vec<Rule>,
+    #[serde(default)]
+    pub monitor: MonitorConfig,
 }
 
 /// Load configuration from a YAML file and compile entries and rules
-pub fn load_config(path: &Path) -> Result<(Vec<CompiledEntry>, Vec<CompiledRule>)> {
+pub fn load_config(path: &Path) -> Result<(Vec<CompiledEntry>, Vec<CompiledRule>, MonitorConfig)> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("Failed to read config file: {}", path.display()))?;
 
@@ -39,11 +67,5 @@ pub fn load_config(path: &Path) -> Result<(Vec<CompiledEntry>, Vec<CompiledRule>
 
     // Rules are processed in order (no sorting needed - line order = priority)
 
-    Ok((compiled_entries, compiled_rules))
-}
-
-/// Legacy function for backward compatibility
-pub fn load_rules(path: &Path) -> Result<Vec<CompiledRule>> {
-    let (_, rules) = load_config(path)?;
-    Ok(rules)
+    Ok((compiled_entries, compiled_rules, config_file.monitor))
 }

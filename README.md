@@ -89,6 +89,28 @@ entries:
     keys: ["bash examples/simple_queue/process_task.sh <task>", "\r"]
 ```
 
+### Agent Pool Configuration
+```yaml
+# Monitor section with agent pool settings
+monitor:
+  base_port: 9990      # First agent port (default: 9990)
+  agent_pool_size: 2   # Number of parallel agents (default: 1)
+
+# Multiple agents will run tasks in parallel
+entries:
+  - name: "task_a"
+    trigger: "periodic"
+    interval: "3s"
+    action: "send_keys"
+    keys: ["bash task_a.sh", "\r"]
+
+  - name: "task_b"
+    trigger: "periodic"
+    interval: "4s"
+    action: "send_keys"
+    keys: ["bash task_b.sh", "\r"]
+```
+
 ## Core Concepts
 
 ### Entries vs Rules
@@ -146,6 +168,16 @@ See [docs/architecture.md](docs/architecture.md) for system design details.
 
 ## Features
 
+### Agent Pool System
+
+Multiple terminal agents running in parallel for improved performance:
+
+- **Parallel Execution**: Multiple agents handle tasks simultaneously without blocking
+- **Round-Robin Distribution**: Tasks automatically distributed across available agents
+- **Scalable Performance**: Add more agents to handle increased workload
+- **Independent Terminals**: Each agent runs in its own terminal process
+- **Configurable Pool Size**: Set `agent_pool_size` to control number of agents
+
 ### Queue System
 
 Advanced task processing with automatic queue management:
@@ -178,10 +210,11 @@ The HT terminal process automatically starts with a web interface for real-time 
 #### Access URLs
 
 After starting rule-agents, the terminal web interface is available at:
-- **Local**: http://localhost:9990
-- **Network**: http://[machine-ip]:9990
+- **Single Agent**: http://localhost:9990
+- **Agent Pool**: Multiple tabs (e.g., http://localhost:9990, http://localhost:9991, etc.)
+- **Network**: http://[machine-ip]:9990+
 
-The web interface URL is automatically displayed when the HT process starts.
+The web interface URLs are automatically displayed when the HT processes start.
 
 ## Available Commands
 
@@ -194,6 +227,9 @@ The web interface URL is automatically displayed when the HT process starts.
 
 # Start with dedupe queue example
 ./target/release/rule-agents --rules examples/dedupe_queue/dedupe_example.yaml
+
+# Start with agent pool example
+./target/release/rule-agents --rules examples/agent_pool/concurrency_demo.yaml
 
 # Test rule matching
 ./target/release/rule-agents test --rules examples/basic/config.yaml --capture "Do you want to proceed"
@@ -230,6 +266,15 @@ Multiple example configurations are provided to demonstrate different features:
 - Prevents reprocessing of identical items
 - Ideal for idempotent operations
 
-**Web Interface**: All examples provide real-time monitoring at http://localhost:9990
+### 4. Agent Pool (`examples/agent_pool/`)
+```bash
+./target/release/rule-agents --rules examples/agent_pool/concurrency_demo.yaml
+```
+- Demonstrates multiple agents running in parallel
+- Shows round-robin task distribution across agents
+- Multiple web interface tabs (http://localhost:9990, http://localhost:9991)
+- Improved throughput with parallel task execution
+
+**Web Interface**: Examples 1-3 provide monitoring at http://localhost:9990, Example 4 uses multiple tabs starting from http://localhost:9990
 
 See [docs/tutorial.md](docs/tutorial.md) for a comprehensive tutorial on configuring and using RuleAgents.
