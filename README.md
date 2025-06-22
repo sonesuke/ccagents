@@ -89,34 +89,26 @@ entries:
     keys: ["bash examples/simple_queue/process_task.sh <task>", "\r"]
 ```
 
-### Concurrency Control Configuration
+### Agent Pool Configuration
 ```yaml
-# Monitor section with custom base port
+# Monitor section with agent pool settings
 monitor:
-  base_port: 8080  # Custom port (default: 9990)
+  base_port: 9990      # First agent port (default: 9990)
+  agent_pool_size: 2   # Number of parallel agents (default: 1)
 
-# Entries with concurrency limits
+# Multiple agents will run tasks in parallel
 entries:
-  - name: "heavy_task"
+  - name: "task_a"
     trigger: "periodic"
     interval: "3s"
     action: "send_keys"
-    keys: ["bash heavy_task.sh", "\r"]
-    concurrency: 2  # Max 2 simultaneous executions
+    keys: ["bash task_a.sh", "\r"]
 
-  - name: "light_task"
+  - name: "task_b"
     trigger: "periodic"
-    interval: "2s"
+    interval: "4s"
     action: "send_keys"
-    keys: ["bash light_task.sh", "\r"]
-    concurrency: 5  # Max 5 simultaneous executions
-    
-  - name: "critical_task"
-    trigger: "periodic"
-    interval: "10s"
-    action: "send_keys"
-    keys: ["bash critical_task.sh", "\r"]
-    concurrency: 1  # Single execution only (default)
+    keys: ["bash task_b.sh", "\r"]
 ```
 
 ## Core Concepts
@@ -176,6 +168,16 @@ See [docs/architecture.md](docs/architecture.md) for system design details.
 
 ## Features
 
+### Agent Pool System
+
+Multiple terminal agents running in parallel for improved performance:
+
+- **Parallel Execution**: Multiple agents handle tasks simultaneously without blocking
+- **Round-Robin Distribution**: Tasks automatically distributed across available agents
+- **Scalable Performance**: Add more agents to handle increased workload
+- **Independent Terminals**: Each agent runs in its own terminal process
+- **Configurable Pool Size**: Set `agent_pool_size` to control number of agents
+
 ### Queue System
 
 Advanced task processing with automatic queue management:
@@ -208,10 +210,11 @@ The HT terminal process automatically starts with a web interface for real-time 
 #### Access URLs
 
 After starting rule-agents, the terminal web interface is available at:
-- **Local**: http://localhost:9990
-- **Network**: http://[machine-ip]:9990
+- **Single Agent**: http://localhost:9990
+- **Agent Pool**: Multiple tabs (e.g., http://localhost:9990, http://localhost:9991, etc.)
+- **Network**: http://[machine-ip]:9990+
 
-The web interface URL is automatically displayed when the HT process starts.
+The web interface URLs are automatically displayed when the HT processes start.
 
 ## Available Commands
 
@@ -225,8 +228,8 @@ The web interface URL is automatically displayed when the HT process starts.
 # Start with dedupe queue example
 ./target/release/rule-agents --rules examples/dedupe_queue/dedupe_example.yaml
 
-# Start with concurrency control example
-./target/release/rule-agents --rules examples/concurrency/concurrency_demo.yaml
+# Start with agent pool example
+./target/release/rule-agents --rules examples/agent_pool/concurrency_demo.yaml
 
 # Test rule matching
 ./target/release/rule-agents test --rules examples/basic/config.yaml --capture "Do you want to proceed"
@@ -263,15 +266,15 @@ Multiple example configurations are provided to demonstrate different features:
 - Prevents reprocessing of identical items
 - Ideal for idempotent operations
 
-### 4. Concurrency Control (`examples/concurrency/`)
+### 4. Agent Pool (`examples/agent_pool/`)
 ```bash
-./target/release/rule-agents --rules examples/concurrency/concurrency_demo.yaml
+./target/release/rule-agents --rules examples/agent_pool/concurrency_demo.yaml
 ```
-- Demonstrates configurable base port and entry-level concurrency limits
-- Shows different concurrency settings for different task types
-- Custom web interface port (8080) instead of default 9990
-- Prevents system overload with controlled task execution
+- Demonstrates multiple agents running in parallel
+- Shows round-robin task distribution across agents
+- Multiple web interface tabs (http://localhost:9990, http://localhost:9991)
+- Improved throughput with parallel task execution
 
-**Web Interface**: Examples 1-3 provide monitoring at http://localhost:9990, Example 4 uses http://localhost:8080
+**Web Interface**: Examples 1-3 provide monitoring at http://localhost:9990, Example 4 uses multiple tabs starting from http://localhost:9990
 
 See [docs/tutorial.md](docs/tutorial.md) for a comprehensive tutorial on configuring and using RuleAgents.

@@ -148,7 +148,6 @@ pub fn resolve_entry_task_placeholders(
         name: entry.name.clone(),
         trigger: entry.trigger.clone(),
         action: resolved_action,
-        concurrency: entry.concurrency,
     }
 }
 

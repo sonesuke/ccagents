@@ -2,12 +2,52 @@ pub mod ht_process;
 
 use crate::agent::ht_process::{HtProcess, HtProcessConfig};
 use anyhow::Result;
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
 use tracing::info;
 
 /// Result of terminal differential detection
 pub struct DifferentialContent {
     pub new_content: String,
     pub clean_content: String,
+}
+
+/// Agent pool for managing multiple agents in parallel
+pub struct AgentPool {
+    agents: Vec<Arc<Agent>>,
+    next_index: AtomicUsize,
+}
+
+impl AgentPool {
+    /// Create a new agent pool with the specified size
+    pub async fn new(pool_size: usize, base_port: u16, test_mode: bool) -> Result<Self> {
+        let mut agents = Vec::new();
+
+        for i in 0..pool_size {
+            let port = base_port + i as u16;
+            let agent_id = format!("agent-{}", i);
+            let agent = Arc::new(Agent::new(agent_id, test_mode, port).await?);
+            agents.push(agent);
+        }
+
+        Ok(Self {
+            agents,
+            next_index: AtomicUsize::new(0),
+        })
+    }
+
+    /// Get the next agent using round-robin selection
+    pub fn get_agent(&self) -> Arc<Agent> {
+        let index = self.next_index.fetch_add(1, Ordering::Relaxed) % self.agents.len();
+        Arc::clone(&self.agents[index])
+    }
+
+    /// Get the number of agents in the pool
+    pub fn size(&self) -> usize {
+        self.agents.len()
+    }
 }
 
 pub struct Agent {

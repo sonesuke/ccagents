@@ -1,0 +1,33 @@
+# Agent Pool Example Configuration
+# 
+# This example demonstrates basic agent pool functionality:
+# - 2 agents running in parallel on different ports
+# - Simple tasks distributed across agents automatically
+#
+# Usage: cargo run -- --rules examples/agent_pool/concurrency_demo.yaml
+
+# Monitor configuration with agent pool
+monitor:
+  base_port: 9990     # First agent on port 9990
+  agent_pool_size: 2  # 2 agents: 9990, 9991
+
+entries:
+  # Task A - will go to agent 1
+  - name: "task_a"
+    trigger: "periodic"
+    interval: "3s"
+    action: "send_keys"
+    keys: ["bash examples/agent_pool/simple_task.sh A", "\r"]
+
+  # Task B - will go to agent 2  
+  - name: "task_b"
+    trigger: "periodic"
+    interval: "4s"
+    action: "send_keys"
+    keys: ["bash examples/agent_pool/simple_task.sh B", "\r"]
+
+rules:
+  # React to task completion
+  - pattern: "Task (\\w+) completed"
+    action: "send_keys"
+    keys: ["echo 'Acknowledged task ${1}'", "\r"]

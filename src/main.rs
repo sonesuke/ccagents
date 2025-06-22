@@ -63,12 +63,21 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
     println!("🌐 Terminal available at: http://localhost:{}", base_port);
     println!("🛑 Press Ctrl+C to stop");
 
-    // Create agent directly
-    let agent = Arc::new(agent::Agent::new("main".to_string(), false, base_port).await?);
+    // Create agent pool
+    let monitor_config = ruler.get_monitor_config();
+    let agent_pool = Arc::new(
+        agent::AgentPool::new(
+            monitor_config.agent_pool_size,
+            monitor_config.base_port,
+            false,
+        )
+        .await?,
+    );
 
     // Wait a moment for terminal to be ready
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
     println!("🚀 Ready to monitor terminal commands...");
+    println!("💡 Agent pool size: {}", agent_pool.size());
     println!("💡 Open http://localhost:{} in your browser", base_port);
 
     // Execute on_start entries
@@ -76,6 +85,7 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
     if !on_start_entries.is_empty() {
         println!("🎬 Executing on_start entries...");
         for entry in on_start_entries {
+            let agent = agent_pool.get_agent();
             execute_entry_action(&agent, &entry, &queue_manager).await?;
         }
     }
@@ -87,19 +97,17 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
         if let TriggerType::Periodic { interval: period } = entry.trigger {
             let entry_clone = entry.clone();
             let queue_manager_clone = queue_manager.clone();
-            let agent_clone = agent.clone();
+            let agent_pool_clone = Arc::clone(&agent_pool);
 
             let handle = tokio::spawn(async move {
                 let mut timer = interval(period);
                 loop {
                     timer.tick().await;
                     println!("⏰ Executing periodic entry: {}", entry_clone.name);
-                    if let Err(e) = execute_periodic_entry(
-                        &entry_clone,
-                        &queue_manager_clone,
-                        Some(&agent_clone),
-                    )
-                    .await
+                    let agent = agent_pool_clone.get_agent();
+                    if let Err(e) =
+                        execute_periodic_entry(&entry_clone, &queue_manager_clone, Some(&agent))
+                            .await
                     {
                         eprintln!(
                             "❌ Error executing periodic entry '{}': {}",
@@ -129,7 +137,7 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
 
             // Clone necessary data for the async task
             let entry_clone = entry;
-            let agent_clone = Arc::clone(&agent);
+            let agent_pool_clone = Arc::clone(&agent_pool);
             let queue_manager_clone = queue_manager.clone();
 
             // Spawn task to listen for queue items
@@ -144,9 +152,9 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
                     let resolved_entry = resolve_entry_task_placeholders(&entry_clone, &task_item);
 
                     // Execute the entry action with resolved placeholders
+                    let agent = agent_pool_clone.get_agent();
                     if let Err(e) =
-                        execute_entry_action(&agent_clone, &resolved_entry, &queue_manager_clone)
-                            .await
+                        execute_entry_action(&agent, &resolved_entry, &queue_manager_clone).await
                     {
                         println!(
                             "❌ Error executing queue entry '{}': {}",
@@ -171,7 +179,8 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
                 break;
             }
             _ = tokio::time::sleep(tokio::time::Duration::from_millis(500)) => {
-                // Process terminal output and execute rules
+                // Process terminal output and execute rules (use first agent for monitoring)
+                let agent = agent_pool.get_agent();
                 process_terminal_output(&agent, &ruler, &queue_manager, &mut last_output).await?;
             }
         }
@@ -187,14 +196,17 @@ async fn handle_show_command(args: &cli::ShowArgs) -> Result<()> {
         ruler::config::load_config(&args.rules).context("Failed to load config")?;
 
     println!("Loaded {} entries and {} rules", entries.len(), rules.len());
-    println!("Monitor config: base_port = {}", monitor_config.base_port);
+    println!(
+        "Monitor config: base_port = {}, agent_pool_size = {}",
+        monitor_config.base_port, monitor_config.agent_pool_size
+    );
 
     if !entries.is_empty() {
         println!("\nEntries:");
         for entry in &entries {
             println!(
-                "  {}: {:?} -> {:?} (concurrency: {})",
-                entry.name, entry.trigger, entry.action, entry.concurrency
+                "  {}: {:?} -> {:?}",
+                entry.name, entry.trigger, entry.action
             );
         }
     }

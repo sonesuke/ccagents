@@ -5,6 +5,12 @@
 # - examples/basic/config.yaml - Basic pattern matching and on_start triggers
 # - examples/simple_queue/simple_queue.yaml - Queue system with periodic triggers
 # - examples/dedupe_queue/dedupe_example.yaml - Duplicate filtering queues
+# - examples/agent_pool/concurrency_demo.yaml - Multiple agents running in parallel
+
+# Optional monitor configuration
+# monitor:
+#   base_port: 9990        # First agent port (default: 9990)
+#   agent_pool_size: 1     # Number of parallel agents (default: 1)
 
 # External triggers - initiated by system events
 entries:

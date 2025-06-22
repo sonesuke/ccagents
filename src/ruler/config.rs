@@ -9,18 +9,25 @@ use std::path::Path;
 pub struct MonitorConfig {
     #[serde(default = "default_base_port")]
     pub base_port: u16,
+    #[serde(default = "default_agent_pool_size")]
+    pub agent_pool_size: usize,
 }
 
 impl Default for MonitorConfig {
     fn default() -> Self {
         Self {
             base_port: default_base_port(),
+            agent_pool_size: default_agent_pool_size(),
         }
     }
 }
 
 fn default_base_port() -> u16 {
     9990
+}
+
+fn default_agent_pool_size() -> usize {
+    1
 }
 
 // YAML structure for loading complete configuration

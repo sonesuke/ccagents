@@ -6,6 +6,7 @@ RuleAgents is a terminal automation tool that provides YAML-driven control of in
 
 ## Core Architecture
 
+### Single Agent Mode (Default)
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌────────────────┐
 │   RuleAgents    │────▶│   HT Process     │────▶│  Web Terminal  │
@@ -21,14 +22,34 @@ RuleAgents is a terminal automation tool that provides YAML-driven control of in
 └─────────────────┘     └──────────────────┘
 ```
 
+### Agent Pool Mode (agent_pool_size > 1)
+```
+                            ┌──────────────────┐     ┌────────────────┐
+                       ┌───▶│   HT Process 1   │────▶│  Web Terminal  │
+                       │    │  (Terminal Emu)  │     │ localhost:9990 │
+┌─────────────────┐    │    └──────────────────┘     └────────────────┘
+│   RuleAgents    │────┤    
+│  (Controller)   │    │    ┌──────────────────┐     ┌────────────────┐
+│   Agent Pool    │    ├───▶│   HT Process 2   │────▶│  Web Terminal  │
+│                 │    │    │  (Terminal Emu)  │     │ localhost:9991 │
+└─────────────────┘    │    └──────────────────┘     └────────────────┘
+                       │    
+                       │    ┌──────────────────┐     ┌────────────────┐
+                       └───▶│   HT Process N   │────▶│  Web Terminal  │
+                            │  (Terminal Emu)  │     │ localhost:999X │
+                            └──────────────────┘     └────────────────┘
+```
+
 ## Key Components
 
 ### 1. Agent Module (`agent/`)
 Manages the HT process and terminal interactions:
-- **HT Process Management**: Spawns and controls HyperTerminal subprocess
+- **Agent Pool**: Manages multiple parallel agents for improved throughput
+- **HT Process Management**: Spawns and controls HyperTerminal subprocesses
 - **Terminal Monitor**: Detects changes in terminal output using differential buffer analysis
 - **Key Sender**: Sends keyboard input to the terminal session
 - **State Detection**: Monitors if scripts are running or idle
+- **Round-Robin Distribution**: Automatically distributes tasks across available agents
 
 ### 2. Ruler Module (`ruler/`)
 Processes configuration and decides actions:
@@ -60,6 +81,13 @@ RuleAgents depends on HyperTerminal (HT) for:
 - Keyboard input injection
 
 ## Configuration Structure
+
+### Monitor Configuration
+```yaml
+monitor:
+  base_port: 9990        # First agent port (default: 9990)
+  agent_pool_size: 1     # Number of parallel agents (default: 1)
+```
 
 ### Entries - Event Triggers
 ```yaml
@@ -95,20 +123,21 @@ rules:
 1. **Initialization**
    - Parse command-line arguments
    - Load YAML configuration
-   - Start HT process on available port (9990+)
-   - Initialize terminal monitor
+   - Create agent pool with specified size (default: 1)
+   - Start HT processes on sequential ports (9990, 9991, ...)
+   - Initialize terminal monitors for each agent
 
 2. **Startup Phase**
-   - Execute `on_start` entries
-   - Begin monitoring terminal output
-   - Web terminal becomes accessible
+   - Execute `on_start` entries using round-robin agent selection
+   - Begin monitoring terminal output across all agents
+   - Web terminals become accessible (one URL per agent)
 
 3. **Runtime Loop**
-   - Monitor terminal buffer for changes
-   - Detect new terminal output
+   - Monitor terminal buffers for changes across all agents
+   - Detect new terminal output from multiple agents
    - Match output against configured rules
-   - Execute actions for matching patterns
-   - Track script state (running/idle)
+   - Execute actions for matching patterns using available agents
+   - Track script state (running/idle) per agent
 
 4. **Action Execution**
    - `send_keys`: Inject keyboard input
@@ -117,10 +146,11 @@ rules:
    - `enqueue_dedupe`: Add command output with duplicate filtering
 
 5. **Queue Processing**
-   - Periodic tasks execute commands at specified intervals
+   - Periodic tasks execute commands at specified intervals using round-robin agent selection
    - Command output is processed line-by-line and added to queues
    - Queue listeners trigger automatically when items are added
    - Variable expansion replaces `<task>` with actual queue items
+   - Each queue event is processed by the next available agent in the pool
 
 ## Terminal Output Detection
 
@@ -146,8 +176,9 @@ RuleAgents uses a sophisticated algorithm to detect new content in HT's fixed-wi
 - Dynamic variable expansion in commands
 
 ### Web Interface
-- Real-time terminal viewing at http://localhost:9990
-- Multiple concurrent viewers supported
+- Real-time terminal viewing starting at http://localhost:9990
+- Multiple terminals with agent pool (9990, 9991, 9992, ...)
+- Multiple concurrent viewers supported per agent
 - No installation required for viewers
 
 ### Reliability
@@ -179,10 +210,27 @@ RuleAgents includes special testing features:
 - No built-in scheduling or cron-like features
 - Limited to terminal-based automation
 
+## Agent Pool Benefits
+
+### Performance Improvements
+- **Parallel Task Execution**: Multiple tasks run simultaneously without blocking
+- **Better Resource Utilization**: Each agent uses independent terminal processes
+- **Improved Throughput**: System can handle more concurrent operations
+
+### Scalability
+- **Configurable Pool Size**: Easily adjust number of agents based on workload
+- **Round-Robin Distribution**: Automatic load balancing across agents
+- **Independent Operation**: Agents don't interfere with each other
+
+### Monitoring and Debugging
+- **Per-Agent Web Interface**: Monitor each agent's terminal independently
+- **Distributed Execution**: View how tasks are distributed across agents
+- **Isolated Sessions**: Debugging issues doesn't affect other agents
+
 ## Future Considerations
 
 - Plugin system for custom actions
 - Enhanced pattern matching capabilities
 - Terminal session recording/playback
-- Multi-terminal orchestration
+- Advanced agent scheduling strategies
 - REST API for external control
