@@ -34,7 +34,7 @@ echo "Result: success"
 
 ```bash
 # Run queue example
-cargo run -- --rules examples/simple_queue/simple_queue.yaml
+cargo run -- --config examples/simple_queue/simple_queue.yaml
 ```
 
 ## How It Works

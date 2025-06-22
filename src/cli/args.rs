@@ -8,8 +8,8 @@ pub struct Cli {
     pub command: Option<Commands>,
 
     /// Path to config YAML file
-    #[arg(short, long, global = true)]
-    pub rules: Option<PathBuf>,
+    #[arg(long, global = true)]
+    pub config: Option<PathBuf>,
 
     /// Enable debug logging for internal details
     #[arg(short, long, global = true)]
@@ -27,15 +27,15 @@ pub enum Commands {
 #[derive(Args, Debug)]
 pub struct ShowArgs {
     /// Path to config YAML file
-    #[arg(short, long, default_value = "config.yaml")]
-    pub rules: PathBuf,
+    #[arg(long, default_value = "config.yaml")]
+    pub config: PathBuf,
 }
 
 #[derive(Args, Debug)]
 pub struct TestArgs {
     /// Path to config YAML file
-    #[arg(short, long, default_value = "config.yaml")]
-    pub rules: PathBuf,
+    #[arg(long, default_value = "config.yaml")]
+    pub config: PathBuf,
     /// Capture text to test against rules
     #[arg(short, long)]
     pub capture: String,
