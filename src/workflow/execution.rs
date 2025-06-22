@@ -1,15 +1,28 @@
 use crate::agent::Agent;
+use crate::queue::SharedQueueManager;
 use crate::ruler::types::ActionType;
 use anyhow::Result;
 use tokio::time::Duration;
 
 pub struct ActionExecutor {
     test_mode: bool,
+    queue_manager: Option<SharedQueueManager>,
 }
 
 impl ActionExecutor {
     pub fn new(test_mode: bool) -> Self {
-        Self { test_mode }
+        Self {
+            test_mode,
+            queue_manager: None,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn with_queue_manager(test_mode: bool, queue_manager: SharedQueueManager) -> Self {
+        Self {
+            test_mode,
+            queue_manager: Some(queue_manager),
+        }
     }
 
     /// Execute an action based on the ActionType system
@@ -27,6 +40,15 @@ impl ActionExecutor {
                     args
                 );
                 self.execute_workflow(agent, &workflow_name, args).await?;
+            }
+            ActionType::Enqueue { queue, command } => {
+                println!(
+                    "→ Executing command '{}' and enqueuing to '{}' for agent {}",
+                    command,
+                    queue,
+                    agent.id()
+                );
+                self.execute_and_enqueue(&queue, &command).await?;
             }
         }
         Ok(())
@@ -69,5 +91,28 @@ impl ActionExecutor {
             "Workflow '{}' not found. Workflows should be defined in external configuration files.",
             workflow_name
         ))
+    }
+
+    /// Execute a command and enqueue its output to a queue
+    async fn execute_and_enqueue(&self, queue_name: &str, command: &str) -> Result<()> {
+        if self.test_mode {
+            println!(
+                "ℹ️ Test mode: would execute command '{}' and enqueue to '{}'",
+                command, queue_name
+            );
+            return Ok(());
+        }
+
+        let queue_manager = self
+            .queue_manager
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Queue manager not initialized"))?;
+
+        // Use QueueExecutor for command execution
+        let executor = crate::queue::QueueExecutor::new(queue_manager.clone());
+        let count = executor.execute_and_enqueue(queue_name, command).await?;
+
+        println!("✅ Enqueued {} items to queue '{}'", count, queue_name);
+        Ok(())
     }
 }

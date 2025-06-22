@@ -1,13 +1,18 @@
 mod agent;
+mod queue;
 mod ruler;
 mod workflow;
 
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
+use queue::{create_shared_manager, QueueExecutor};
 use ruler::decision::decide_action;
+use ruler::entry::TriggerType;
+use ruler::rule::resolve_task_placeholder_in_vec;
 use ruler::Ruler;
 use std::path::PathBuf;
 use tokio::signal;
+use tokio::time::interval;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -58,7 +63,15 @@ async fn main() -> Result<()> {
             // When no subcommand is provided, run manager mode (default)
             let rules_path = cli.rules.unwrap_or_else(|| PathBuf::from("config.yaml"));
 
-            let mut ruler = Ruler::new(rules_path.to_str().unwrap()).await?;
+            // Create queue manager
+            let queue_manager = create_shared_manager();
+
+            // Create ruler with queue manager
+            let mut ruler = Ruler::with_queue_manager(
+                rules_path.to_str().unwrap(),
+                Some(queue_manager.clone()),
+            )
+            .await?;
 
             // Create a single agent for mock.sh testing
             ruler.create_agent("main").await?;
@@ -82,28 +95,45 @@ async fn main() -> Result<()> {
             if !on_start_entries.is_empty() {
                 println!("🎬 Executing on_start entries...");
                 for entry in on_start_entries {
-                    match &entry.action {
-                        ruler::types::ActionType::SendKeys(keys) => {
-                            println!("🤖 Executing entry '{}' → Sending: {:?}", entry.name, keys);
+                    execute_entry_action(agent, &entry, &queue_manager).await?;
+                }
+            }
 
-                            for key in keys {
-                                if key == "\\r" || key == "\r" {
-                                    if let Err(e) = agent.send_keys("\r").await {
-                                        eprintln!("❌ Error sending key: {}", e);
-                                    }
-                                } else if let Err(e) = agent.send_keys(key).await {
-                                    eprintln!("❌ Error sending key: {}", e);
-                                }
-                                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            // Setup periodic timers
+            let periodic_entries = ruler.get_periodic_entries().await;
+            let mut periodic_handles = Vec::new();
+            for entry in periodic_entries {
+                if let TriggerType::Periodic { interval: period } = entry.trigger {
+                    let entry_clone = entry.clone();
+                    let queue_manager_clone = queue_manager.clone();
+
+                    let handle = tokio::spawn(async move {
+                        let mut timer = interval(period);
+                        loop {
+                            timer.tick().await;
+                            println!("⏰ Executing periodic entry: {}", entry_clone.name);
+                            // For periodic execution, we don't have an agent context yet
+                            // This is for background tasks that don't need terminal interaction
+                            if let Err(e) =
+                                execute_periodic_entry(&entry_clone, &queue_manager_clone).await
+                            {
+                                eprintln!(
+                                    "❌ Error executing periodic entry '{}': {}",
+                                    entry_clone.name, e
+                                );
                             }
                         }
-                        ruler::types::ActionType::Workflow(workflow_name, args) => {
-                            println!(
-                                "🔄 Executing entry '{}' → Workflow: {} {:?}",
-                                entry.name, workflow_name, args
-                            );
-                        }
-                    }
+                    });
+                    periodic_handles.push(handle);
+                }
+            }
+
+            // Setup queue listeners for enqueue entries
+            let enqueue_entries = ruler.get_enqueue_entries().await;
+            println!("📡 Setting up {} queue listeners...", enqueue_entries.len());
+            for entry in &enqueue_entries {
+                if let TriggerType::Enqueue { queue_name } = &entry.trigger {
+                    println!("📡 Listening to queue: {}", queue_name);
                 }
             }
 
@@ -233,6 +263,18 @@ async fn main() -> Result<()> {
                                         ruler::types::ActionType::Workflow(workflow_name, args) => {
                                             println!("🔄 Matched workflow: {} {:?}", workflow_name, args);
                                         }
+                                        ruler::types::ActionType::Enqueue { queue, command } => {
+                                            println!("📦 Matched enqueue to '{}': {}", queue, command);
+                                            let executor = QueueExecutor::new(queue_manager.clone());
+                                            match executor.execute_and_enqueue(&queue, &command).await {
+                                                Ok(count) => {
+                                                    println!("✅ Enqueued {} items to queue '{}'", count, queue);
+                                                }
+                                                Err(e) => {
+                                                    eprintln!("❌ Error executing enqueue action: {}", e);
+                                                }
+                                            }
+                                        }
                                     }
                                 }
 
@@ -300,4 +342,109 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Execute a periodic entry action (without agent context)
+async fn execute_periodic_entry(
+    entry: &ruler::entry::CompiledEntry,
+    queue_manager: &queue::SharedQueueManager,
+) -> Result<()> {
+    match &entry.action {
+        ruler::types::ActionType::SendKeys(_keys) => {
+            println!(
+                "⚠️ Periodic entry '{}' has SendKeys action - skipping (no agent context)",
+                entry.name
+            );
+        }
+        ruler::types::ActionType::Workflow(workflow_name, args) => {
+            println!(
+                "🔄 Executing periodic entry '{}' → Workflow: {} {:?}",
+                entry.name, workflow_name, args
+            );
+            // TODO: Implement workflow execution
+        }
+        ruler::types::ActionType::Enqueue { queue, command } => {
+            println!(
+                "📦 Executing periodic entry '{}' → Enqueue to '{}': {}",
+                entry.name, queue, command
+            );
+            let executor = QueueExecutor::new(queue_manager.clone());
+            let count = executor.execute_and_enqueue(queue, command).await?;
+            println!("✅ Enqueued {} items to queue '{}'", count, queue);
+        }
+    }
+    Ok(())
+}
+
+/// Execute an entry action using the appropriate mechanism
+async fn execute_entry_action(
+    agent: &agent::Agent,
+    entry: &ruler::entry::CompiledEntry,
+    queue_manager: &queue::SharedQueueManager,
+) -> Result<()> {
+    match &entry.action {
+        ruler::types::ActionType::SendKeys(keys) => {
+            println!("🤖 Executing entry '{}' → Sending: {:?}", entry.name, keys);
+            for key in keys {
+                if key == "\\r" || key == "\r" {
+                    if let Err(e) = agent.send_keys("\r").await {
+                        eprintln!("❌ Error sending key: {}", e);
+                    }
+                } else if let Err(e) = agent.send_keys(key).await {
+                    eprintln!("❌ Error sending key: {}", e);
+                }
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            }
+        }
+        ruler::types::ActionType::Workflow(workflow_name, args) => {
+            println!(
+                "🔄 Executing entry '{}' → Workflow: {} {:?}",
+                entry.name, workflow_name, args
+            );
+            // TODO: Implement workflow execution
+        }
+        ruler::types::ActionType::Enqueue { queue, command } => {
+            println!(
+                "📦 Executing entry '{}' → Enqueue to '{}': {}",
+                entry.name, queue, command
+            );
+            let executor = QueueExecutor::new(queue_manager.clone());
+            let count = executor.execute_and_enqueue(queue, command).await?;
+            println!("✅ Enqueued {} items to queue '{}'", count, queue);
+        }
+    }
+    Ok(())
+}
+
+/// Resolve <task> placeholders in entry action with actual task value
+#[allow(dead_code)]
+fn resolve_entry_task_placeholders(
+    entry: &ruler::entry::CompiledEntry,
+    task_value: &str,
+) -> ruler::entry::CompiledEntry {
+    let resolved_action = match &entry.action {
+        ruler::types::ActionType::SendKeys(keys) => {
+            ruler::types::ActionType::SendKeys(resolve_task_placeholder_in_vec(keys, task_value))
+        }
+        ruler::types::ActionType::Workflow(workflow_name, args) => {
+            let resolved_workflow =
+                ruler::rule::resolve_task_placeholder(workflow_name, task_value);
+            let resolved_args = resolve_task_placeholder_in_vec(args, task_value);
+            ruler::types::ActionType::Workflow(resolved_workflow, resolved_args)
+        }
+        ruler::types::ActionType::Enqueue { queue, command } => {
+            let resolved_queue = ruler::rule::resolve_task_placeholder(queue, task_value);
+            let resolved_command = ruler::rule::resolve_task_placeholder(command, task_value);
+            ruler::types::ActionType::Enqueue {
+                queue: resolved_queue,
+                command: resolved_command,
+            }
+        }
+    };
+
+    ruler::entry::CompiledEntry {
+        name: entry.name.clone(),
+        trigger: entry.trigger.clone(),
+        action: resolved_action,
+    }
 }

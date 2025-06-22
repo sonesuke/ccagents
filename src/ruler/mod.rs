@@ -5,6 +5,7 @@ pub mod rule;
 pub mod types;
 
 use crate::agent::Agent;
+use crate::queue::SharedQueueManager;
 use crate::ruler::config::load_config;
 use crate::ruler::decision::decide_action;
 use crate::ruler::entry::{CompiledEntry, TriggerType};
@@ -21,11 +22,19 @@ pub struct Ruler {
     agents: HashMap<String, Agent>,
     test_mode: bool,
     next_port: u16,
+    queue_manager: Option<SharedQueueManager>,
 }
 
 #[allow(dead_code)]
 impl Ruler {
     pub async fn new(config_path: &str) -> Result<Self> {
+        Self::with_queue_manager(config_path, None).await
+    }
+
+    pub async fn with_queue_manager(
+        config_path: &str,
+        queue_manager: Option<SharedQueueManager>,
+    ) -> Result<Self> {
         // Load initial configuration (entries and rules)
         let (initial_entries, initial_rules) = load_config(std::path::Path::new(config_path))?;
         let entries = Arc::new(RwLock::new(initial_entries));
@@ -55,6 +64,7 @@ impl Ruler {
             agents: HashMap::new(),
             test_mode: is_test,
             next_port: 9990, // Start from port 9990
+            queue_manager,
         })
     }
 
@@ -91,6 +101,26 @@ impl Ruler {
             .into_iter()
             .filter(|entry| matches!(entry.trigger, TriggerType::OnStart))
             .collect()
+    }
+
+    pub async fn get_periodic_entries(&self) -> Vec<CompiledEntry> {
+        let entries = self.get_entries().await;
+        entries
+            .into_iter()
+            .filter(|entry| matches!(entry.trigger, TriggerType::Periodic { .. }))
+            .collect()
+    }
+
+    pub async fn get_enqueue_entries(&self) -> Vec<CompiledEntry> {
+        let entries = self.get_entries().await;
+        entries
+            .into_iter()
+            .filter(|entry| matches!(entry.trigger, TriggerType::Enqueue { .. }))
+            .collect()
+    }
+
+    pub fn get_queue_manager(&self) -> Option<&SharedQueueManager> {
+        self.queue_manager.as_ref()
     }
 
     pub async fn reload_config(&self, config_path: &str) -> Result<()> {

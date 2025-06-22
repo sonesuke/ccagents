@@ -15,6 +15,10 @@ pub struct Rule {
     pub workflow: Option<String>,
     #[serde(default)]
     pub args: Vec<String>,
+    #[serde(default)]
+    pub queue: Option<String>,
+    #[serde(default)]
+    pub command: Option<String>,
 }
 
 // Compiled structure for runtime use
@@ -29,7 +33,14 @@ impl Rule {
         let regex = Regex::new(&self.pattern)
             .with_context(|| format!("Invalid regex pattern: {}", self.pattern))?;
 
-        let action = compile_action(&self.action, &self.keys, &self.workflow, &self.args)?;
+        let action = compile_action(
+            &self.action,
+            &self.keys,
+            &self.workflow,
+            &self.args,
+            &self.queue,
+            &self.command,
+        )?;
 
         Ok(CompiledRule { regex, action })
     }
@@ -53,5 +64,20 @@ pub fn resolve_capture_groups_in_vec(
     templates
         .iter()
         .map(|template| resolve_capture_groups(template, captured_groups))
+        .collect()
+}
+
+/// Resolve <task> placeholder in a template string with a task value
+#[allow(dead_code)]
+pub fn resolve_task_placeholder(template: &str, task_value: &str) -> String {
+    template.replace("<task>", task_value)
+}
+
+/// Resolve <task> placeholder in a vector of strings
+#[allow(dead_code)]
+pub fn resolve_task_placeholder_in_vec(templates: &[String], task_value: &str) -> Vec<String> {
+    templates
+        .iter()
+        .map(|template| resolve_task_placeholder(template, task_value))
         .collect()
 }
