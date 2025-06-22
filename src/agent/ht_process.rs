@@ -99,7 +99,6 @@ impl HtProcess {
         }
     }
 
-
     pub async fn start(&self) -> Result<(), HtProcessError> {
         let mut process_lock = self.process.lock().await;
 
@@ -189,7 +188,6 @@ impl HtProcess {
         Ok(())
     }
 
-
     pub async fn send_input(&self, input: String) -> Result<(), HtProcessError> {
         let sender_lock = self.sender.lock().await;
 
@@ -243,7 +241,6 @@ impl HtProcess {
             Err(HtProcessError::NotRunning)
         }
     }
-
 
     async fn handle_input(
         mut stdin: std::process::ChildStdin,

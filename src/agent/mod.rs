@@ -51,7 +51,6 @@ impl Agent {
         Ok(Agent { ht_process })
     }
 
-
     pub async fn send_keys(&self, keys: &str) -> Result<()> {
         self.ht_process
             .send_input(keys.to_string())
@@ -65,7 +64,6 @@ impl Agent {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to get output: {}", e))
     }
-
 
     /// Detect differential content from terminal output
     ///
@@ -126,7 +124,6 @@ impl Agent {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {

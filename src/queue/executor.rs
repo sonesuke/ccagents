@@ -101,7 +101,6 @@ impl QueueExecutor {
         );
         Ok(count)
     }
-
 }
 
 #[cfg(test)]
@@ -167,5 +166,4 @@ mod tests {
         assert_eq!(count, 0);
         // No items were enqueued
     }
-
 }

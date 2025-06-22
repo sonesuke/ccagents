@@ -22,7 +22,6 @@ pub struct Ruler {
 }
 
 impl Ruler {
-
     pub async fn new(config_path: &str) -> Result<Self> {
         // Load initial configuration (entries, rules, and monitor config)
         let (initial_entries, initial_rules, monitor_config) =
@@ -48,7 +47,6 @@ impl Ruler {
                 })
                 .unwrap_or(false);
 
-
         Ok(Ruler {
             entries,
             rules,
@@ -56,8 +54,6 @@ impl Ruler {
             monitor_config,
         })
     }
-
-
 
     pub async fn get_entries(&self) -> Vec<CompiledEntry> {
         self.entries.read().await.clone()
@@ -91,13 +87,10 @@ impl Ruler {
             .collect()
     }
 
-
-
     pub async fn decide_action_for_capture(&self, capture: &str) -> ActionType {
         let rules = self.get_rules().await;
         decide_action(capture, &rules)
     }
-
 
     /// Get monitor configuration
     pub fn get_monitor_config(&self) -> &config::MonitorConfig {

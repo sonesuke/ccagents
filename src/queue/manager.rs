@@ -6,7 +6,6 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tracing::{debug, info};
 
-
 /// Manages multiple named queues with event notification
 #[derive(Debug, Serialize, Deserialize)]
 pub struct QueueManager {
@@ -137,7 +136,6 @@ impl QueueManager {
         Ok(added_count)
     }
 
-
     /// Subscribe to queue events
     pub fn subscribe(&mut self, queue_name: &str) -> UnboundedReceiver<String> {
         let (tx, rx) = mpsc::unbounded_channel();
@@ -153,6 +151,4 @@ impl QueueManager {
 
         rx
     }
-
 }
-
