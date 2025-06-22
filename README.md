@@ -89,6 +89,36 @@ entries:
     keys: ["bash examples/simple_queue/process_task.sh <task>", "\r"]
 ```
 
+### Concurrency Control Configuration
+```yaml
+# Monitor section with custom base port
+monitor:
+  base_port: 8080  # Custom port (default: 9990)
+
+# Entries with concurrency limits
+entries:
+  - name: "heavy_task"
+    trigger: "periodic"
+    interval: "3s"
+    action: "send_keys"
+    keys: ["bash heavy_task.sh", "\r"]
+    concurrency: 2  # Max 2 simultaneous executions
+
+  - name: "light_task"
+    trigger: "periodic"
+    interval: "2s"
+    action: "send_keys"
+    keys: ["bash light_task.sh", "\r"]
+    concurrency: 5  # Max 5 simultaneous executions
+    
+  - name: "critical_task"
+    trigger: "periodic"
+    interval: "10s"
+    action: "send_keys"
+    keys: ["bash critical_task.sh", "\r"]
+    concurrency: 1  # Single execution only (default)
+```
+
 ## Core Concepts
 
 ### Entries vs Rules
@@ -195,6 +225,9 @@ The web interface URL is automatically displayed when the HT process starts.
 # Start with dedupe queue example
 ./target/release/rule-agents --rules examples/dedupe_queue/dedupe_example.yaml
 
+# Start with concurrency control example
+./target/release/rule-agents --rules examples/concurrency/concurrency_demo.yaml
+
 # Test rule matching
 ./target/release/rule-agents test --rules examples/basic/config.yaml --capture "Do you want to proceed"
 
@@ -230,6 +263,15 @@ Multiple example configurations are provided to demonstrate different features:
 - Prevents reprocessing of identical items
 - Ideal for idempotent operations
 
-**Web Interface**: All examples provide real-time monitoring at http://localhost:9990
+### 4. Concurrency Control (`examples/concurrency/`)
+```bash
+./target/release/rule-agents --rules examples/concurrency/concurrency_demo.yaml
+```
+- Demonstrates configurable base port and entry-level concurrency limits
+- Shows different concurrency settings for different task types
+- Custom web interface port (8080) instead of default 9990
+- Prevents system overload with controlled task execution
+
+**Web Interface**: Examples 1-3 provide monitoring at http://localhost:9990, Example 4 uses http://localhost:8080
 
 See [docs/tutorial.md](docs/tutorial.md) for a comprehensive tutorial on configuring and using RuleAgents.

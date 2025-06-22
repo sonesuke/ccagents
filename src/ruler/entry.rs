@@ -3,6 +3,10 @@ use anyhow::{anyhow, Result};
 use serde::Deserialize;
 use std::time::Duration;
 
+fn default_entry_concurrency() -> usize {
+    1
+}
+
 // YAML structure for loading entries
 #[derive(Debug, Deserialize)]
 pub struct Entry {
@@ -22,6 +26,8 @@ pub struct Entry {
     pub queue: Option<String>,
     #[serde(default)]
     pub command: Option<String>,
+    #[serde(default = "default_entry_concurrency")]
+    pub concurrency: usize,
 }
 
 // Compiled structure for runtime use
@@ -30,6 +36,7 @@ pub struct CompiledEntry {
     pub name: String,
     pub trigger: TriggerType,
     pub action: ActionType,
+    pub concurrency: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -75,6 +82,7 @@ impl Entry {
             name: self.name.clone(),
             trigger,
             action,
+            concurrency: self.concurrency,
         })
     }
 }

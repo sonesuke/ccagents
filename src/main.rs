@@ -360,17 +360,18 @@ async fn main() -> Result<()> {
         Some(command) => match command {
             Commands::Show(args) => {
                 // Load and compile configuration from YAML file
-                let (entries, rules) =
+                let (entries, rules, monitor_config) =
                     ruler::config::load_config(&args.rules).context("Failed to load config")?;
 
                 println!("Loaded {} entries and {} rules", entries.len(), rules.len());
+                println!("Monitor config: base_port = {}", monitor_config.base_port);
 
                 if !entries.is_empty() {
                     println!("\nEntries:");
                     for entry in &entries {
                         println!(
-                            "  {}: {:?} -> {:?}",
-                            entry.name, entry.trigger, entry.action
+                            "  {}: {:?} -> {:?} (concurrency: {})",
+                            entry.name, entry.trigger, entry.action, entry.concurrency
                         );
                     }
                 }
@@ -384,7 +385,7 @@ async fn main() -> Result<()> {
             }
             Commands::Test(args) => {
                 // Load rules and test against capture text
-                let (_, rules) =
+                let (_, rules, _) =
                     ruler::config::load_config(&args.rules).context("Failed to load config")?;
                 let action = decide_action(&args.capture, &rules);
 
@@ -542,5 +543,6 @@ fn resolve_entry_task_placeholders(
         name: entry.name.clone(),
         trigger: entry.trigger.clone(),
         action: resolved_action,
+        concurrency: entry.concurrency,
     }
 }
