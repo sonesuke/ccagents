@@ -3,7 +3,6 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
-use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
@@ -13,19 +12,6 @@ pub struct TerminalSnapshot {
     pub cursor_position: Option<(u32, u32)>,
     pub width: u32,
     pub height: u32,
-}
-
-#[derive(Debug, Error)]
-#[allow(dead_code)]
-pub enum MonitorError {
-    #[error("Monitoring error: {0}")]
-    MonitoringError(String),
-    #[error("Regex error: {0}")]
-    RegexError(#[from] regex::Error),
-    #[error("Monitor timeout: {0}")]
-    Timeout(String),
-    #[error("Monitor not running")]
-    NotRunning,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,15 +62,6 @@ impl Default for MonitorConfig {
             max_snapshot_history: 10,
         }
     }
-}
-
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub struct MonitorStatistics {
-    pub total_transitions: usize,
-    pub idle_duration_ms: u64,
-    pub wait_duration_ms: u64,
-    pub active_duration_ms: u64,
 }
 
 #[allow(dead_code)]
@@ -158,12 +135,9 @@ impl TerminalOutputMonitor {
     }
 
     /// Process a new terminal snapshot and detect state changes
-    pub async fn process_snapshot(
-        &mut self,
-        snapshot: TerminalSnapshot,
-    ) -> Result<(), MonitorError> {
+    pub async fn process_snapshot(&mut self, snapshot: TerminalSnapshot) -> Result<()> {
         if !self.running {
-            return Err(MonitorError::NotRunning);
+            return Err(anyhow::anyhow!("Monitor not running"));
         }
 
         let new_state = self.determine_state(&snapshot);
@@ -269,17 +243,6 @@ impl TerminalOutputMonitor {
     /// Get the current state
     pub fn current_state(&self) -> &AgentState {
         &self.current_state
-    }
-
-    /// Get monitoring statistics
-    pub fn get_statistics(&self) -> MonitorStatistics {
-        // Simplified statistics for now
-        MonitorStatistics {
-            total_transitions: 0,
-            idle_duration_ms: 0,
-            wait_duration_ms: 0,
-            active_duration_ms: 0,
-        }
     }
 }
 

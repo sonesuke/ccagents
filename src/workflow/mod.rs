@@ -1,10 +1,9 @@
-pub mod error_handling;
 pub mod execution;
 pub mod hot_reload;
 pub mod session;
 
 use crate::agent::Agent;
-use crate::ruler::rule_types::ActionType;
+use crate::ruler::types::ActionType;
 use crate::workflow::execution::ActionExecutor;
 use crate::workflow::hot_reload::HotReloader;
 use crate::workflow::session::SessionStore;
@@ -339,8 +338,7 @@ impl Workflow {
                     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
                 }
 
-                // Try to cleanup the agent
-                agent.cleanup().await.ok();
+                // Note: Agent cleanup is handled automatically by OS when parent process exits
                 println!("🛑 Stopped agent {}", agent.id());
             }
         }

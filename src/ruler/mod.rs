@@ -1,27 +1,34 @@
+pub mod config;
 pub mod decision;
-pub mod rule_loader;
-pub mod rule_types;
+pub mod entry;
+pub mod rule;
+pub mod types;
 
 use crate::agent::Agent;
+use crate::ruler::config::load_config;
 use crate::ruler::decision::decide_action;
-use crate::ruler::rule_types::{ActionType, CompiledRule};
+use crate::ruler::entry::{CompiledEntry, TriggerType};
+use crate::ruler::rule::CompiledRule;
+use crate::ruler::types::ActionType;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 pub struct Ruler {
+    entries: Arc<RwLock<Vec<CompiledEntry>>>,
     rules: Arc<RwLock<Vec<CompiledRule>>>,
     agents: HashMap<String, Agent>,
     test_mode: bool,
+    next_port: u16,
 }
 
 #[allow(dead_code)]
 impl Ruler {
-    pub async fn new(rules_path: &str) -> Result<Self> {
-        // Load initial rules
-        let initial_rules =
-            crate::ruler::rule_loader::load_rules(std::path::Path::new(rules_path))?;
+    pub async fn new(config_path: &str) -> Result<Self> {
+        // Load initial configuration (entries and rules)
+        let (initial_entries, initial_rules) = load_config(std::path::Path::new(config_path))?;
+        let entries = Arc::new(RwLock::new(initial_entries));
         let rules = Arc::new(RwLock::new(initial_rules));
 
         // In test environment, create a simple mock backend that always succeeds
@@ -43,9 +50,11 @@ impl Ruler {
                 .unwrap_or(false);
 
         Ok(Ruler {
+            entries,
             rules,
             agents: HashMap::new(),
             test_mode: is_test,
+            next_port: 9990, // Start from port 9990
         })
     }
 
@@ -54,7 +63,10 @@ impl Ruler {
             return Err(anyhow::anyhow!("Agent {} already exists", agent_id));
         }
 
-        let agent = Agent::new(agent_id.to_string(), self.test_mode).await?;
+        let port = self.next_port;
+        self.next_port += 1; // Increment for next agent
+
+        let agent = Agent::new(agent_id.to_string(), self.test_mode, port).await?;
         self.agents.insert(agent_id.to_string(), agent);
         Ok(())
     }
@@ -65,15 +77,35 @@ impl Ruler {
             .ok_or_else(|| anyhow::anyhow!("Agent {} not found", agent_id))
     }
 
+    pub async fn get_entries(&self) -> Vec<CompiledEntry> {
+        self.entries.read().await.clone()
+    }
+
     pub async fn get_rules(&self) -> Vec<CompiledRule> {
         self.rules.read().await.clone()
     }
 
-    pub async fn reload_rules(&self, rules_path: &str) -> Result<()> {
-        let new_rules = crate::ruler::rule_loader::load_rules(std::path::Path::new(rules_path))?;
+    pub async fn get_on_start_entries(&self) -> Vec<CompiledEntry> {
+        let entries = self.get_entries().await;
+        entries
+            .into_iter()
+            .filter(|entry| matches!(entry.trigger, TriggerType::OnStart))
+            .collect()
+    }
+
+    pub async fn reload_config(&self, config_path: &str) -> Result<()> {
+        let (new_entries, new_rules) = load_config(std::path::Path::new(config_path))?;
+
+        let mut entries_guard = self.entries.write().await;
+        *entries_guard = new_entries;
+
         let mut rules_guard = self.rules.write().await;
         *rules_guard = new_rules;
-        println!("✅ Rules reloaded successfully from {}", rules_path);
+
+        println!(
+            "✅ Configuration reloaded successfully from {}",
+            config_path
+        );
         Ok(())
     }
 

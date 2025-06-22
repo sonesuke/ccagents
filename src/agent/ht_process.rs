@@ -30,14 +30,29 @@ pub enum HtProcessError {
 pub enum HtMessage {
     #[serde(rename = "input")]
     Input { payload: String },
-    #[serde(rename = "getView")]
-    GetView,
+    #[serde(rename = "takeSnapshot")]
+    TakeSnapshot,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HtResponse {
-    pub view: Option<String>,
-    pub status: String,
+#[serde(untagged)]
+pub enum HtResponse {
+    View {
+        view: Option<String>,
+        status: String,
+    },
+    Snapshot {
+        #[serde(rename = "type")]
+        response_type: String,
+        data: SnapshotData,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SnapshotData {
+    pub seq: String,
+    pub cols: u32,
+    pub rows: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -46,6 +61,7 @@ pub struct HtProcessConfig {
     pub shell_command: Option<String>,
     pub restart_attempts: u32,
     pub restart_delay_ms: u64,
+    pub port: u16,
 }
 
 impl Default for HtProcessConfig {
@@ -55,6 +71,7 @@ impl Default for HtProcessConfig {
             shell_command: Some(std::env::var("SHELL").unwrap_or_else(|_| "bash".to_string())),
             restart_attempts: 3,
             restart_delay_ms: 1000,
+            port: 9999,
         }
     }
 }
@@ -110,12 +127,20 @@ impl HtProcess {
 
         let shell = self.config.shell_command.as_deref().unwrap_or("unknown");
         println!("🐚 Starting HT with shell: {}", shell);
-        println!("🌐 HT terminal web interface available at: http://localhost:9999");
+        println!(
+            "🌐 HT terminal web interface available at: http://localhost:{}",
+            self.config.port
+        );
 
         let mut command = Command::new(&self.config.ht_binary_path);
 
-        // Always enable web interface on port 9999
-        command.arg("-l").arg("0.0.0.0:9999");
+        // Enable web interface on configured port
+        command
+            .arg("-l")
+            .arg(format!("0.0.0.0:{}", self.config.port));
+
+        // Subscribe to snapshot events for terminal output monitoring
+        command.arg("--subscribe").arg("snapshot");
 
         if let Some(shell_cmd) = &self.config.shell_command {
             command.arg(shell_cmd);
@@ -237,9 +262,10 @@ impl HtProcess {
         let sender_lock = self.sender.lock().await;
 
         if let Some(sender) = sender_lock.as_ref() {
-            let message = HtMessage::GetView;
-            sender.send(message).map_err(|e| {
-                HtProcessError::CommunicationError(format!("Failed to request view: {}", e))
+            // Take a snapshot to get current terminal state
+            let snapshot_message = HtMessage::TakeSnapshot;
+            sender.send(snapshot_message).map_err(|e| {
+                HtProcessError::CommunicationError(format!("Failed to request snapshot: {}", e))
             })?;
 
             // Wait for response
@@ -248,9 +274,18 @@ impl HtProcess {
 
             if let Some(receiver) = receiver_lock.as_mut() {
                 match receiver.recv().await {
-                    Some(response) => response.view.ok_or_else(|| {
-                        HtProcessError::CommunicationError("No view data in response".to_string())
-                    }),
+                    Some(response) => match response {
+                        HtResponse::View { view, .. } => view.ok_or_else(|| {
+                            HtProcessError::CommunicationError(
+                                "No view data in response".to_string(),
+                            )
+                        }),
+                        HtResponse::Snapshot { data, .. } => {
+                            // Clean up terminal output by removing ANSI escape sequences
+                            let cleaned = Self::clean_terminal_output(&data.seq);
+                            Ok(cleaned)
+                        }
+                    },
                     None => Err(HtProcessError::CommunicationError(
                         "No response received".to_string(),
                     )),
@@ -381,76 +416,23 @@ impl HtProcess {
         }
     }
 
-    #[allow(dead_code)]
-    fn start_process_monitor(&self) {
-        self.monitor_running.store(true, Ordering::SeqCst);
+    fn clean_terminal_output(raw_output: &str) -> String {
+        // Remove ANSI escape sequences (improved pattern)
+        let ansi_regex = regex::Regex::new(r"\x1B\[[0-9;]*[a-zA-Z]|\x1B\[[\?]?[0-9;]*[hlm]|\x1B[>\=]|\x1B[c\d]|\x1B\][0-9];|\x1B\[[0-9A-Z]|\x1B[789]|\x1B\([AB]|\x1B\[[0-9]*[HJKfABCDGR`]|\x1B\[[0-9;]*[rW]|\x1B\[[0-9;]*H").unwrap();
+        let without_ansi = ansi_regex.replace_all(raw_output, "");
 
-        let process = Arc::clone(&self.process);
-        let monitor_running = Arc::clone(&self.monitor_running);
-        let auto_restart = Arc::clone(&self.auto_restart);
-        let config = self.config.clone();
+        // Remove control characters and non-printable characters
+        let control_regex = regex::Regex::new(r"[\x00-\x1F\x7F]+").unwrap();
+        let clean_text = control_regex.replace_all(&without_ansi, " ");
 
-        // Create a clone of self for the monitor task
-        let process_clone = HtProcess {
-            config: config.clone(),
-            process: Arc::clone(&self.process),
-            sender: Arc::clone(&self.sender),
-            receiver: Arc::clone(&self.receiver),
-            monitor_running: Arc::clone(&self.monitor_running),
-            auto_restart: Arc::clone(&self.auto_restart),
-        };
+        // Remove excessive whitespace and empty lines
+        let lines: Vec<&str> = clean_text
+            .lines()
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty())
+            .collect();
 
-        tokio::spawn(async move {
-            info!("Starting HT process monitor");
-
-            while monitor_running.load(Ordering::SeqCst) {
-                sleep(Duration::from_millis(1000)).await; // Check every second
-
-                let mut needs_restart = false;
-
-                // Check if process is still alive
-                {
-                    let mut process_lock = process.lock().await;
-                    if let Some(child) = process_lock.as_mut() {
-                        match child.try_wait() {
-                            Ok(Some(status)) => {
-                                error!("HT process exited unexpectedly with status: {}", status);
-                                needs_restart = true;
-                                *process_lock = None; // Remove the dead process
-                            }
-                            Ok(None) => {
-                                // Process is still running
-                                continue;
-                            }
-                            Err(e) => {
-                                error!("Error checking HT process status: {}", e);
-                                needs_restart = true;
-                                *process_lock = None;
-                            }
-                        }
-                    } else if auto_restart.load(Ordering::SeqCst) {
-                        // Process is not running but should be
-                        needs_restart = true;
-                    }
-                }
-
-                if needs_restart && auto_restart.load(Ordering::SeqCst) {
-                    warn!("HT process needs restart, attempting recovery...");
-
-                    match process_clone.restart_with_retry().await {
-                        Ok(()) => {
-                            info!("HT process successfully restarted by monitor");
-                        }
-                        Err(e) => {
-                            error!("Failed to restart HT process: {}", e);
-                            // Continue monitoring in case manual restart happens
-                        }
-                    }
-                }
-            }
-
-            info!("HT process monitor stopped");
-        });
+        lines.join("\n")
     }
 }
 

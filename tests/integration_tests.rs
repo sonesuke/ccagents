@@ -22,7 +22,7 @@ fn test_binary_help_command() {
 #[test]
 fn test_binary_show_command() {
     let output = Command::new("cargo")
-        .args(["run", "--", "show", "--rules", "examples/basic-rules.yaml"])
+        .args(["run", "--", "show", "--rules", "config.yaml"])
         .output()
         .expect("Failed to execute command");
 
@@ -40,9 +40,9 @@ fn test_binary_test_command() {
             "--",
             "test",
             "--rules",
-            "examples/basic-rules.yaml",
+            "config.yaml",
             "--capture",
-            "issue 123",
+            "Do you want to proceed",
         ])
         .output()
         .expect("Failed to execute command");
@@ -62,7 +62,7 @@ fn test_binary_with_invalid_rules_file() {
 
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("Failed to load rules"));
+    assert!(stderr.contains("Failed to load config"));
 }
 
 #[test]
@@ -71,8 +71,8 @@ fn test_binary_with_custom_rules() {
 rules:
   - priority: 10
     pattern: "test pattern"
-    command: "resume"
-    args: []
+    action: "send_keys"
+    keys: ["test", "\r"]
 "#;
 
     let mut temp_file = NamedTempFile::new().unwrap();

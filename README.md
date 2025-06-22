@@ -1,6 +1,6 @@
 # RuleAgents
 
-A command-line tool for YAML-driven agent auto-control system
+A command-line tool for YAML-driven agent auto-control system with automatic terminal interaction.
 
 ## Installation
 
@@ -8,45 +8,56 @@ A command-line tool for YAML-driven agent auto-control system
 cargo build --release
 ```
 
-## Usage
+## Quick Start
 
 ```bash
-# Run with default rules.yaml file
+# Run with default configuration (starts automatically)
 ./target/release/rule-agents
 
-# Run with specific rules file
-./target/release/rule-agents --rules examples/basic-rules.yaml
+# Run with specific config file
+./target/release/rule-agents --rules custom-config.yaml
 
-# Show help
-./target/release/rule-agents --help
+# View terminal automation at http://localhost:9990
 ```
 
 ## Configuration
 
-Create a YAML file with your rules. See `examples/basic-rules.yaml` for reference:
+Create a YAML file with entries and rules. See `config.yaml` for reference:
 
 ```yaml
+# External triggers - initiated by system events
+entries:
+  - name: "start_mock"
+    trigger: "on_start"           # Automatic startup trigger
+    action: "send_keys"
+    keys: ["bash examples/mock.sh", "\r"]
+
+# Automatic detection rules - triggered by terminal state changes
+# Higher priority = earlier in the list (line order matters)
 rules:
-  - priority: 10
-    pattern: "issue\\s+(\\d+)"
-    command: "entry"
-    args: []
-  - priority: 20
-    pattern: "cancel"
-    command: "cancel"
-    args: []
-  - priority: 30
-    pattern: "resume"
-    command: "resume"
-    args: []
+  - pattern: "Do you want to proceed"    # Highest priority
+    action: "send_keys"
+    keys: ["1", "\r"]
+    
+  - pattern: "^exit$"                    # Lower priority
+    action: "send_keys"
+    keys: ["/exit", "\r"]
 ```
 
-### Rule Structure
+## Core Concepts
 
-- **priority**: Lower numbers = higher priority (rules are sorted by priority)
-- **pattern**: Regular expression to match against input
-- **command**: Command to execute when pattern matches (`entry`, `cancel`, `resume`)
-- **args**: Optional arguments for the command (defaults to empty array)
+### Entries vs Rules
+
+The system distinguishes between two types of automation:
+
+- **Entries**: External triggers initiated by system events (e.g., startup, user commands)
+- **Rules**: Automatic detection triggered by terminal state changes (e.g., prompts, output patterns)
+
+### Configuration Structure
+
+- **entries**: Define external triggers with `trigger`, `action`, and `keys`
+- **rules**: Define automatic responses with `pattern`, `action`, and `keys`
+- **Priority**: Rules are processed in order (first rule = highest priority)
 
 ## Development
 
@@ -92,32 +103,48 @@ See [docs/terminal_output_monitoring.md](docs/terminal_output_monitoring.md) for
 The HT terminal process automatically starts with a web interface for real-time monitoring:
 
 - **Live Terminal View**: Watch agent terminal sessions via web browser
-- **Remote Access**: Monitor from any device on the network
+- **Automatic Execution**: View real-time automation triggered by entries and rules
 - **Multi-user Support**: Multiple people can observe sessions simultaneously
 - **Debug Support**: Real-time visibility into agent behavior
 
 #### Access URLs
 
 After starting rule-agents, the terminal web interface is available at:
-- **Local**: http://localhost:9999
-- **Network**: http://[machine-ip]:9999
+- **Local**: http://localhost:9990
+- **Network**: http://[machine-ip]:9990
 
 The web interface URL is automatically displayed when the HT process starts.
 
-#### Command Line Interface
-
-Access the web interface by running the rule-agents binary:
+## Available Commands
 
 ```bash
-# Start with default configuration
+# Start automation with default config.yaml
 ./target/release/rule-agents
 
-# Start with custom rules and settings
-./target/release/rule-agents daemon --rules examples/basic-rules.yaml --interval 5
+# Start with custom config file
+./target/release/rule-agents --rules custom-config.yaml
 
 # Test rule matching
-./target/release/rule-agents test --rules examples/basic-rules.yaml --capture "issue 123"
+./target/release/rule-agents test --rules config.yaml --capture "Do you want to proceed"
 
-# View loaded rules
-./target/release/rule-agents show --rules examples/basic-rules.yaml
+# View loaded configuration
+./target/release/rule-agents show --rules config.yaml
 ```
+
+## Mock Test Example
+
+A complete test scenario is provided to demonstrate the system:
+
+1. **Run the test**:
+   ```bash
+   chmod +x examples/mock.sh
+   ./target/release/rule-agents --rules config.yaml
+   ```
+
+2. **Automatic execution**:
+   - Opens http://localhost:9990 to view the terminal
+   - Automatically starts `examples/mock.sh` via `on_start` trigger
+   - Automatically responds to prompts using defined rules
+   - Completes the full workflow without manual intervention
+
+See [docs/mock-test-guide.md](docs/mock-test-guide.md) for detailed test documentation.

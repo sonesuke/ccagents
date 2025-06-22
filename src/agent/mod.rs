@@ -16,7 +16,7 @@ pub struct Agent {
 
 #[allow(dead_code)]
 impl Agent {
-    pub async fn new(id: String, test_mode: bool) -> Result<Self> {
+    pub async fn new(id: String, test_mode: bool, port: u16) -> Result<Self> {
         let config = if test_mode {
             // Test configuration
             HtProcessConfig {
@@ -24,6 +24,7 @@ impl Agent {
                 shell_command: Some("bash".to_string()),
                 restart_attempts: 1,
                 restart_delay_ms: 100,
+                port,
             }
         } else {
             // Production configuration
@@ -32,9 +33,12 @@ impl Agent {
                     .map_err(|_| anyhow::anyhow!("ht binary not found in PATH"))?
                     .to_string_lossy()
                     .to_string(),
-                shell_command: Some("bash".to_string()),
+                shell_command: Some(
+                    std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string()),
+                ),
                 restart_attempts: 3,
                 restart_delay_ms: 1000,
+                port,
             }
         };
 
@@ -148,12 +152,6 @@ impl Agent {
         self.send_keys(&cmd).await
     }
 
-    pub async fn cleanup(&self) -> Result<()> {
-        info!("Agent {} cleaning up", self.id);
-        self.ht_process.stop().await?;
-        Ok(())
-    }
-
     pub async fn start_monitoring(&mut self) -> Result<()> {
         if self.terminal_monitor.is_none() {
             let monitor = TerminalOutputMonitor::new(self.id.clone());
@@ -186,14 +184,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_agent_creation() {
-        let agent = Agent::new("test-agent".to_string(), true).await.unwrap();
+        let agent = Agent::new("test-agent".to_string(), true, 9999)
+            .await
+            .unwrap();
         assert_eq!(agent.id(), "test-agent");
         assert_eq!(agent.backend_type(), "ht");
     }
 
     #[tokio::test]
     async fn test_agent_availability() {
-        let agent = Agent::new("test-agent".to_string(), true).await.unwrap();
+        let agent = Agent::new("test-agent".to_string(), true, 9999)
+            .await
+            .unwrap();
         // In test mode, agent may not be available since we don't start the process
         // This test mainly verifies that the agent can be created without panicking
         let _available = agent.is_available().await;

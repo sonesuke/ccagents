@@ -1,5 +1,5 @@
-use crate::ruler::rule_loader::load_rules;
-use crate::ruler::rule_types::CompiledRule;
+use crate::ruler::config::load_rules;
+use crate::ruler::rule::CompiledRule;
 use anyhow::Result;
 use notify::{RecommendedWatcher, RecursiveMode, Result as NotifyResult, Watcher};
 use std::path::Path;
@@ -7,6 +7,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 pub struct HotReloader {
+    #[allow(dead_code)]
     rules: Arc<RwLock<Vec<CompiledRule>>>,
     _watcher: RecommendedWatcher,
 }
@@ -52,6 +53,7 @@ impl HotReloader {
         })
     }
 
+    #[allow(dead_code)]
     pub async fn get_rules(&self) -> Vec<CompiledRule> {
         self.rules.read().await.clone()
     }

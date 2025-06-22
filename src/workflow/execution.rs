@@ -1,5 +1,5 @@
 use crate::agent::Agent;
-use crate::ruler::rule_types::{ActionType, CmdKind};
+use crate::ruler::types::ActionType;
 use anyhow::Result;
 use tokio::time::Duration;
 
@@ -27,16 +27,6 @@ impl ActionExecutor {
                     args
                 );
                 self.execute_workflow(agent, &workflow_name, args).await?;
-            }
-            ActionType::Legacy(cmd_kind, args) => {
-                // Handle legacy commands during transition period
-                println!(
-                    "→ Executing legacy command {:?} for agent {} with args: {:?}",
-                    cmd_kind,
-                    agent.id(),
-                    args
-                );
-                self.send_command_to_agent(agent, cmd_kind, args).await?;
             }
         }
         Ok(())
@@ -79,28 +69,5 @@ impl ActionExecutor {
             "Workflow '{}' not found. Workflows should be defined in external configuration files.",
             workflow_name
         ))
-    }
-
-    async fn send_command_to_agent(
-        &self,
-        agent: &Agent,
-        command: CmdKind,
-        _args: Vec<String>,
-    ) -> Result<()> {
-        match command {
-            CmdKind::Entry => {
-                // Entry commands should be handled by external workflow definitions
-                Err(anyhow::anyhow!(
-                    "Entry commands are deprecated. Use workflow definitions instead."
-                ))
-            }
-            CmdKind::Resume => {
-                println!("→ Sending resume to agent {}", agent.id());
-                // Resume command should be handled by the workflow module
-                Err(anyhow::anyhow!(
-                    "Resume command should be handled by Workflow module"
-                ))
-            }
-        }
     }
 }

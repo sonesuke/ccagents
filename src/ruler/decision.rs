@@ -1,11 +1,12 @@
-use crate::ruler::rule_loader::resolve_capture_groups_in_vec;
-use crate::ruler::rule_types::{ActionType, CmdKind, CompiledRule};
+use crate::ruler::rule::resolve_capture_groups_in_vec;
+use crate::ruler::rule::CompiledRule;
+use crate::ruler::types::ActionType;
 
 /// Matches capture text against compiled rules and returns the appropriate action.
 ///
 /// This function iterates through rules in priority order (already sorted by load_rules)
 /// and returns the first matching rule's action with resolved capture groups.
-/// If no rules match, returns ActionType::Legacy(CmdKind::Resume, vec![]) as the default.
+/// If no rules match, returns ActionType::SendKeys(vec![]) as the default.
 ///
 /// # Arguments
 /// * `capture` - The text to match against rule patterns
@@ -36,12 +37,6 @@ pub fn decide_action(capture: &str, rules: &[CompiledRule]) -> ActionType {
                     let resolved_args = resolve_capture_groups_in_vec(args, &captured_groups);
                     ActionType::Workflow(workflow.clone(), resolved_args)
                 }
-                ActionType::Legacy(cmd_kind, args) => {
-                    let mut resolved_args = args.clone();
-                    // Add captured groups to legacy args for backward compatibility
-                    resolved_args.extend(captured_groups);
-                    ActionType::Legacy(cmd_kind.clone(), resolved_args)
-                }
             };
 
             return resolved_action;
@@ -49,24 +44,7 @@ pub fn decide_action(capture: &str, rules: &[CompiledRule]) -> ActionType {
     }
 
     // Default case: no rules matched
-    ActionType::Legacy(CmdKind::Resume, vec![])
-}
-
-/// Legacy wrapper function for backward compatibility
-///
-/// This function maintains compatibility with existing code that expects
-/// the old (CmdKind, Vec<String>) return type. It should be used during
-/// the transition period.
-pub fn decide_cmd(capture: &str, rules: &[CompiledRule]) -> (CmdKind, Vec<String>) {
-    let action = decide_action(capture, rules);
-    match action {
-        ActionType::Legacy(cmd_kind, args) => (cmd_kind, args),
-        _ => {
-            // For non-legacy actions, return Resume to maintain compatibility
-            // The new system should use decide_action directly
-            (CmdKind::Resume, vec![])
-        }
-    }
+    ActionType::SendKeys(vec![])
 }
 
 #[cfg(test)]
@@ -74,103 +52,111 @@ mod tests {
     use super::*;
     use regex::Regex;
 
-    fn create_test_rule(
-        priority: u32,
-        pattern: &str,
-        command: CmdKind,
-        args: Vec<String>,
-    ) -> CompiledRule {
+    fn create_test_rule(pattern: &str, keys: Vec<String>) -> CompiledRule {
         CompiledRule {
-            priority,
             regex: Regex::new(pattern).unwrap(),
-            action: ActionType::Legacy(command, args),
+            action: ActionType::SendKeys(keys),
+        }
+    }
+
+    fn create_workflow_rule(pattern: &str, workflow: String, args: Vec<String>) -> CompiledRule {
+        CompiledRule {
+            regex: Regex::new(pattern).unwrap(),
+            action: ActionType::Workflow(workflow, args),
         }
     }
 
     #[test]
-    fn test_decide_cmd_exact_match() {
+    fn test_decide_action_exact_match() {
         let rules = vec![
-            create_test_rule(10, r"issue\s+(\d+)", CmdKind::Entry, vec![]),
-            create_test_rule(20, r"resume", CmdKind::Resume, vec![]),
+            create_test_rule(
+                r"issue\s+(\d+)",
+                vec!["open_issue".to_string(), "${1}".to_string()],
+            ),
+            create_test_rule(r"resume", vec!["resume_task".to_string()]),
         ];
 
-        let (command, args) = decide_cmd("issue 123", &rules);
-        assert_eq!(command, CmdKind::Entry);
-        assert_eq!(args, vec!["123"]); // Should capture the issue number
+        let action = decide_action("issue 123", &rules);
+        assert_eq!(
+            action,
+            ActionType::SendKeys(vec!["open_issue".to_string(), "123".to_string()])
+        );
     }
 
     #[test]
-    fn test_decide_cmd_priority_ordering() {
+    fn test_decide_action_priority_ordering() {
         let rules = vec![
-            create_test_rule(10, r"test", CmdKind::Entry, vec!["high".to_string()]),
-            create_test_rule(20, r"test", CmdKind::Resume, vec!["low".to_string()]),
+            create_test_rule(r"test", vec!["high_priority".to_string()]),
+            create_test_rule(r"test", vec!["low_priority".to_string()]),
         ];
 
         // Should match the first rule (higher priority - lower number)
-        let (command, args) = decide_cmd("test", &rules);
-        assert_eq!(command, CmdKind::Entry);
-        assert_eq!(args, vec!["high"]);
+        let action = decide_action("test", &rules);
+        assert_eq!(
+            action,
+            ActionType::SendKeys(vec!["high_priority".to_string()])
+        );
     }
 
     #[test]
-    fn test_decide_cmd_no_match() {
+    fn test_decide_action_no_match() {
         let rules = vec![
-            create_test_rule(10, r"issue\s+(\d+)", CmdKind::Entry, vec![]),
-            create_test_rule(20, r"resume", CmdKind::Resume, vec![]),
+            create_test_rule(r"issue\s+(\d+)", vec!["open_issue".to_string()]),
+            create_test_rule(r"resume", vec!["resume_task".to_string()]),
         ];
 
-        let (command, args) = decide_cmd("no matching pattern here", &rules);
-        assert_eq!(command, CmdKind::Resume);
-        assert!(args.is_empty());
+        let action = decide_action("no matching pattern here", &rules);
+        assert_eq!(action, ActionType::SendKeys(vec![]));
     }
 
     #[test]
-    fn test_decide_cmd_empty_capture() {
+    fn test_decide_action_empty_capture() {
         let rules = vec![create_test_rule(
-            10,
             r"issue\s+(\d+)",
-            CmdKind::Entry,
-            vec![],
+            vec!["open_issue".to_string()],
         )];
 
-        let (command, args) = decide_cmd("", &rules);
-        assert_eq!(command, CmdKind::Resume);
-        assert!(args.is_empty());
+        let action = decide_action("", &rules);
+        assert_eq!(action, ActionType::SendKeys(vec![]));
     }
 
     #[test]
-    fn test_decide_cmd_empty_rules() {
-        let (command, args) = decide_cmd("any text", &[]);
-        assert_eq!(command, CmdKind::Resume);
-        assert!(args.is_empty());
+    fn test_decide_action_empty_rules() {
+        let action = decide_action("any text", &[]);
+        assert_eq!(action, ActionType::SendKeys(vec![]));
     }
 
     #[test]
-    fn test_decide_cmd_capture_groups() {
+    fn test_decide_action_capture_groups() {
         let rules = vec![create_test_rule(
-            10,
             r"deploy\s+(\w+)\s+to\s+(\w+)",
-            CmdKind::Entry,
-            vec!["static".to_string()],
+            vec!["deploy".to_string(), "${1}".to_string(), "${2}".to_string()],
         )];
 
-        let (command, args) = decide_cmd("deploy app to production", &rules);
-        assert_eq!(command, CmdKind::Entry);
-        assert_eq!(args, vec!["static", "app", "production"]); // static + captured groups
+        let action = decide_action("deploy app to production", &rules);
+        assert_eq!(
+            action,
+            ActionType::SendKeys(vec![
+                "deploy".to_string(),
+                "app".to_string(),
+                "production".to_string()
+            ])
+        );
     }
 
     #[test]
-    fn test_decide_cmd_no_capture_groups() {
-        let rules = vec![create_test_rule(
-            20,
-            r"resume",
-            CmdKind::Resume,
-            vec!["static".to_string()],
+    fn test_decide_action_workflow() {
+        let rules = vec![create_workflow_rule(
+            r"fix\s+issue\s+(\d+)",
+            "github_issue_fix".to_string(),
+            vec!["${1}".to_string()],
         )];
 
-        let (command, args) = decide_cmd("resume", &rules);
-        assert_eq!(command, CmdKind::Resume);
-        assert_eq!(args, vec!["static"]); // Only static args, no capture groups
+        let action = decide_action("fix issue 456", &rules);
+        assert_eq!(
+            action,
+            ActionType::Workflow("github_issue_fix".to_string(), vec!["456".to_string()])
+        );
     }
 
     #[test]
@@ -179,14 +165,14 @@ mod tests {
 
         // Create 100 test rules that don't match our test input
         let rules: Vec<CompiledRule> = (0..100)
-            .map(|i| create_test_rule(i, &format!("unique_pattern_{}", i), CmdKind::Resume, vec![]))
+            .map(|i| create_test_rule(&format!("unique_pattern_{}", i), vec![]))
             .collect();
 
         let start = Instant::now();
-        let (command, _) = decide_cmd("non-matching test input", &rules);
+        let action = decide_action("non-matching test input", &rules);
         let duration = start.elapsed();
 
-        assert_eq!(command, CmdKind::Resume);
+        assert_eq!(action, ActionType::SendKeys(vec![]));
         assert!(
             duration.as_millis() < 100,
             "Should complete within 100ms for 100 rules, took {}ms",
