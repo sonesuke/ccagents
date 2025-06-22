@@ -1,4 +1,3 @@
-pub mod error_handling;
 pub mod execution;
 pub mod hot_reload;
 pub mod session;
