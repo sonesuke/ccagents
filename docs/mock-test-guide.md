@@ -1,179 +1,257 @@
-# Mock Test Guide
+# Getting Started with RuleAgents - Tutorial
 
-This guide explains how to use the mock script and rules to test the agent automation system.
+This tutorial walks you through configuring and using RuleAgents with a practical example. You'll learn how to create automation rules and understand the core concepts through hands-on experience.
 
 ## Overview
 
-The mock test scenario provides a concrete example of how `rule-agents` can automate interactive processes. It consists of:
+RuleAgents automates terminal interactions using YAML configuration files. This tutorial uses a mock interactive script to demonstrate:
+- How to write configuration rules
+- Different types of automation triggers
+- Pattern matching and automated responses
+- Real-time monitoring via web interface
 
-- **`mock.sh`**: A bash script that simulates an interactive process with countdown and user prompts
-- **`config.yaml`**: Entry and rule definitions that control automation behavior
+## Core Concepts
 
-## Concepts
+### Configuration Structure
 
-### Entries vs Rules
+A RuleAgents configuration file (`config.yaml`) contains two main sections:
 
-The system distinguishes between two types of automation:
-
-- **Entries**: External triggers initiated by system events (e.g., startup, user commands)
-- **Rules**: Automatic detection triggered by terminal state changes (e.g., prompts, output patterns)
-
-## Setup
-
-1. Ensure the mock script is executable:
-   ```bash
-   chmod +x examples/mock.sh
-   ```
-
-2. Test the script manually (optional):
-   ```bash
-   bash examples/mock.sh
-   ```
-
-## Running with Rule Agents
-
-### Basic Usage
-
-Run rule-agents with the config:
-
-```bash
-rule-agents --rules config.yaml
+#### 1. Entries - Event-Driven Triggers
+```yaml
+entries:
+  - name: "descriptive_name"
+    trigger: "event_type"    # When to activate
+    action: "action_type"    # What to do
+    keys: ["command", "\r"]  # Keys to send (\r = Enter)
 ```
 
-### Test Flow
+**Available triggers:**
+- `on_start`: Executes automatically when RuleAgents starts
+- More triggers can be added as needed
 
-1. **Automatic startup**:
-   - The `on_start` entry trigger automatically starts the mock script
-   - No manual command input required
+#### 2. Rules - Pattern-Based Automation
+```yaml
+rules:
+  - pattern: "text to match"   # Regex pattern to detect
+    action: "send_keys"        # Action to perform
+    keys: ["response", "\r"]   # Keys to send
+```
 
-2. **Automatic flow**:
-   - The script displays a 5-second countdown
-   - When prompted "Do you want to proceed?", the agent automatically responds with "1"
-   - The script processes for 3 seconds
-   - Displays "MISSION COMPLETE" and exits
+**Key points:**
+- Rules are evaluated in order (first rule = highest priority)
+- Patterns support regular expressions
+- Rules trigger automatically when patterns match terminal output
 
-3. **Terminal access**:
-   - Open http://localhost:9990 in your browser to view the automated terminal
-   - The automation runs automatically without user intervention
+## Tutorial: Automating an Interactive Script
 
-## Configuration Structure
+### Step 1: Understanding the Example
 
-### config.yaml Format
+Our example uses a mock script that simulates an interactive process:
+- Shows a countdown timer
+- Asks for user input
+- Processes the response
+- Completes the operation
+
+### Step 2: Configuration File Breakdown
+
+Let's examine `config.yaml`:
 
 ```yaml
-# External triggers - initiated by system events
+# Entry: Automatic startup
 entries:
   - name: "start_mock"
-    trigger: "on_start"    # Automatic startup trigger
+    trigger: "on_start"           # Runs when RuleAgents starts
     action: "send_keys"
-    keys: ["bash examples/mock.sh", "\r"]
+    keys: ["bash examples/mock.sh", "\r"]  # Executes the mock script
 
-# Automatic detection rules - triggered by terminal state changes
-# Higher priority = earlier in the list (line order matters)
+# Rules: Automated responses
 rules:
-  - pattern: "Do you want to proceed"  # Highest priority
+  - pattern: "Do you want to proceed"    # Detects the prompt
     action: "send_keys"
-    keys: ["1", "\r"]
+    keys: ["1", "\r"]                    # Automatically selects option 1
     
-  - pattern: "^exit$"                  # Lower priority
+  - pattern: "^exit$"                    # Detects "exit" command
     action: "send_keys"
-    keys: ["/exit", "\r"]
+    keys: ["/exit", "\r"]                # Sends special exit command
 ```
 
-### Testing Different Scenarios
+### Step 3: Running the Tutorial
 
-#### Test Automatic Response
-```bash
-# This tests the full automated flow
-rule-agents test --rules config.yaml --capture "Do you want to proceed"
-```
+1. **Start RuleAgents:**
+   ```bash
+   ./target/release/rule-agents --rules config.yaml
+   ```
 
-#### Test Exit Command Detection
-```bash
-# This tests the exit command handling
-rule-agents test --rules config.yaml --capture "exit"
-```
+2. **Watch the automation:**
+   - Open http://localhost:9990 in your browser
+   - Observe the automated execution:
+     - Script starts automatically (via `on_start` trigger)
+     - Countdown runs
+     - When prompted, option "1" is selected automatically
+     - Process completes without manual intervention
 
-## Expected Behavior
+### Step 4: Testing Your Configuration
 
-### Successful Run
-```
-=== Mock Test Script ===
-This script simulates an interactive process for testing rule-agents.
-
-Starting countdown...
-Countdown: 5 seconds remaining...
-Countdown: 4 seconds remaining...
-Countdown: 3 seconds remaining...
-Countdown: 2 seconds remaining...
-Countdown: 1 seconds remaining...
-Countdown complete!
-
-Do you want to proceed?
-1) Continue with mission
-2) Cancel operation
-(Type '/exit' to exit the script)
-Enter your choice: 1                    # ← Automatically selected by rules
-Processing request...
-Processing... (1/3)
-Processing... (2/3)
-Processing... (3/3)
-
-=== MISSION COMPLETE ===
-The operation has been successfully completed!
-```
-
-Note: The script starts automatically via the `on_start` trigger, and "1" is selected automatically when the "Do you want to proceed?" prompt appears.
-
-## Manual Script Testing
-
-You can also test the script independently without rule-agents:
+RuleAgents provides a test command to verify rule matching:
 
 ```bash
-# Run the script
-bash examples/mock.sh
+# Test if a pattern matches correctly
+./target/release/rule-agents test --rules config.yaml --capture "Do you want to proceed"
 
-# When prompted, you can:
-# - Enter "1" to continue
-# - Enter "2" to cancel
-# - Type "/exit" to exit
-# - Any other input shows help
+# Output shows which rule would trigger:
+# Match found: rule at index 0
+# Pattern: "Do you want to proceed"
+# Action: send_keys ["1", "\r"]
 ```
 
-## CI Integration
+## Creating Your Own Automation
 
-This test scenario can be integrated into CI pipelines:
-
+### Example 1: Automating Git Operations
 ```yaml
-# Example GitHub Actions step
-- name: Test Mock Scenario
-  run: |
-    chmod +x examples/mock.sh
-    timeout 30s rule-agents --rules config.yaml
+entries:
+  - name: "git_status"
+    trigger: "on_start"
+    action: "send_keys"
+    keys: ["git status", "\r"]
+
+rules:
+  - pattern: "nothing to commit"
+    action: "send_keys"
+    keys: ["echo 'Repository is clean!'", "\r"]
 ```
 
-## Troubleshooting
+### Example 2: Handling Yes/No Prompts
+```yaml
+rules:
+  - pattern: "Are you sure.*\\[y/N\\]"  # Regex pattern
+    action: "send_keys"
+    keys: ["y", "\r"]
+    
+  - pattern: "Continue\\? \\(yes/no\\)"
+    action: "send_keys"
+    keys: ["yes", "\r"]
+```
 
-1. **Script not found**: Ensure you're running from the project root directory
-2. **Permission denied**: Run `chmod +x examples/mock.sh`
-3. **Timeout issues**: The full test should complete in about 10 seconds
-4. **No auto-response**: Check that the pattern in `config.yaml` matches exactly
-5. **Script doesn't start**: Verify the `on_start` trigger is properly configured
+### Example 3: Multi-Step Workflows
+```yaml
+entries:
+  - name: "deploy_workflow"
+    trigger: "on_start"
+    action: "send_keys"
+    keys: ["./deploy.sh", "\r"]
 
-## Key Features
+rules:
+  # Step 1: Environment selection
+  - pattern: "Select environment.*production"
+    action: "send_keys"
+    keys: ["2", "\r"]  # Select production
+    
+  # Step 2: Confirmation
+  - pattern: "Deploy to production\\?"
+    action: "send_keys"
+    keys: ["yes", "\r"]
+    
+  # Step 3: Authentication
+  - pattern: "Enter deployment token:"
+    action: "send_keys"
+    keys: ["${DEPLOY_TOKEN}", "\r"]
+```
 
-- **Automatic startup**: No manual intervention required
-- **Priority-based rules**: Line order determines rule priority
-- **Clear separation**: Entries for triggers, rules for detection
-- **Web interface**: View automation in real-time at http://localhost:9990
+## Best Practices
 
-## Extending the Test
+### 1. Pattern Design
+- **Be specific**: Use precise patterns to avoid false matches
+- **Use anchors**: `^` for start, `$` for end of line
+- **Test patterns**: Use the test command before deployment
 
-You can modify the mock scenario to test more complex interactions:
+### 2. Rule Priority
+- Order matters: Place more specific rules first
+- General catch-all rules should go last
+- Document why certain rules have higher priority
 
-1. Add more prompts to `mock.sh`
-2. Define corresponding rules in `config.yaml`
-3. Test different trigger types and response patterns
-4. Experiment with rule priorities and pattern matching
+### 3. Safety Considerations
+```yaml
+rules:
+  # Dangerous - too broad
+  - pattern: "yes"
+    action: "send_keys"
+    keys: ["y", "\r"]
+    
+  # Better - more specific
+  - pattern: "Remove all files\\? \\[yes/no\\]"
+    action: "send_keys"
+    keys: ["no", "\r"]  # Safe default
+```
 
-This mock test provides a foundation for developing and testing more sophisticated automation scenarios with rule-agents.
+## Advanced Features
+
+### Regular Expression Patterns
+```yaml
+rules:
+  # Match version numbers
+  - pattern: "Version: (\\d+\\.\\d+\\.\\d+)"
+    action: "send_keys"
+    keys: ["echo 'Detected version match'", "\r"]
+    
+  # Match file paths
+  - pattern: "File not found: (.+\\.txt)$"
+    action: "send_keys"
+    keys: ["touch $1", "\r"]  # Create the missing file
+```
+
+### Combining Rules
+```yaml
+rules:
+  # Handle different prompt formats
+  - pattern: "(Continue|Proceed|Go ahead)\\?"
+    action: "send_keys"
+    keys: ["y", "\r"]
+    
+  # Multi-line pattern (careful with these)
+  - pattern: "Summary:.*Total: \\d+ files"
+    action: "send_keys"
+    keys: ["echo 'Processing complete'", "\r"]
+```
+
+## Debugging Tips
+
+1. **Enable verbose logging:**
+   ```bash
+   RUST_LOG=debug ./target/release/rule-agents --rules config.yaml
+   ```
+
+2. **Test patterns individually:**
+   ```bash
+   ./target/release/rule-agents test --rules config.yaml --capture "your text here"
+   ```
+
+3. **View the configuration:**
+   ```bash
+   ./target/release/rule-agents show --rules config.yaml
+   ```
+
+## Common Issues and Solutions
+
+### Pattern Not Matching
+- Check for extra whitespace in patterns
+- Verify regex escape characters
+- Use the test command to debug
+
+### Wrong Rule Triggering
+- Review rule order (priority)
+- Make patterns more specific
+- Consider using anchors (^$)
+
+### Automation Too Fast
+- Some applications need delays
+- Consider breaking complex commands into steps
+- Monitor via web interface at http://localhost:9990
+
+## Next Steps
+
+1. Start with simple patterns and gradually add complexity
+2. Test each rule thoroughly before adding more
+3. Build a library of common patterns for your workflows
+4. Share useful configurations with your team
+
+Remember: RuleAgents is powerful but requires careful configuration. Always test in a safe environment before using in production workflows!
