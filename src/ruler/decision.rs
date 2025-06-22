@@ -133,7 +133,6 @@ mod tests {
     #[test]
     fn test_decide_action_capture_groups() {
         let rules = vec![create_test_rule(
-            10,
             r"deploy\s+(\w+)\s+to\s+(\w+)",
             vec!["deploy".to_string(), "${1}".to_string(), "${2}".to_string()],
         )];
