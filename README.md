@@ -116,12 +116,10 @@ See [docs/architecture.md](docs/architecture.md) for system design details.
 Real-time agent state detection based on HT (terminal) process output analysis:
 
 - **State Detection**: Automatically detects Idle, Wait, and Active agent states
-- **Shell Prompt Recognition**: Configurable regex patterns for various shell prompts
+- **Shell Prompt Recognition**: Built-in regex patterns for various shell prompts
 - **Output Change Monitoring**: Compares terminal snapshots to detect activity
 - **Timeout Handling**: Detects stuck commands and provides warnings
 - **Event-Driven Architecture**: Efficient monitoring with minimal CPU overhead
-
-See [docs/terminal_output_monitoring.md](docs/terminal_output_monitoring.md) for detailed documentation.
 
 ### Web Interface
 
