@@ -86,19 +86,21 @@ async fn main() -> Result<()> {
             )
             .await?;
 
+            let base_port = ruler.get_monitor_config().base_port;
+
             println!("🎯 RuleAgents started");
             println!("📂 Config file: {}", rules_path.display());
-            println!("🌐 Terminal available at: http://localhost:9990");
+            println!("🌐 Terminal available at: http://localhost:{}", base_port);
             println!("💡 Type 'entry' in the terminal to start mock.sh");
             println!("🛑 Press Ctrl+C to stop");
 
             // Create agent directly
-            let agent = Arc::new(agent::Agent::new("main".to_string(), false, 9990).await?);
+            let agent = Arc::new(agent::Agent::new("main".to_string(), false, base_port).await?);
 
             // Wait a moment for terminal to be ready
             tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
             println!("🚀 Ready to monitor terminal commands...");
-            println!("💡 Open http://localhost:9990 in your browser");
+            println!("💡 Open http://localhost:{} in your browser", base_port);
 
             // Execute on_start entries
             let on_start_entries = ruler.get_on_start_entries().await;
@@ -116,16 +118,19 @@ async fn main() -> Result<()> {
                 if let TriggerType::Periodic { interval: period } = entry.trigger {
                     let entry_clone = entry.clone();
                     let queue_manager_clone = queue_manager.clone();
+                    let agent_clone = agent.clone();
 
                     let handle = tokio::spawn(async move {
                         let mut timer = interval(period);
                         loop {
                             timer.tick().await;
                             println!("⏰ Executing periodic entry: {}", entry_clone.name);
-                            // For periodic execution, we don't have an agent context yet
-                            // This is for background tasks that don't need terminal interaction
-                            if let Err(e) =
-                                execute_periodic_entry(&entry_clone, &queue_manager_clone).await
+                            if let Err(e) = execute_periodic_entry(
+                                &entry_clone,
+                                &queue_manager_clone,
+                                Some(&agent_clone),
+                            )
+                            .await
                             {
                                 eprintln!(
                                     "❌ Error executing periodic entry '{}': {}",
@@ -410,17 +415,28 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-/// Execute a periodic entry action (without agent context)
+/// Execute a periodic entry action (with agent context)
 async fn execute_periodic_entry(
     entry: &ruler::entry::CompiledEntry,
     queue_manager: &queue::SharedQueueManager,
+    agent: Option<&agent::Agent>,
 ) -> Result<()> {
     match &entry.action {
-        ruler::types::ActionType::SendKeys(_keys) => {
-            println!(
-                "⚠️ Periodic entry '{}' has SendKeys action - skipping (no agent context)",
-                entry.name
-            );
+        ruler::types::ActionType::SendKeys(keys) => {
+            if let Some(agent) = agent {
+                println!(
+                    "🤖 Executing periodic entry '{}' → Sending: {:?}",
+                    entry.name, keys
+                );
+                for key in keys {
+                    agent.send_keys(key).await?;
+                }
+            } else {
+                println!(
+                    "⚠️ Periodic entry '{}' has SendKeys action - skipping (no agent context)",
+                    entry.name
+                );
+            }
         }
         ruler::types::ActionType::Workflow(workflow_name, args) => {
             println!(

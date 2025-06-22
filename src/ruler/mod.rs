@@ -27,6 +27,8 @@ pub struct Ruler {
     queue_manager: Option<SharedQueueManager>,
     // Concurrency control for entries - maps entry name to semaphore
     entry_semaphores: Arc<RwLock<HashMap<String, Arc<Semaphore>>>>,
+    // Monitor configuration
+    monitor_config: config::MonitorConfig,
 }
 
 impl Ruler {
@@ -81,6 +83,7 @@ impl Ruler {
             next_port: monitor_config.base_port, // Start from configured base port
             queue_manager,
             entry_semaphores,
+            monitor_config,
         })
     }
 
@@ -143,8 +146,8 @@ impl Ruler {
     }
 
     #[allow(dead_code)]
-    pub async fn reload_config(&self, config_path: &str) -> Result<()> {
-        let (new_entries, new_rules, _monitor_config) =
+    pub async fn reload_config(&mut self, config_path: &str) -> Result<()> {
+        let (new_entries, new_rules, new_monitor_config) =
             load_config(std::path::Path::new(config_path))?;
 
         // Update entries
@@ -165,6 +168,9 @@ impl Ruler {
             semaphores_guard.insert(entry.name.clone(), semaphore);
         }
 
+        // Update monitor config
+        self.monitor_config = new_monitor_config;
+
         println!(
             "✅ Configuration reloaded successfully from {}",
             config_path
@@ -182,6 +188,11 @@ impl Ruler {
     pub async fn acquire_entry_permit(&self, entry_name: &str) -> Option<Arc<Semaphore>> {
         let semaphores_guard = self.entry_semaphores.read().await;
         semaphores_guard.get(entry_name).cloned()
+    }
+
+    /// Get monitor configuration
+    pub fn get_monitor_config(&self) -> &config::MonitorConfig {
+        &self.monitor_config
     }
 }
 
