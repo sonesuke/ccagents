@@ -23,7 +23,7 @@ Mock script that simulates an interactive process:
 cargo run
 
 # Run with explicit config
-cargo run -- --rules examples/basic/config.yaml
+cargo run -- --config examples/basic/config.yaml
 ```
 
 ## How It Works

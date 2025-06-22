@@ -26,7 +26,7 @@ Basic demo script that takes 2 seconds and shows which task is running.
 
 ```bash
 # Run the agent pool demo
-cargo run -- --rules examples/agent_pool/concurrency_demo.yaml
+cargo run -- --config examples/agent_pool/concurrency_demo.yaml
 
 # Watch terminals at:
 # - http://localhost:9990 (Agent 1)

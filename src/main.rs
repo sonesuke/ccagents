@@ -36,7 +36,7 @@ async fn main() -> Result<()> {
     match cli.command {
         None => {
             // When no subcommand is provided, run manager mode (default)
-            let rules_path = cli.rules.unwrap_or_else(|| PathBuf::from("config.yaml"));
+            let rules_path = cli.config.unwrap_or_else(|| PathBuf::from("config.yaml"));
             run_automation_command(rules_path).await?
         }
         Some(command) => match command {
@@ -193,7 +193,7 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
 async fn handle_show_command(args: &cli::ShowArgs) -> Result<()> {
     // Load and compile configuration from YAML file
     let (entries, rules, monitor_config) =
-        ruler::config::load_config(&args.rules).context("Failed to load config")?;
+        ruler::config::load_config(&args.config).context("Failed to load config")?;
 
     println!("Loaded {} entries and {} rules", entries.len(), rules.len());
     println!(
@@ -224,7 +224,8 @@ async fn handle_show_command(args: &cli::ShowArgs) -> Result<()> {
 /// Handle test command
 async fn handle_test_command(args: &cli::TestArgs) -> Result<()> {
     // Load rules and test against capture text
-    let (_, rules, _) = ruler::config::load_config(&args.rules).context("Failed to load config")?;
+    let (_, rules, _) =
+        ruler::config::load_config(&args.config).context("Failed to load config")?;
     let action = decide_action(&args.capture, &rules);
 
     println!("Input: \"{}\"", args.capture);

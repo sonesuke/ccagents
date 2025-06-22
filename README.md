@@ -40,7 +40,7 @@ cargo build --release
 ./target/release/rule-agents
 
 # Run with specific config file
-./target/release/rule-agents --rules custom-config.yaml
+./target/release/rule-agents --config custom-config.yaml
 
 # View terminal automation at http://localhost:9990
 ```
@@ -220,22 +220,22 @@ The web interface URLs are automatically displayed when the HT processes start.
 
 ```bash
 # Start automation with basic example
-./target/release/rule-agents --rules examples/basic/config.yaml
+./target/release/rule-agents --config examples/basic/config.yaml
 
 # Start with queue system example
-./target/release/rule-agents --rules examples/simple_queue/simple_queue.yaml
+./target/release/rule-agents --config examples/simple_queue/simple_queue.yaml
 
 # Start with dedupe queue example
-./target/release/rule-agents --rules examples/dedupe_queue/dedupe_example.yaml
+./target/release/rule-agents --config examples/dedupe_queue/dedupe_example.yaml
 
 # Start with agent pool example
-./target/release/rule-agents --rules examples/agent_pool/concurrency_demo.yaml
+./target/release/rule-agents --config examples/agent_pool/concurrency_demo.yaml
 
 # Test rule matching
-./target/release/rule-agents test --rules examples/basic/config.yaml --capture "Do you want to proceed"
+./target/release/rule-agents test --config examples/basic/config.yaml --capture "Do you want to proceed"
 
 # View loaded configuration
-./target/release/rule-agents show --rules examples/basic/config.yaml
+./target/release/rule-agents show --config examples/basic/config.yaml
 ```
 
 ## Examples
@@ -244,7 +244,7 @@ Multiple example configurations are provided to demonstrate different features:
 
 ### 1. Basic Automation (`examples/basic/`)
 ```bash
-./target/release/rule-agents --rules examples/basic/config.yaml
+./target/release/rule-agents --config examples/basic/config.yaml
 ```
 - Demonstrates on_start triggers and pattern-based rules
 - Automatically executes mock.sh and responds to prompts
@@ -252,7 +252,7 @@ Multiple example configurations are provided to demonstrate different features:
 
 ### 2. Queue System (`examples/simple_queue/`)
 ```bash
-./target/release/rule-agents --rules examples/simple_queue/simple_queue.yaml
+./target/release/rule-agents --config examples/simple_queue/simple_queue.yaml
 ```
 - Shows periodic task generation and automatic processing
 - Demonstrates queue-based workflows with `<task>` variable expansion
@@ -260,7 +260,7 @@ Multiple example configurations are provided to demonstrate different features:
 
 ### 3. Dedupe Queue (`examples/dedupe_queue/`)
 ```bash
-./target/release/rule-agents --rules examples/dedupe_queue/dedupe_example.yaml
+./target/release/rule-agents --config examples/dedupe_queue/dedupe_example.yaml
 ```
 - Demonstrates automatic duplicate detection and filtering
 - Prevents reprocessing of identical items
@@ -268,7 +268,7 @@ Multiple example configurations are provided to demonstrate different features:
 
 ### 4. Agent Pool (`examples/agent_pool/`)
 ```bash
-./target/release/rule-agents --rules examples/agent_pool/concurrency_demo.yaml
+./target/release/rule-agents --config examples/agent_pool/concurrency_demo.yaml
 ```
 - Demonstrates multiple agents running in parallel
 - Shows round-robin task distribution across agents

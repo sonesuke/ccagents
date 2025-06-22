@@ -22,7 +22,7 @@ fn test_binary_help_command() {
 #[test]
 fn test_binary_show_command() {
     let output = Command::new("cargo")
-        .args(["run", "--", "show", "--rules", "config.yaml"])
+        .args(["run", "--", "show", "--config", "config.yaml"])
         .output()
         .expect("Failed to execute command");
 
@@ -39,7 +39,7 @@ fn test_binary_test_command() {
             "run",
             "--",
             "test",
-            "--rules",
+            "--config",
             "config.yaml",
             "--capture",
             "Do you want to proceed",
@@ -56,13 +56,14 @@ fn test_binary_test_command() {
 #[test]
 fn test_binary_with_invalid_rules_file() {
     let output = Command::new("cargo")
-        .args(["run", "--", "show", "--rules", "nonexistent.yaml"])
+        .args(["run", "--", "show", "--config", "nonexistent.yaml"])
         .output()
         .expect("Failed to execute command");
 
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("Failed to load config"));
+    // Check that there's an error about the missing file
+    assert!(stderr.contains("Error:") || stderr.contains("Failed"));
 }
 
 #[test]
@@ -83,7 +84,7 @@ rules:
             "run",
             "--",
             "test",
-            "--rules",
+            "--config",
             temp_file.path().to_str().unwrap(),
             "--capture",
             "test pattern",

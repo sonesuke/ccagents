@@ -11,7 +11,7 @@ Basic terminal automation and rule-based processing.
 
 ```bash
 # Run basic examples
-cargo run -- --rules examples/basic/config.yaml
+cargo run -- --config examples/basic/config.yaml
 ```
 
 ### [Simple Queue System](./simple_queue/)
@@ -21,7 +21,7 @@ Periodic task execution and queue-based processing.
 
 ```bash
 # Run queue examples
-cargo run -- --rules examples/simple_queue/simple_queue.yaml
+cargo run -- --config examples/simple_queue/simple_queue.yaml
 ```
 
 ### [Dedupe Queue System](./dedupe_queue/)
@@ -31,7 +31,7 @@ Queue processing with automatic deduplication.
 
 ```bash
 # Run dedupe queue examples
-cargo run -- --rules examples/dedupe_queue/dedupe_example.yaml
+cargo run -- --config examples/dedupe_queue/dedupe_example.yaml
 ```
 
 ### [Agent Pool System](./agent_pool/)
@@ -41,7 +41,7 @@ Multiple agents running in parallel for improved performance.
 
 ```bash
 # Run agent pool examples
-cargo run -- --rules examples/agent_pool/concurrency_demo.yaml
+cargo run -- --config examples/agent_pool/concurrency_demo.yaml
 ```
 
 ## Quick Start
@@ -51,7 +51,7 @@ cargo run -- --rules examples/agent_pool/concurrency_demo.yaml
 cargo run
 
 # With specific config
-cargo run -- --rules examples/[folder]/[config].yaml
+cargo run -- --config examples/[folder]/[config].yaml
 ```
 
 ## Core Features Demonstrated

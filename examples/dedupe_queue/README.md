@@ -38,10 +38,10 @@ echo "Result: success"
 
 ```bash
 # Run dedupe queue example
-cargo run -- --rules examples/dedupe_queue/dedupe_example.yaml
+cargo run -- --config examples/dedupe_queue/dedupe_example.yaml
 
 # Compare with normal queue behavior
-cargo run -- --rules examples/simple_queue/simple_queue.yaml
+cargo run -- --config examples/simple_queue/simple_queue.yaml
 ```
 
 ## How It Works

@@ -80,7 +80,7 @@ rules:
 
 1. **Start RuleAgents:**
    ```bash
-   ./target/release/rule-agents --rules config.yaml
+   ./target/release/rule-agents --config config.yaml
    ```
 
 2. **Watch the automation:**
@@ -97,7 +97,7 @@ RuleAgents provides a test command to verify rule matching:
 
 ```bash
 # Test if a pattern matches correctly
-./target/release/rule-agents test --rules config.yaml --capture "Do you want to proceed"
+./target/release/rule-agents test --config config.yaml --capture "Do you want to proceed"
 
 # Output shows which rule would trigger:
 # Match found: rule at index 0
@@ -266,17 +266,17 @@ rules:
 
 1. **Enable verbose logging:**
    ```bash
-   RUST_LOG=debug ./target/release/rule-agents --rules config.yaml
+   RUST_LOG=debug ./target/release/rule-agents --config config.yaml
    ```
 
 2. **Test patterns individually:**
    ```bash
-   ./target/release/rule-agents test --rules config.yaml --capture "your text here"
+   ./target/release/rule-agents test --config config.yaml --capture "your text here"
    ```
 
 3. **View the configuration:**
    ```bash
-   ./target/release/rule-agents show --rules config.yaml
+   ./target/release/rule-agents show --config config.yaml
    ```
 
 ## Common Issues and Solutions
