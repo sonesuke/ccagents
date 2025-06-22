@@ -95,10 +95,8 @@ async fn main() -> Result<()> {
                                     if let Err(e) = agent.send_keys("\r").await {
                                         eprintln!("❌ Error sending key: {}", e);
                                     }
-                                } else {
-                                    if let Err(e) = agent.send_keys(key).await {
-                                        eprintln!("❌ Error sending key: {}", e);
-                                    }
+                                } else if let Err(e) = agent.send_keys(key).await {
+                                    eprintln!("❌ Error sending key: {}", e);
                                 }
                                 tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
                             }
@@ -162,8 +160,7 @@ async fn main() -> Result<()> {
                                     if current_output.len() > common_prefix_len {
                                         // Find a safe character boundary at or after common_prefix_len
                                         let safe_start = current_output.char_indices()
-                                            .skip_while(|(i, _)| *i < common_prefix_len)
-                                            .next()
+                                            .find(|(i, _)| *i >= common_prefix_len)
                                             .map(|(i, _)| i)
                                             .unwrap_or(current_output.len());
                                         
@@ -224,10 +221,8 @@ async fn main() -> Result<()> {
                                                         if let Err(e) = agent.send_keys("\r").await {
                                                             eprintln!("❌ Error sending key: {}", e);
                                                         }
-                                                    } else {
-                                                        if let Err(e) = agent.send_keys(&key).await {
-                                                            eprintln!("❌ Error sending key: {}", e);
-                                                        }
+                                                    } else if let Err(e) = agent.send_keys(key).await {
+                                                        eprintln!("❌ Error sending key: {}", e);
                                                     }
                                                     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
                                                 }
