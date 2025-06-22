@@ -2,6 +2,31 @@
 
 A command-line tool for YAML-driven agent auto-control system with automatic terminal interaction.
 
+## Prerequisites
+
+### HT (Headless Terminal)
+
+RuleAgents requires HT (Headless Terminal) to be installed on your system. HT provides the terminal emulation and web interface that RuleAgents uses for automation.
+
+#### Install HT
+
+```bash
+# Clone and install HT
+git clone https://github.com/andyk/ht.git
+cd ht
+cargo install --path .
+```
+
+Alternatively, if you have cargo installed:
+```bash
+cargo install ht
+```
+
+Verify HT is installed and accessible:
+```bash
+ht --version
+```
+
 ## Installation
 
 ```bash
