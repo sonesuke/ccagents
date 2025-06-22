@@ -2,6 +2,31 @@
 
 A command-line tool for YAML-driven agent auto-control system with automatic terminal interaction.
 
+## Prerequisites
+
+### HT (Headless Terminal)
+
+RuleAgents requires HT (Headless Terminal) to be installed on your system. HT provides the terminal emulation and web interface that RuleAgents uses for automation.
+
+#### Install HT
+
+```bash
+# Clone and install HT
+git clone https://github.com/andyk/ht.git
+cd ht
+cargo install --path .
+```
+
+Alternatively, if you have cargo installed:
+```bash
+cargo install ht
+```
+
+Verify HT is installed and accessible:
+```bash
+ht --version
+```
+
 ## Installation
 
 ```bash
@@ -91,12 +116,10 @@ See [docs/architecture.md](docs/architecture.md) for system design details.
 Real-time agent state detection based on HT (terminal) process output analysis:
 
 - **State Detection**: Automatically detects Idle, Wait, and Active agent states
-- **Shell Prompt Recognition**: Configurable regex patterns for various shell prompts
+- **Shell Prompt Recognition**: Built-in regex patterns for various shell prompts
 - **Output Change Monitoring**: Compares terminal snapshots to detect activity
 - **Timeout Handling**: Detects stuck commands and provides warnings
 - **Event-Driven Architecture**: Efficient monitoring with minimal CPU overhead
-
-See [docs/terminal_output_monitoring.md](docs/terminal_output_monitoring.md) for detailed documentation.
 
 ### Web Interface
 
@@ -147,4 +170,4 @@ A complete test scenario is provided to demonstrate the system:
    - Automatically responds to prompts using defined rules
    - Completes the full workflow without manual intervention
 
-See [docs/mock-test-guide.md](docs/mock-test-guide.md) for detailed test documentation.
+See [docs/tutorial.md](docs/tutorial.md) for a comprehensive tutorial on configuring and using RuleAgents.

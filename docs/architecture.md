@@ -2,83 +2,153 @@
 
 ## Overview
 
-RuleAgents is a command-line tool that provides a YAML-driven agent auto-control system. It runs as a daemon process that monitors events, evaluates conditions, and executes actions according to rules defined in YAML configuration files.
+RuleAgents is a terminal automation tool that provides YAML-driven control of interactive terminal sessions. It integrates with HyperTerminal (HT) to monitor terminal output and automatically respond based on configured rules.
 
-## Usage
+## Core Architecture
 
-```bash
-# Run with default rules.yaml
-rule-agents
-
-# Run with specific rules file
-rule-agents --rules /path/to/my-rules.yaml
+```
+┌─────────────────┐     ┌──────────────────┐     ┌────────────────┐
+│   RuleAgents    │────▶│   HT Process     │────▶│  Web Terminal  │
+│   (Controller)  │     │  (Terminal Emu)  │     │ localhost:9990 │
+└────────┬────────┘     └─────────┬────────┘     └────────────────┘
+         │                        │
+         │ Monitors               │ Sends
+         │ Output                 │ Keystrokes
+         ▼                        ▼
+┌─────────────────┐     ┌──────────────────┐
+│  Terminal       │     │    Terminal      │
+│  Output Buffer  │     │    Session       │
+└─────────────────┘     └──────────────────┘
 ```
 
-## Core Components
+## Key Components
 
-### 1. Rule Engine
-The heart of the system that:
-- Loads and parses YAML rule files
-- Compiles rules into an efficient runtime representation
-- Manages rule execution based on triggers
-- Handles condition evaluation
-- Executes configured actions
+### 1. Agent Module (`agent/`)
+Manages the HT process and terminal interactions:
+- **HT Process Management**: Spawns and controls HyperTerminal subprocess
+- **Terminal Monitor**: Detects changes in terminal output using differential buffer analysis
+- **Key Sender**: Sends keyboard input to the terminal session
+- **State Detection**: Monitors if scripts are running or idle
 
-### 2. Agent Manager
-Manages multiple agents that:
-- Execute commands and tasks
-- Monitor file system changes
-- Collect system metrics
-- Handle inter-agent communication
+### 2. Ruler Module (`ruler/`)
+Processes configuration and decides actions:
+- **Config Loader**: Parses YAML configuration files
+- **Pattern Matcher**: Evaluates regex patterns against terminal output
+- **Action Decider**: Determines which action to execute based on matches
+- **Priority System**: Rules are evaluated in order (first match wins)
 
-### 3. Event System
-- File system events (using `notify` crate)
-- Timer-based events
-- Custom event sources
+### 3. Workflow Module (`workflow/`)
+Manages complex multi-step operations:
+- **Session Management**: Saves and restores terminal sessions
+- **Action Execution**: Runs configured workflows
+- **Recovery**: Handles interruptions and resumption
+- **Hot Reload**: Supports dynamic workflow updates
 
-### 4. Metrics & Monitoring
-- Prometheus metrics export
-- HTTP server for metrics endpoint (using `warp`)
-- Rule execution statistics
+### 4. HT Integration
+RuleAgents depends on HyperTerminal (HT) for:
+- Terminal emulation
+- Web-based terminal access
+- Terminal output capture
+- Keyboard input injection
 
-## Rule Structure
+## Configuration Structure
 
-Rules are defined in YAML format with the following simplified structure:
+### Entries - Event Triggers
+```yaml
+entries:
+  - name: "descriptive_name"
+    trigger: "on_start"        # Executes when RuleAgents starts
+    action: "send_keys"        # Action type
+    keys: ["command", "\r"]    # Keys to send (\r = Enter)
+```
 
+### Rules - Pattern Matching
 ```yaml
 rules:
-  - priority: 10
-    pattern: "issue\\s+(\\d+)"
-    command: "entry"
-    args: []
-  - priority: 20
-    pattern: "cancel"
-    command: "cancel"
-    args: []
+  - pattern: "regex_pattern"   # Regex to match terminal output
+    action: "send_keys"        # Action to perform
+    keys: ["response", "\r"]   # Keys to send
 ```
 
-### Rule Fields
-- **priority**: Numeric priority (lower = higher priority, rules sorted ascending)  
-- **pattern**: Regular expression pattern to match against input
-- **command**: Command type to execute when pattern matches
-- **args**: Optional command arguments (defaults to empty array)
+## Operation Flow
 
-### Supported Commands
-- `entry`: Handle GitHub issue resolution workflow
-- `cancel`: Cancel current operation
-- `resume`: Resume interrupted operation
+1. **Initialization**
+   - Parse command-line arguments
+   - Load YAML configuration
+   - Start HT process on available port (9990+)
+   - Initialize terminal monitor
 
-## Data Flow
+2. **Startup Phase**
+   - Execute `on_start` entries
+   - Begin monitoring terminal output
+   - Web terminal becomes accessible
 
-1. **Startup**: Parse CLI args → Load YAML rules → Compile regex patterns → Sort by priority
-2. **Runtime**: Input received → Match patterns (priority order) → Execute command
-3. **Shutdown**: Receive Ctrl+C signal → Clean up resources
+3. **Runtime Loop**
+   - Monitor terminal buffer for changes
+   - Detect new terminal output
+   - Match output against configured rules
+   - Execute actions for matching patterns
+   - Track script state (running/idle)
 
-## Future Enhancements
+4. **Action Execution**
+   - `send_keys`: Inject keyboard input
+   - `workflow`: Execute named workflow sequence
 
-- Rule hot-reloading (SIGHUP support)
-- Configuration file validation
-- Systemd service integration
-- Metrics endpoint (HTTP server)
+## Terminal Output Detection
+
+RuleAgents uses a sophisticated algorithm to detect new content in HT's fixed-width terminal buffer:
+
+1. **Differential Detection**: Compares snapshots to find new lines
+2. **Buffer Wrapping**: Handles terminal scrolling and line wrapping
+3. **State Tracking**: Prevents duplicate triggers when scripts are idle
+4. **Content Hashing**: Uses MD5 to identify unique output chunks
+
+## Key Features
+
+### Terminal Automation
+- Pattern-based response to prompts
+- Automated script execution
+- Multi-step workflow support
+- State-aware triggering
+
+### Web Interface
+- Real-time terminal viewing at http://localhost:9990
+- Multiple concurrent viewers supported
+- No installation required for viewers
+
+### Reliability
+- Session persistence and recovery
+- Graceful shutdown handling
+- Error recovery mechanisms
+- Timeout protection
+
+## Testing Support
+
+RuleAgents includes special testing features:
+- `test` command for rule validation
+- `show` command for configuration inspection
+- Mock backend support for unit tests
+- Integration test framework
+
+## Dependencies
+
+- **HyperTerminal (HT)**: Required for terminal emulation
+- **Tokio**: Async runtime
+- **Regex**: Pattern matching
+- **Serde/YAML**: Configuration parsing
+- **Clap**: Command-line interface
+
+## Limitations
+
+- Requires HT to be installed separately
+- Terminal detection relies on text patterns
+- No built-in scheduling or cron-like features
+- Limited to terminal-based automation
+
+## Future Considerations
+
 - Plugin system for custom actions
-- Interactive mode for rule testing
+- Enhanced pattern matching capabilities
+- Terminal session recording/playback
+- Multi-terminal orchestration
+- REST API for external control
