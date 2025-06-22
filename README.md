@@ -170,4 +170,4 @@ A complete test scenario is provided to demonstrate the system:
    - Automatically responds to prompts using defined rules
    - Completes the full workflow without manual intervention
 
-See [docs/mock-test-guide.md](docs/mock-test-guide.md) for a comprehensive tutorial on configuring and using RuleAgents.
+See [docs/tutorial.md](docs/tutorial.md) for a comprehensive tutorial on configuring and using RuleAgents.

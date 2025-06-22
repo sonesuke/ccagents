@@ -1,4 +1,4 @@
-# Getting Started with RuleAgents - Tutorial
+# RuleAgents Tutorial
 
 This tutorial walks you through configuring and using RuleAgents with a practical example. You'll learn how to create automation rules and understand the core concepts through hands-on experience.
 
