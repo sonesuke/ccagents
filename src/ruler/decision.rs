@@ -4,7 +4,7 @@ use crate::ruler::types::ActionType;
 
 /// Matches capture text against compiled rules and returns the appropriate action.
 ///
-/// This function iterates through rules in priority order (already sorted by load_rules)
+/// This function iterates through rules in priority order (as loaded by load_config)
 /// and returns the first matching rule's action with resolved capture groups.
 /// If no rules match, returns ActionType::SendKeys(vec![]) as the default.
 ///

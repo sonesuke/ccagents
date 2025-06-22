@@ -62,9 +62,3 @@ pub fn load_config(path: &Path) -> Result<(Vec<CompiledEntry>, Vec<CompiledRule>
 
     Ok((compiled_entries, compiled_rules, config_file.monitor))
 }
-
-/// Legacy function for backward compatibility
-pub fn load_rules(path: &Path) -> Result<Vec<CompiledRule>> {
-    let (_, rules, _) = load_config(path)?;
-    Ok(rules)
-}

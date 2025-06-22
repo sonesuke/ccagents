@@ -7,6 +7,12 @@ use anyhow::Result;
 use std::collections::HashMap;
 use tracing::info;
 
+/// Result of terminal differential detection
+pub struct DifferentialContent {
+    pub new_content: String,
+    pub clean_content: String,
+}
+
 #[allow(dead_code)]
 pub struct Agent {
     #[allow(dead_code)]
@@ -178,6 +184,65 @@ impl Agent {
     #[allow(dead_code)]
     pub fn get_monitor(&self) -> Option<&TerminalOutputMonitor> {
         self.terminal_monitor.as_ref()
+    }
+
+    /// Detect differential content from terminal output
+    ///
+    /// This function implements the HT TERMINAL DIFFERENTIAL DETECTION STRATEGY:
+    /// - HT Terminal sends the entire screen buffer as a single continuous string
+    /// - The buffer is fixed-width with space padding
+    /// - We compare buffers character-by-character and extract only newly added content
+    /// - This treats the terminal as an append-only stream
+    pub fn detect_differential_content(
+        &self,
+        current_output: &str,
+        previous_output: Option<&str>,
+    ) -> DifferentialContent {
+        let current_output = current_output.trim();
+        let mut new_content = String::new();
+
+        if let Some(previous_output) = previous_output {
+            // Find the longest common prefix between previous and current output
+            let common_prefix_len = previous_output
+                .chars()
+                .zip(current_output.chars())
+                .take_while(|(a, b)| a == b)
+                .count();
+
+            // Extract the new content that was appended to the end
+            // Handle Unicode character boundaries safely
+            if current_output.len() > common_prefix_len {
+                // Find a safe character boundary at or after common_prefix_len
+                let safe_start = current_output
+                    .char_indices()
+                    .find(|(i, _)| *i >= common_prefix_len)
+                    .map(|(i, _)| i)
+                    .unwrap_or(current_output.len());
+
+                if safe_start < current_output.len() {
+                    new_content = current_output[safe_start..].trim().to_string();
+                }
+            }
+
+            // Debug info (only shown with --debug flag)
+            info!(
+                "Buffer length: prev={}, curr={}",
+                previous_output.len(),
+                current_output.len()
+            );
+            info!("Common prefix length: {}", common_prefix_len);
+        } else {
+            // First time - entire output is "new"
+            new_content = current_output.to_string();
+        }
+
+        // Clean the content
+        let clean_content = HtProcess::clean_terminal_output(&new_content);
+
+        DifferentialContent {
+            new_content,
+            clean_content,
+        }
     }
 }
 
