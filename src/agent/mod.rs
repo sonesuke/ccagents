@@ -9,12 +9,13 @@ use tracing::info;
 
 #[allow(dead_code)]
 pub struct Agent {
+    #[allow(dead_code)]
     id: String,
     ht_process: HtProcess,
+    #[allow(dead_code)]
     terminal_monitor: Option<TerminalOutputMonitor>,
 }
 
-#[allow(dead_code)]
 impl Agent {
     pub async fn new(id: String, test_mode: bool, port: u16) -> Result<Self> {
         let config = if test_mode {
@@ -56,6 +57,7 @@ impl Agent {
         })
     }
 
+    #[allow(dead_code)]
     pub fn id(&self) -> &str {
         &self.id
     }
@@ -74,6 +76,7 @@ impl Agent {
             .map_err(|e| anyhow::anyhow!("Failed to get output: {}", e))
     }
 
+    #[allow(dead_code)]
     pub async fn execute_command(&self, command: &str) -> Result<CommandResult> {
         info!("Agent {} executing command: {}", self.id, command);
 
@@ -101,6 +104,7 @@ impl Agent {
         })
     }
 
+    #[allow(dead_code)]
     pub async fn take_snapshot(&self) -> Result<TerminalSnapshot> {
         let content = self.ht_process.get_view().await?;
 
@@ -115,20 +119,24 @@ impl Agent {
         })
     }
 
+    #[allow(dead_code)]
     pub async fn resize(&self, width: u32, height: u32) -> Result<()> {
         // HT process would handle resize in production
         info!("Agent {} resizing to {}x{}", self.id, width, height);
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn is_available(&self) -> bool {
         self.ht_process.is_running().await
     }
 
+    #[allow(dead_code)]
     pub fn backend_type(&self) -> &'static str {
         "ht"
     }
 
+    #[allow(dead_code)]
     pub async fn get_environment(&self) -> Result<HashMap<String, String>> {
         // Send env command and parse output
         self.send_keys("env\n").await?;
@@ -147,11 +155,13 @@ impl Agent {
         Ok(env_vars)
     }
 
+    #[allow(dead_code)]
     pub async fn set_working_directory(&self, path: &str) -> Result<()> {
         let cmd = format!("cd {}\n", path);
         self.send_keys(&cmd).await
     }
 
+    #[allow(dead_code)]
     pub async fn start_monitoring(&mut self) -> Result<()> {
         if self.terminal_monitor.is_none() {
             let monitor = TerminalOutputMonitor::new(self.id.clone());
@@ -160,10 +170,12 @@ impl Agent {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn stop_monitoring(&mut self) {
         self.terminal_monitor = None;
     }
 
+    #[allow(dead_code)]
     pub fn get_monitor(&self) -> Option<&TerminalOutputMonitor> {
         self.terminal_monitor.as_ref()
     }

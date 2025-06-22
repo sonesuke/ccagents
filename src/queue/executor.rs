@@ -74,6 +74,34 @@ impl QueueExecutor {
         Ok(count)
     }
 
+    /// Execute a command and enqueue its output lines to a dedupe queue
+    pub async fn execute_and_enqueue_dedupe(
+        &self,
+        queue_name: &str,
+        command: &str,
+    ) -> Result<usize> {
+        info!(
+            "Executing command and enqueuing to dedupe {}: {}",
+            queue_name, command
+        );
+
+        let output = self.execute_command(command).await?;
+
+        if output.trim().is_empty() {
+            debug!("Command produced no output, nothing to enqueue");
+            return Ok(0);
+        }
+
+        let mut manager = self.manager.write().await;
+        let count = manager.enqueue_lines_dedupe(queue_name, &output)?;
+
+        info!(
+            "Enqueued {} new items to dedupe queue: {}",
+            count, queue_name
+        );
+        Ok(count)
+    }
+
     /// Dequeue an item from a queue
     #[allow(dead_code)]
     pub async fn dequeue(&self, queue_name: &str) -> Option<String> {

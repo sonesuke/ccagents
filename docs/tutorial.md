@@ -27,7 +27,8 @@ entries:
 
 **Available triggers:**
 - `on_start`: Executes automatically when RuleAgents starts
-- More triggers can be added as needed
+- `periodic`: Executes at regular intervals (e.g., "15s", "5m", "2h")
+- `enqueue:queue_name`: Executes when items are added to specified queue
 
 #### 2. Rules - Pattern-Based Automation
 ```yaml
@@ -132,29 +133,52 @@ rules:
     keys: ["yes", "\r"]
 ```
 
-### Example 3: Multi-Step Workflows
+### Example 3: Queue-Based Task Processing
 ```yaml
 entries:
-  - name: "deploy_workflow"
-    trigger: "on_start"
+  # Generate tasks every 30 seconds
+  - name: "task_generator"
+    trigger: "periodic"
+    interval: "30s"
+    action: "enqueue"
+    queue: "build_tasks"
+    command: "find . -name '*.rs' -newer last_build"
+    
+  # Process each task automatically
+  - name: "task_processor"
+    trigger: "enqueue:build_tasks"
     action: "send_keys"
-    keys: ["./deploy.sh", "\r"]
+    keys: ["rustc --check <task>", "\r"]
+    
+  # Handle results
+  - name: "result_handler"
+    trigger: "enqueue:build_tasks"
+    action: "enqueue"
+    queue: "completed"
+    command: "echo 'Processed: <task>'"
 
 rules:
-  # Step 1: Environment selection
-  - pattern: "Select environment.*production"
+  - pattern: "error.*"
     action: "send_keys"
-    keys: ["2", "\r"]  # Select production
+    keys: ["echo 'Build error detected'", "\r"]
+```
+
+### Example 4: Deduplication Queue
+```yaml
+entries:
+  # Generate items with potential duplicates
+  - name: "item_generator"
+    trigger: "periodic"
+    interval: "10s"
+    action: "enqueue_dedupe"  # Automatic duplicate filtering
+    queue: "unique_items"
+    command: "ls *.log"       # May return same files
     
-  # Step 2: Confirmation
-  - pattern: "Deploy to production\\?"
+  # Process only unique items
+  - name: "unique_processor"
+    trigger: "enqueue:unique_items"
     action: "send_keys"
-    keys: ["yes", "\r"]
-    
-  # Step 3: Authentication
-  - pattern: "Enter deployment token:"
-    action: "send_keys"
-    keys: ["${DEPLOY_TOKEN}", "\r"]
+    keys: ["process_log <task>", "\r"]
 ```
 
 ## Best Practices
@@ -169,7 +193,14 @@ rules:
 - General catch-all rules should go last
 - Document why certain rules have higher priority
 
-### 3. Safety Considerations
+### 3. Queue System Best Practices
+- Use meaningful queue names that describe the data type
+- Keep periodic intervals reasonable to avoid overwhelming the system
+- Use `enqueue_dedupe` for idempotent operations
+- Remember that `<task>` expands to individual queue items
+- Test queue processing with small intervals first
+
+### 4. Safety Considerations
 ```yaml
 rules:
   # Dangerous - too broad
@@ -184,6 +215,24 @@ rules:
 ```
 
 ## Advanced Features
+
+### Variable Expansion in Queue Actions
+```yaml
+entries:
+  - name: "file_processor"
+    trigger: "periodic"
+    interval: "60s"
+    action: "enqueue"
+    queue: "files"
+    command: "find /data -name '*.csv'"
+    
+  - name: "process_files"
+    trigger: "enqueue:files"
+    action: "send_keys"
+    keys: ["python process.py --input <task> --output processed/<task>.out", "\r"]
+
+# <task> expands to each individual file path from the queue
+```
 
 ### Regular Expression Patterns
 ```yaml

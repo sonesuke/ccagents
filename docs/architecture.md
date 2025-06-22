@@ -37,14 +37,22 @@ Processes configuration and decides actions:
 - **Action Decider**: Determines which action to execute based on matches
 - **Priority System**: Rules are evaluated in order (first match wins)
 
-### 3. Workflow Module (`workflow/`)
+### 3. Queue Module (`queue/`)
+Manages task queues and periodic execution:
+- **Queue Manager**: FIFO queues with event notifications
+- **Queue Executor**: Command execution and result enqueueing
+- **Periodic Triggers**: Timer-based task scheduling with configurable intervals
+- **Variable Expansion**: Dynamic task substitution using `<task>` placeholders
+- **Deduplication**: In-memory duplicate filtering for idempotent operations
+
+### 4. Workflow Module (`workflow/`)
 Manages complex multi-step operations:
 - **Session Management**: Saves and restores terminal sessions
 - **Action Execution**: Runs configured workflows
 - **Recovery**: Handles interruptions and resumption
 - **Hot Reload**: Supports dynamic workflow updates
 
-### 4. HT Integration
+### 5. HT Integration
 RuleAgents depends on HyperTerminal (HT) for:
 - Terminal emulation
 - Web-based terminal access
@@ -60,6 +68,18 @@ entries:
     trigger: "on_start"        # Executes when RuleAgents starts
     action: "send_keys"        # Action type
     keys: ["command", "\r"]    # Keys to send (\r = Enter)
+    
+  - name: "periodic_task"
+    trigger: "periodic"        # Executes at regular intervals
+    interval: "15s"            # Interval (supports s, m, h)
+    action: "enqueue"          # Add command output to queue
+    queue: "tasks"             # Queue name
+    command: "echo 'task'"     # Command to execute
+    
+  - name: "queue_processor"
+    trigger: "enqueue:tasks"   # Executes when items added to queue
+    action: "send_keys"
+    keys: ["process <task>", "\r"]  # <task> expands to queue item
 ```
 
 ### Rules - Pattern Matching
@@ -93,6 +113,14 @@ rules:
 4. **Action Execution**
    - `send_keys`: Inject keyboard input
    - `workflow`: Execute named workflow sequence
+   - `enqueue`: Add command output to named queue
+   - `enqueue_dedupe`: Add command output with duplicate filtering
+
+5. **Queue Processing**
+   - Periodic tasks execute commands at specified intervals
+   - Command output is processed line-by-line and added to queues
+   - Queue listeners trigger automatically when items are added
+   - Variable expansion replaces `<task>` with actual queue items
 
 ## Terminal Output Detection
 
@@ -110,6 +138,12 @@ RuleAgents uses a sophisticated algorithm to detect new content in HT's fixed-wi
 - Automated script execution
 - Multi-step workflow support
 - State-aware triggering
+
+### Queue System
+- Periodic task scheduling with flexible intervals
+- FIFO queue processing with event notifications
+- Automatic duplicate detection and filtering
+- Dynamic variable expansion in commands
 
 ### Web Interface
 - Real-time terminal viewing at http://localhost:9990

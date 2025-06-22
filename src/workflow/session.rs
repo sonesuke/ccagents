@@ -35,13 +35,14 @@ impl Default for SessionPersistence {
     }
 }
 
+#[allow(dead_code)]
 pub struct SessionStore {
     persistence_file: PathBuf,
     sessions: HashMap<String, SessionState>,
 }
 
-#[allow(dead_code)]
 impl SessionStore {
+    #[allow(dead_code)]
     pub fn new<P: AsRef<Path>>(persistence_file: P) -> Self {
         Self {
             persistence_file: persistence_file.as_ref().to_path_buf(),
@@ -49,6 +50,7 @@ impl SessionStore {
         }
     }
 
+    #[allow(dead_code)]
     pub async fn load_sessions(&mut self) -> Result<()> {
         if !self.persistence_file.exists() {
             info!("No existing session file found, starting with empty sessions");
@@ -67,6 +69,7 @@ impl SessionStore {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn save_sessions(&self) -> Result<()> {
         let persistence = SessionPersistence {
             sessions: self.sessions.clone(),
@@ -89,6 +92,7 @@ impl SessionStore {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn save_session_state(
         &mut self,
         agent_id: &str,
@@ -126,10 +130,12 @@ impl SessionStore {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn get_session_state(&self, agent_id: &str) -> Option<&SessionState> {
         self.sessions.get(agent_id)
     }
 
+    #[allow(dead_code)]
     pub fn get_latest_session_for_agent(&self, agent_id: &str) -> Option<&SessionState> {
         self.sessions
             .values()
@@ -137,10 +143,12 @@ impl SessionStore {
             .max_by_key(|session| session.timestamp)
     }
 
+    #[allow(dead_code)]
     pub fn list_sessions(&self) -> Vec<&SessionState> {
         self.sessions.values().collect()
     }
 
+    #[allow(dead_code)]
     pub async fn cleanup_old_sessions(&mut self, max_age_hours: u64) -> Result<()> {
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::SystemTime::UNIX_EPOCH)
@@ -167,6 +175,7 @@ impl SessionStore {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn remove_session(&mut self, agent_id: &str) -> Result<bool> {
         if self.sessions.remove(agent_id).is_some() {
             self.save_sessions().await?;
@@ -178,18 +187,22 @@ impl SessionStore {
         }
     }
 
+    #[allow(dead_code)]
     pub fn has_session(&self, agent_id: &str) -> bool {
         self.sessions.contains_key(agent_id)
     }
 
+    #[allow(dead_code)]
     pub fn session_count(&self) -> usize {
         self.sessions.len()
     }
 
+    #[allow(dead_code)]
     pub fn get_session_mut(&mut self, agent_id: &str) -> Option<&mut SessionState> {
         self.sessions.get_mut(agent_id)
     }
 
+    #[allow(dead_code)]
     pub fn clear_all_sessions(&mut self) {
         self.sessions.clear();
     }

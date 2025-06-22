@@ -68,13 +68,11 @@ pub fn resolve_capture_groups_in_vec(
 }
 
 /// Resolve <task> placeholder in a template string with a task value
-#[allow(dead_code)]
 pub fn resolve_task_placeholder(template: &str, task_value: &str) -> String {
     template.replace("<task>", task_value)
 }
 
 /// Resolve <task> placeholder in a vector of strings
-#[allow(dead_code)]
 pub fn resolve_task_placeholder_in_vec(templates: &[String], task_value: &str) -> Vec<String> {
     templates
         .iter()

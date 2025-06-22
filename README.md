@@ -47,15 +47,16 @@ cargo build --release
 
 ## Configuration
 
-Create a YAML file with entries and rules. See `config.yaml` for reference:
+Create a YAML file with entries and rules. See `examples/` directory for reference configurations:
 
+### Basic Configuration
 ```yaml
 # External triggers - initiated by system events
 entries:
   - name: "start_mock"
     trigger: "on_start"           # Automatic startup trigger
     action: "send_keys"
-    keys: ["bash examples/mock.sh", "\r"]
+    keys: ["bash examples/basic/mock.sh", "\r"]
 
 # Automatic detection rules - triggered by terminal state changes
 # Higher priority = earlier in the list (line order matters)
@@ -69,20 +70,54 @@ rules:
     keys: ["/exit", "\r"]
 ```
 
+### Queue System Configuration
+```yaml
+# Queue-based task processing with periodic triggers
+entries:
+  # Generate tasks every 15 seconds
+  - name: "generate_tasks"
+    trigger: "periodic"
+    interval: "15s"
+    action: "enqueue"
+    queue: "tasks"
+    command: "bash examples/simple_queue/list_tasks.sh"
+
+  # Process each task automatically
+  - name: "process_tasks"
+    trigger: "enqueue:tasks"
+    action: "send_keys"
+    keys: ["bash examples/simple_queue/process_task.sh <task>", "\r"]
+```
+
 ## Core Concepts
 
 ### Entries vs Rules
 
 The system distinguishes between two types of automation:
 
-- **Entries**: External triggers initiated by system events (e.g., startup, user commands)
+- **Entries**: External triggers initiated by system events (e.g., startup, periodic intervals, queue events)
 - **Rules**: Automatic detection triggered by terminal state changes (e.g., prompts, output patterns)
+
+### Trigger Types
+
+**Entry Triggers:**
+- `on_start`: Executes when RuleAgents starts
+- `periodic`: Executes at regular intervals (e.g., "15s", "5m", "2h")
+- `enqueue:queue_name`: Executes when items are added to specified queue
+
+### Action Types
+
+- `send_keys`: Send keyboard input to terminal
+- `workflow`: Execute named workflow sequence
+- `enqueue`: Add command output to named queue
+- `enqueue_dedupe`: Add command output to queue with duplicate filtering
 
 ### Configuration Structure
 
-- **entries**: Define external triggers with `trigger`, `action`, and `keys`
+- **entries**: Define external triggers with `trigger`, `action`, and parameters
 - **rules**: Define automatic responses with `pattern`, `action`, and `keys`
 - **Priority**: Rules are processed in order (first rule = highest priority)
+- **Variable Expansion**: Use `<task>` in actions to reference queue items
 
 ## Development
 
@@ -110,6 +145,16 @@ cargo fmt                      # Auto-format code
 See [docs/architecture.md](docs/architecture.md) for system design details.
 
 ## Features
+
+### Queue System
+
+Advanced task processing with automatic queue management:
+
+- **Periodic Triggers**: Execute commands at configurable intervals
+- **Queue Processing**: FIFO queues with event-driven item processing
+- **Variable Expansion**: Dynamic task substitution using `<task>` placeholders
+- **Duplicate Filtering**: Built-in deduplication with `enqueue_dedupe` action
+- **Multi-Queue Support**: Handle multiple named queues simultaneously
 
 ### Terminal Output Monitoring
 
@@ -141,33 +186,50 @@ The web interface URL is automatically displayed when the HT process starts.
 ## Available Commands
 
 ```bash
-# Start automation with default config.yaml
-./target/release/rule-agents
+# Start automation with basic example
+./target/release/rule-agents --rules examples/basic/config.yaml
 
-# Start with custom config file
-./target/release/rule-agents --rules custom-config.yaml
+# Start with queue system example
+./target/release/rule-agents --rules examples/simple_queue/simple_queue.yaml
+
+# Start with dedupe queue example
+./target/release/rule-agents --rules examples/dedupe_queue/dedupe_example.yaml
 
 # Test rule matching
-./target/release/rule-agents test --rules config.yaml --capture "Do you want to proceed"
+./target/release/rule-agents test --rules examples/basic/config.yaml --capture "Do you want to proceed"
 
 # View loaded configuration
-./target/release/rule-agents show --rules config.yaml
+./target/release/rule-agents show --rules examples/basic/config.yaml
 ```
 
-## Mock Test Example
+## Examples
 
-A complete test scenario is provided to demonstrate the system:
+Multiple example configurations are provided to demonstrate different features:
 
-1. **Run the test**:
-   ```bash
-   chmod +x examples/mock.sh
-   ./target/release/rule-agents --rules config.yaml
-   ```
+### 1. Basic Automation (`examples/basic/`)
+```bash
+./target/release/rule-agents --rules examples/basic/config.yaml
+```
+- Demonstrates on_start triggers and pattern-based rules
+- Automatically executes mock.sh and responds to prompts
+- Good starting point for understanding core concepts
 
-2. **Automatic execution**:
-   - Opens http://localhost:9990 to view the terminal
-   - Automatically starts `examples/mock.sh` via `on_start` trigger
-   - Automatically responds to prompts using defined rules
-   - Completes the full workflow without manual intervention
+### 2. Queue System (`examples/simple_queue/`)
+```bash
+./target/release/rule-agents --rules examples/simple_queue/simple_queue.yaml
+```
+- Shows periodic task generation and automatic processing
+- Demonstrates queue-based workflows with `<task>` variable expansion
+- Useful for batch processing scenarios
+
+### 3. Dedupe Queue (`examples/dedupe_queue/`)
+```bash
+./target/release/rule-agents --rules examples/dedupe_queue/dedupe_example.yaml
+```
+- Demonstrates automatic duplicate detection and filtering
+- Prevents reprocessing of identical items
+- Ideal for idempotent operations
+
+**Web Interface**: All examples provide real-time monitoring at http://localhost:9990
 
 See [docs/tutorial.md](docs/tutorial.md) for a comprehensive tutorial on configuring and using RuleAgents.

@@ -16,6 +16,7 @@ pub enum HtProcessError {
     #[error("HT process communication error: {0}")]
     CommunicationError(String),
     #[error("HT process crashed: {0}")]
+    #[allow(dead_code)]
     ProcessCrashed(String),
     #[error("HT process not running")]
     NotRunning,
@@ -59,7 +60,9 @@ pub struct SnapshotData {
 pub struct HtProcessConfig {
     pub ht_binary_path: String,
     pub shell_command: Option<String>,
+    #[allow(dead_code)]
     pub restart_attempts: u32,
+    #[allow(dead_code)]
     pub restart_delay_ms: u64,
     pub port: u16,
 }
@@ -82,11 +85,12 @@ pub struct HtProcess {
     process: Arc<Mutex<Option<Child>>>,
     sender: Arc<Mutex<Option<mpsc::UnboundedSender<HtMessage>>>>,
     receiver: Arc<Mutex<Option<mpsc::UnboundedReceiver<HtResponse>>>>,
+    #[allow(dead_code)]
     monitor_running: Arc<AtomicBool>,
+    #[allow(dead_code)]
     auto_restart: Arc<AtomicBool>,
 }
 
-#[allow(dead_code)]
 impl HtProcess {
     pub fn new(config: HtProcessConfig) -> Self {
         Self {
@@ -99,18 +103,22 @@ impl HtProcess {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_default_config() -> Self {
         Self::new(HtProcessConfig::default())
     }
 
+    #[allow(dead_code)]
     pub fn enable_auto_restart(&self) {
         self.auto_restart.store(true, Ordering::SeqCst);
     }
 
+    #[allow(dead_code)]
     pub fn disable_auto_restart(&self) {
         self.auto_restart.store(false, Ordering::SeqCst);
     }
 
+    #[allow(dead_code)]
     pub fn is_auto_restart_enabled(&self) -> bool {
         self.auto_restart.load(Ordering::SeqCst)
     }
@@ -201,10 +209,10 @@ impl HtProcess {
         // }
 
         info!("HT process started successfully");
-        println!("🌐 HT terminal web interface available at: http://localhost:9999");
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn stop(&self) -> Result<(), HtProcessError> {
         // Stop the monitor first to prevent restart attempts
         self.monitor_running.store(false, Ordering::SeqCst);
@@ -239,6 +247,7 @@ impl HtProcess {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn is_running(&self) -> bool {
         let process_lock = self.process.lock().await;
         process_lock.is_some()
@@ -298,6 +307,7 @@ impl HtProcess {
         }
     }
 
+    #[allow(dead_code)]
     pub async fn restart(&self) -> Result<(), HtProcessError> {
         info!("Restarting HT process");
 
@@ -313,6 +323,7 @@ impl HtProcess {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn restart_with_retry(&self) -> Result<(), HtProcessError> {
         let mut attempts = 0;
 
@@ -406,7 +417,15 @@ impl HtProcess {
         for line in reader.lines() {
             match line {
                 Ok(line_content) => {
-                    error!("HT process stderr: {}", line_content);
+                    // Filter out normal HTTP server startup messages
+                    if line_content.contains("HTTP server listening on")
+                        || line_content.contains("live preview available at")
+                        || line_content.contains("launching \"/bin/zsh\" in terminal")
+                    {
+                        debug!("HT process info: {}", line_content);
+                    } else {
+                        error!("HT process stderr: {}", line_content);
+                    }
                 }
                 Err(e) => {
                     error!("Error reading from HT process stderr: {}", e);
@@ -416,14 +435,14 @@ impl HtProcess {
         }
     }
 
-    fn clean_terminal_output(raw_output: &str) -> String {
-        // Remove ANSI escape sequences (improved pattern)
-        let ansi_regex = regex::Regex::new(r"\x1B\[[0-9;]*[a-zA-Z]|\x1B\[[\?]?[0-9;]*[hlm]|\x1B[>\=]|\x1B[c\d]|\x1B\][0-9];|\x1B\[[0-9A-Z]|\x1B[789]|\x1B\([AB]|\x1B\[[0-9]*[HJKfABCDGR`]|\x1B\[[0-9;]*[rW]|\x1B\[[0-9;]*H").unwrap();
+    pub fn clean_terminal_output(raw_output: &str) -> String {
+        // Remove ANSI escape sequences including CSI sequences (\u{9b})
+        let ansi_regex = regex::Regex::new(r"\x1B\[[0-9;]*[a-zA-Z]|\x1B\[[\?]?[0-9;]*[hlm]|\x1B[>\=]|\x1B[c\d]|\x1B\][0-9];|\x1B\[[0-9A-Z]|\x1B[789]|\x1B\([AB]|\x1B\[[0-9]*[HJKfABCDGR`]|\x1B\[[0-9;]*[rW]|\x1B\[[0-9;]*H|\u{9b}[0-9;]*[a-zA-Z]|\u{9b}[\?]?[0-9;]*[hlm]").unwrap();
         let without_ansi = ansi_regex.replace_all(raw_output, "");
 
-        // Remove control characters and non-printable characters
-        let control_regex = regex::Regex::new(r"[\x00-\x1F\x7F]+").unwrap();
-        let clean_text = control_regex.replace_all(&without_ansi, " ");
+        // Remove control characters and non-printable characters (including \u{9b})
+        let control_regex = regex::Regex::new(r"[\x00-\x1F\x7F\u{9b}]+").unwrap();
+        let clean_text = control_regex.replace_all(&without_ansi, "");
 
         // Remove excessive whitespace and empty lines
         let lines: Vec<&str> = clean_text
@@ -432,7 +451,11 @@ impl HtProcess {
             .filter(|line| !line.is_empty())
             .collect();
 
-        lines.join("\n")
+        if lines.is_empty() {
+            String::new()
+        } else {
+            lines.join(" ")
+        }
     }
 }
 

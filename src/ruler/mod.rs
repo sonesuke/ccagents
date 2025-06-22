@@ -21,12 +21,14 @@ pub struct Ruler {
     rules: Arc<RwLock<Vec<CompiledRule>>>,
     agents: HashMap<String, Agent>,
     test_mode: bool,
+    #[allow(dead_code)]
     next_port: u16,
+    #[allow(dead_code)]
     queue_manager: Option<SharedQueueManager>,
 }
 
-#[allow(dead_code)]
 impl Ruler {
+    #[allow(dead_code)]
     pub async fn new(config_path: &str) -> Result<Self> {
         Self::with_queue_manager(config_path, None).await
     }
@@ -68,6 +70,7 @@ impl Ruler {
         })
     }
 
+    #[allow(dead_code)]
     pub async fn create_agent(&mut self, agent_id: &str) -> Result<()> {
         if self.agents.contains_key(agent_id) {
             return Err(anyhow::anyhow!("Agent {} already exists", agent_id));
@@ -81,6 +84,7 @@ impl Ruler {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn get_agent(&self, agent_id: &str) -> Result<&Agent> {
         self.agents
             .get(agent_id)
@@ -119,10 +123,12 @@ impl Ruler {
             .collect()
     }
 
+    #[allow(dead_code)]
     pub fn get_queue_manager(&self) -> Option<&SharedQueueManager> {
         self.queue_manager.as_ref()
     }
 
+    #[allow(dead_code)]
     pub async fn reload_config(&self, config_path: &str) -> Result<()> {
         let (new_entries, new_rules) = load_config(std::path::Path::new(config_path))?;
 

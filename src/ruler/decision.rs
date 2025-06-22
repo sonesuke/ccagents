@@ -45,6 +45,14 @@ pub fn decide_action(capture: &str, rules: &[CompiledRule]) -> ActionType {
                         command: resolved_command,
                     }
                 }
+                ActionType::EnqueueDedupe { queue, command } => {
+                    let resolved_queue = resolve_capture_groups(queue, &captured_groups);
+                    let resolved_command = resolve_capture_groups(command, &captured_groups);
+                    ActionType::EnqueueDedupe {
+                        queue: resolved_queue,
+                        command: resolved_command,
+                    }
+                }
             };
 
             return resolved_action;

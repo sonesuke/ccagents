@@ -4,12 +4,14 @@ use crate::ruler::types::ActionType;
 use anyhow::Result;
 use tokio::time::Duration;
 
+#[allow(dead_code)]
 pub struct ActionExecutor {
     test_mode: bool,
     queue_manager: Option<SharedQueueManager>,
 }
 
 impl ActionExecutor {
+    #[allow(dead_code)]
     pub fn new(test_mode: bool) -> Self {
         Self {
             test_mode,
@@ -26,6 +28,7 @@ impl ActionExecutor {
     }
 
     /// Execute an action based on the ActionType system
+    #[allow(dead_code)]
     pub async fn execute_action(&self, agent: &Agent, action: ActionType) -> Result<()> {
         match action {
             ActionType::SendKeys(keys) => {
@@ -50,11 +53,21 @@ impl ActionExecutor {
                 );
                 self.execute_and_enqueue(&queue, &command).await?;
             }
+            ActionType::EnqueueDedupe { queue, command } => {
+                println!(
+                    "→ Executing command '{}' and enqueuing to dedupe '{}' for agent {}",
+                    command,
+                    queue,
+                    agent.id()
+                );
+                self.execute_and_enqueue_dedupe(&queue, &command).await?;
+            }
         }
         Ok(())
     }
 
     /// Send keys directly to the terminal
+    #[allow(dead_code)]
     async fn send_keys_to_agent(&self, agent: &Agent, keys: Vec<String>) -> Result<()> {
         if self.test_mode {
             println!(
@@ -79,6 +92,7 @@ impl ActionExecutor {
     }
 
     /// Execute a workflow by name
+    #[allow(dead_code)]
     async fn execute_workflow(
         &self,
         _agent: &Agent,
@@ -94,6 +108,7 @@ impl ActionExecutor {
     }
 
     /// Execute a command and enqueue its output to a queue
+    #[allow(dead_code)]
     async fn execute_and_enqueue(&self, queue_name: &str, command: &str) -> Result<()> {
         if self.test_mode {
             println!(
@@ -113,6 +128,34 @@ impl ActionExecutor {
         let count = executor.execute_and_enqueue(queue_name, command).await?;
 
         println!("✅ Enqueued {} items to queue '{}'", count, queue_name);
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    async fn execute_and_enqueue_dedupe(&self, queue_name: &str, command: &str) -> Result<()> {
+        if self.test_mode {
+            println!(
+                "ℹ️ Test mode: would execute command '{}' and enqueue to dedupe '{}'",
+                command, queue_name
+            );
+            return Ok(());
+        }
+
+        let queue_manager = self
+            .queue_manager
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Queue manager not initialized"))?;
+
+        // Use QueueExecutor for command execution with deduplication
+        let executor = crate::queue::QueueExecutor::new(queue_manager.clone());
+        let count = executor
+            .execute_and_enqueue_dedupe(queue_name, command)
+            .await?;
+
+        println!(
+            "✅ Enqueued {} new items to dedupe queue '{}'",
+            count, queue_name
+        );
         Ok(())
     }
 }
