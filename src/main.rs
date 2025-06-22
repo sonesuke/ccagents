@@ -11,8 +11,10 @@ use ruler::entry::TriggerType;
 use ruler::rule::resolve_task_placeholder_in_vec;
 use ruler::Ruler;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::signal;
 use tokio::time::interval;
+use tracing::info;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -23,6 +25,10 @@ struct Cli {
     /// Path to config YAML file
     #[arg(short, long, global = true)]
     rules: Option<PathBuf>,
+
+    /// Enable debug logging for internal details
+    #[arg(short, long, global = true)]
+    debug: bool,
 }
 
 #[derive(Subcommand, Debug)]
@@ -52,11 +58,18 @@ struct TestArgs {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize logging
-    tracing_subscriber::fmt::init();
-
-    // Parse command line arguments
+    // Parse command line arguments first to get debug flag
     let cli = Cli::parse();
+
+    // Initialize logging based on debug flag
+    if cli.debug {
+        tracing_subscriber::fmt::init();
+    } else {
+        // Only show error logs when debug is disabled
+        tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::ERROR)
+            .init();
+    }
 
     match cli.command {
         None => {
@@ -67,14 +80,11 @@ async fn main() -> Result<()> {
             let queue_manager = create_shared_manager();
 
             // Create ruler with queue manager
-            let mut ruler = Ruler::with_queue_manager(
+            let ruler = Ruler::with_queue_manager(
                 rules_path.to_str().unwrap(),
                 Some(queue_manager.clone()),
             )
             .await?;
-
-            // Create a single agent for mock.sh testing
-            ruler.create_agent("main").await?;
 
             println!("🎯 RuleAgents started");
             println!("📂 Config file: {}", rules_path.display());
@@ -82,8 +92,8 @@ async fn main() -> Result<()> {
             println!("💡 Type 'entry' in the terminal to start mock.sh");
             println!("🛑 Press Ctrl+C to stop");
 
-            // Monitor terminal output and apply rules
-            let agent = ruler.get_agent("main").await?;
+            // Create agent directly
+            let agent = Arc::new(agent::Agent::new("main".to_string(), false, 9990).await?);
 
             // Wait a moment for terminal to be ready
             tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
@@ -95,7 +105,7 @@ async fn main() -> Result<()> {
             if !on_start_entries.is_empty() {
                 println!("🎬 Executing on_start entries...");
                 for entry in on_start_entries {
-                    execute_entry_action(agent, &entry, &queue_manager).await?;
+                    execute_entry_action(&agent, &entry, &queue_manager).await?;
                 }
             }
 
@@ -131,9 +141,51 @@ async fn main() -> Result<()> {
             // Setup queue listeners for enqueue entries
             let enqueue_entries = ruler.get_enqueue_entries().await;
             println!("📡 Setting up {} queue listeners...", enqueue_entries.len());
-            for entry in &enqueue_entries {
+            let mut queue_handles = Vec::new();
+            for entry in enqueue_entries {
                 if let TriggerType::Enqueue { queue_name } = &entry.trigger {
+                    let queue_name_clone = queue_name.clone();
                     println!("📡 Listening to queue: {}", queue_name);
+
+                    // Subscribe to queue and get receiver
+                    let mut receiver = {
+                        let mut manager = queue_manager.write().await;
+                        manager.subscribe(queue_name)
+                    };
+
+                    // Clone necessary data for the async task
+                    let entry_clone = entry;
+                    let agent_clone = Arc::clone(&agent);
+                    let queue_manager_clone = queue_manager.clone();
+
+                    // Spawn task to listen for queue items
+                    let handle = tokio::spawn(async move {
+                        while let Some(task_item) = receiver.recv().await {
+                            println!(
+                                "🎯 Queue '{}' received item: '{}'",
+                                queue_name_clone, task_item
+                            );
+
+                            // Resolve task placeholders in the entry
+                            let resolved_entry =
+                                resolve_entry_task_placeholders(&entry_clone, &task_item);
+
+                            // Execute the entry action with resolved placeholders
+                            if let Err(e) = execute_entry_action(
+                                &agent_clone,
+                                &resolved_entry,
+                                &queue_manager_clone,
+                            )
+                            .await
+                            {
+                                println!(
+                                    "❌ Error executing queue entry '{}': {}",
+                                    resolved_entry.name, e
+                                );
+                            }
+                        }
+                    });
+                    queue_handles.push(handle);
                 }
             }
 
@@ -198,16 +250,16 @@ async fn main() -> Result<()> {
                                         }
                                     }
 
-                                    println!("🔍 Buffer length: prev={}, curr={}", previous_output.len(), current_output.len());
-                                    println!("🔍 Common prefix length: {}", common_prefix_len);
-                                    // Filter out content that only contains ANSI escape sequences or whitespace
-                                let meaningful_content = new_content.chars()
-                                    .filter(|c| !c.is_whitespace() && *c != '\u{9b}' && !c.is_control())
-                                    .count() > 0;
-
+                                    // Debug info (only shown with --debug flag)
+                                    info!("Buffer length: prev={}, curr={}", previous_output.len(), current_output.len());
+                                    info!("Common prefix length: {}", common_prefix_len);
                                 if !new_content.is_empty() {
-                                    if meaningful_content {
-                                        println!("📄 NEW content detected: {:?}", &new_content[..new_content.len().min(200)]);
+                                    // Always clean the content first
+                                    let clean_content = agent::ht_process::HtProcess::clean_terminal_output(&new_content);
+
+                                    // Check if cleaned content has meaningful text
+                                    if !clean_content.trim().is_empty() {
+                                        println!("📄 NEW content detected: {:?}", &clean_content[..clean_content.len().min(200)]);
                                     } else {
                                         println!("📄 Ignoring ANSI escape sequences");
                                     }
@@ -215,7 +267,8 @@ async fn main() -> Result<()> {
                                 } else {
                                     // First time - entire output is "new"
                                     new_content = current_output.to_string();
-                                    println!("📄 Initial buffer content: {:?}", &new_content[..new_content.len().min(200)]);
+                                    let clean_content = agent::ht_process::HtProcess::clean_terminal_output(&new_content);
+                                    println!("📄 Initial buffer content: {:?}", &clean_content[..clean_content.len().min(200)]);
                                 }
 
                                 // === SCRIPT STATE DETECTION ===
@@ -272,6 +325,18 @@ async fn main() -> Result<()> {
                                                 }
                                                 Err(e) => {
                                                     eprintln!("❌ Error executing enqueue action: {}", e);
+                                                }
+                                            }
+                                        }
+                                        ruler::types::ActionType::EnqueueDedupe { queue, command } => {
+                                            println!("📦 Matched enqueue_dedupe to '{}': {}", queue, command);
+                                            let executor = QueueExecutor::new(queue_manager.clone());
+                                            match executor.execute_and_enqueue_dedupe(&queue, &command).await {
+                                                Ok(count) => {
+                                                    println!("✅ Enqueued {} new items to dedupe queue '{}'", count, queue);
+                                                }
+                                                Err(e) => {
+                                                    eprintln!("❌ Error executing enqueue_dedupe action: {}", e);
                                                 }
                                             }
                                         }
@@ -372,6 +437,18 @@ async fn execute_periodic_entry(
             let count = executor.execute_and_enqueue(queue, command).await?;
             println!("✅ Enqueued {} items to queue '{}'", count, queue);
         }
+        ruler::types::ActionType::EnqueueDedupe { queue, command } => {
+            println!(
+                "📦 Executing periodic entry '{}' → EnqueueDedupe to '{}': {}",
+                entry.name, queue, command
+            );
+            let executor = QueueExecutor::new(queue_manager.clone());
+            let count = executor.execute_and_enqueue_dedupe(queue, command).await?;
+            println!(
+                "✅ Enqueued {} new items to dedupe queue '{}'",
+                count, queue
+            );
+        }
     }
     Ok(())
 }
@@ -412,12 +489,23 @@ async fn execute_entry_action(
             let count = executor.execute_and_enqueue(queue, command).await?;
             println!("✅ Enqueued {} items to queue '{}'", count, queue);
         }
+        ruler::types::ActionType::EnqueueDedupe { queue, command } => {
+            println!(
+                "📦 Executing entry '{}' → EnqueueDedupe to '{}': {}",
+                entry.name, queue, command
+            );
+            let executor = QueueExecutor::new(queue_manager.clone());
+            let count = executor.execute_and_enqueue_dedupe(queue, command).await?;
+            println!(
+                "✅ Enqueued {} new items to dedupe queue '{}'",
+                count, queue
+            );
+        }
     }
     Ok(())
 }
 
 /// Resolve <task> placeholders in entry action with actual task value
-#[allow(dead_code)]
 fn resolve_entry_task_placeholders(
     entry: &ruler::entry::CompiledEntry,
     task_value: &str,
@@ -436,6 +524,14 @@ fn resolve_entry_task_placeholders(
             let resolved_queue = ruler::rule::resolve_task_placeholder(queue, task_value);
             let resolved_command = ruler::rule::resolve_task_placeholder(command, task_value);
             ruler::types::ActionType::Enqueue {
+                queue: resolved_queue,
+                command: resolved_command,
+            }
+        }
+        ruler::types::ActionType::EnqueueDedupe { queue, command } => {
+            let resolved_queue = ruler::rule::resolve_task_placeholder(queue, task_value);
+            let resolved_command = ruler::rule::resolve_task_placeholder(command, task_value);
+            ruler::types::ActionType::EnqueueDedupe {
                 queue: resolved_queue,
                 command: resolved_command,
             }

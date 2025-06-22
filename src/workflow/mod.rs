@@ -15,13 +15,14 @@ use tokio::sync::Mutex;
 pub struct Workflow {
     sessions: Arc<Mutex<SessionStore>>,
     executor: ActionExecutor,
+
     #[allow(dead_code)]
     hot_reloader: Option<HotReloader>,
     test_mode: bool,
 }
 
-#[allow(dead_code)]
 impl Workflow {
+    #[allow(dead_code)]
     pub async fn new(test_mode: bool, rules_path: Option<&str>) -> Result<Self> {
         // Initialize session store with default persistence file
         let session_file = if test_mode {
@@ -55,6 +56,7 @@ impl Workflow {
         })
     }
 
+    #[allow(dead_code)]
     pub async fn handle_waiting_state(
         &self,
         agent: &Agent,
@@ -194,6 +196,7 @@ impl Workflow {
         Err(anyhow::anyhow!("Terminal session recovery incomplete"))
     }
 
+    #[allow(dead_code)]
     pub async fn execute_resume_command(&self, agent: &Agent) -> Result<()> {
         println!("▶️ Executing resume command for agent {}", agent.id());
 
@@ -290,21 +293,25 @@ impl Workflow {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn cleanup_old_sessions(&self, max_age_hours: u64) -> Result<()> {
         let mut sessions = self.sessions.lock().await;
         sessions.cleanup_old_sessions(max_age_hours).await
     }
 
+    #[allow(dead_code)]
     pub async fn list_sessions(&self) -> Vec<crate::workflow::session::SessionState> {
         let sessions = self.sessions.lock().await;
         sessions.list_sessions().into_iter().cloned().collect()
     }
 
+    #[allow(dead_code)]
     pub async fn remove_session(&self, agent_id: &str) -> Result<bool> {
         let mut sessions = self.sessions.lock().await;
         sessions.remove_session(agent_id).await
     }
 
+    #[allow(dead_code)]
     pub async fn force_cleanup_agent(&self, agent: &Agent) -> Result<()> {
         println!("🧹 Force cleaning up agent session: {}", agent.id());
 
@@ -327,6 +334,7 @@ impl Workflow {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn emergency_stop_all(&self, agents: &[&Agent]) -> Result<()> {
         println!("🚨 Emergency stop: cleaning up all sessions");
 

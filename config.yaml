@@ -1,19 +1,25 @@
-# Entry and Rule definitions for agent automation
+# RuleAgents Default Configuration
+#
+# This is the default configuration file that demonstrates basic automation.
+# For more examples, see the examples/ directory:
+# - examples/basic/config.yaml - Basic pattern matching and on_start triggers
+# - examples/simple_queue/simple_queue.yaml - Queue system with periodic triggers
+# - examples/dedupe_queue/dedupe_example.yaml - Duplicate filtering queues
 
-# External triggers - initiated by user commands
+# External triggers - initiated by system events
 entries:
   - name: "start_mock"
-    trigger: "on_start"
+    trigger: "on_start"           # Automatic startup trigger
     action: "send_keys"
-    keys: ["bash examples/mock.sh", "\r"]
+    keys: ["bash examples/basic/mock.sh", "\r"]
 
 # Automatic detection rules - triggered by terminal state changes
 # Higher priority = earlier in the list (line order matters)
 rules:
-  - pattern: "Do you want to proceed"
+  - pattern: "Do you want to proceed"    # Highest priority
     action: "send_keys"
     keys: ["1", "\r"]
     
-  - pattern: "^exit$"
+  - pattern: "^exit$"                    # Lower priority
     action: "send_keys"
     keys: ["/exit", "\r"]

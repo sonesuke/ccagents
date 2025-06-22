@@ -6,6 +6,7 @@ pub enum ActionType {
     SendKeys(Vec<String>),
     Workflow(String, Vec<String>),
     Enqueue { queue: String, command: String },
+    EnqueueDedupe { queue: String, command: String },
 }
 
 /// Compile action from YAML fields into ActionType
@@ -39,6 +40,18 @@ pub fn compile_action(
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("enqueue action requires 'command' field"))?;
                 ActionType::Enqueue {
+                    queue: queue_name.clone(),
+                    command: command_str.clone(),
+                }
+            }
+            "enqueue_dedupe" => {
+                let queue_name = queue.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("enqueue_dedupe action requires 'queue' field")
+                })?;
+                let command_str = command.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("enqueue_dedupe action requires 'command' field")
+                })?;
+                ActionType::EnqueueDedupe {
                     queue: queue_name.clone(),
                     command: command_str.clone(),
                 }

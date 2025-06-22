@@ -25,11 +25,15 @@ pub enum AgentState {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
+
 pub struct StateTransition {
+    #[allow(dead_code)]
     pub from: AgentState,
+    #[allow(dead_code)]
     pub to: AgentState,
+    #[allow(dead_code)]
     pub timestamp: Instant,
+    #[allow(dead_code)]
     pub snapshot: TerminalSnapshot,
 }
 
@@ -37,12 +41,16 @@ pub struct StateTransition {
 #[allow(dead_code)]
 pub struct MonitorConfig {
     /// Interval between terminal snapshots for change detection
+    #[allow(dead_code)]
     pub change_detection_interval: Duration,
     /// How long to wait without output changes before transitioning to Wait state
+    #[allow(dead_code)]
     pub output_stable_duration: Duration,
     /// Regex patterns to detect shell prompts (indicates Idle state)
+    #[allow(dead_code)]
     pub prompt_patterns: Vec<String>,
     /// Maximum number of snapshots to keep for comparison
+    #[allow(dead_code)]
     pub max_snapshot_history: usize,
 }
 
@@ -76,14 +84,15 @@ pub struct TerminalOutputMonitor {
     running: bool,
 }
 
-#[allow(dead_code)]
 impl TerminalOutputMonitor {
     /// Create a new TerminalOutputMonitor
+    #[allow(dead_code)]
     pub fn new(agent_id: String) -> Self {
         Self::with_config(agent_id, MonitorConfig::default())
     }
 
     /// Create a new TerminalOutputMonitor with custom configuration
+    #[allow(dead_code)]
     pub fn with_config(agent_id: String, config: MonitorConfig) -> Self {
         // Compile regex patterns
         let prompt_patterns = config
@@ -111,6 +120,7 @@ impl TerminalOutputMonitor {
     }
 
     /// Start monitoring terminal output and return a receiver for state transitions
+    #[allow(dead_code)]
     pub fn start_monitoring(&mut self) -> mpsc::UnboundedReceiver<StateTransition> {
         let (tx, rx) = mpsc::unbounded_channel();
         self.state_tx = Some(tx);
@@ -125,6 +135,7 @@ impl TerminalOutputMonitor {
     }
 
     /// Stop monitoring
+    #[allow(dead_code)]
     pub fn stop_monitoring(&mut self) {
         self.running = false;
         self.state_tx = None;
@@ -135,6 +146,7 @@ impl TerminalOutputMonitor {
     }
 
     /// Process a new terminal snapshot and detect state changes
+    #[allow(dead_code)]
     pub async fn process_snapshot(&mut self, snapshot: TerminalSnapshot) -> Result<()> {
         if !self.running {
             return Err(anyhow::anyhow!("Monitor not running"));
@@ -241,6 +253,7 @@ impl TerminalOutputMonitor {
     }
 
     /// Get the current state
+    #[allow(dead_code)]
     pub fn current_state(&self) -> &AgentState {
         &self.current_state
     }

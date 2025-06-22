@@ -22,6 +22,7 @@ impl std::fmt::Debug for HotReloader {
 }
 
 impl HotReloader {
+    #[allow(dead_code)]
     pub async fn new(rules_path: &str) -> Result<Self> {
         // Load initial rules using existing function from #3
         let initial_rules = load_rules(Path::new(rules_path))?;
@@ -59,6 +60,7 @@ impl HotReloader {
     }
 }
 
+#[allow(dead_code)]
 async fn reload_rules(rules: Arc<RwLock<Vec<CompiledRule>>>, path: String) {
     // Debouncing - wait for file operations to complete
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
