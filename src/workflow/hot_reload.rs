@@ -1,5 +1,5 @@
-use crate::ruler::rule_loader::load_rules;
-use crate::ruler::rule_types::CompiledRule;
+use crate::ruler::config::load_rules;
+use crate::ruler::rule::CompiledRule;
 use anyhow::Result;
 use notify::{RecommendedWatcher, RecursiveMode, Result as NotifyResult, Watcher};
 use std::path::Path;

@@ -7,7 +7,16 @@ This guide explains how to use the mock script and rules to test the agent autom
 The mock test scenario provides a concrete example of how `rule-agents` can automate interactive processes. It consists of:
 
 - **`mock.sh`**: A bash script that simulates an interactive process with countdown and user prompts
-- **`mock-rules.yaml`**: Rule definitions that automate interactions with the script
+- **`config.yaml`**: Entry and rule definitions that control automation behavior
+
+## Concepts
+
+### Entries vs Rules
+
+The system distinguishes between two types of automation:
+
+- **Entries**: External triggers initiated by system events (e.g., startup, user commands)
+- **Rules**: Automatic detection triggered by terminal state changes (e.g., prompts, output patterns)
 
 ## Setup
 
@@ -25,19 +34,17 @@ The mock test scenario provides a concrete example of how `rule-agents` can auto
 
 ### Basic Usage
 
-Run rule-agents with the mock rules:
+Run rule-agents with the config:
 
 ```bash
-rule-agents --rules examples/mock-rules.yaml
+rule-agents --rules config.yaml
 ```
 
 ### Test Flow
 
-1. **Start the test**:
-   ```
-   > entry
-   ```
-   This command triggers the mock script execution.
+1. **Automatic startup**:
+   - The `on_start` entry trigger automatically starts the mock script
+   - No manual command input required
 
 2. **Automatic flow**:
    - The script displays a 5-second countdown
@@ -45,36 +52,52 @@ rule-agents --rules examples/mock-rules.yaml
    - The script processes for 3 seconds
    - Displays "MISSION COMPLETE" and exits
 
-3. **Manual controls**:
-   - `exit`: Sends `/exit` to the script to terminate it gracefully
-   - `cancel`: Sends Ctrl+C to interrupt the script
-   - `resume`: Legacy command (displays deprecation message)
+3. **Terminal access**:
+   - Open http://localhost:9990 in your browser to view the automated terminal
+   - The automation runs automatically without user intervention
 
-## Testing Different Scenarios
+## Configuration Structure
 
-### Test Automatic Response
+### config.yaml Format
+
+```yaml
+# External triggers - initiated by system events
+entries:
+  - name: "start_mock"
+    trigger: "on_start"    # Automatic startup trigger
+    action: "send_keys"
+    keys: ["bash examples/mock.sh", "\r"]
+
+# Automatic detection rules - triggered by terminal state changes
+# Higher priority = earlier in the list (line order matters)
+rules:
+  - pattern: "Do you want to proceed"  # Highest priority
+    action: "send_keys"
+    keys: ["1", "\r"]
+    
+  - pattern: "^exit$"                  # Lower priority
+    action: "send_keys"
+    keys: ["/exit", "\r"]
+```
+
+### Testing Different Scenarios
+
+#### Test Automatic Response
 ```bash
 # This tests the full automated flow
-rule-agents test --rules examples/mock-rules.yaml --capture "entry"
+rule-agents test --rules config.yaml --capture "Do you want to proceed"
 ```
 
-### Test Exit Command
+#### Test Exit Command Detection
 ```bash
 # This tests the exit command handling
-rule-agents test --rules examples/mock-rules.yaml --capture "exit"
-```
-
-### Test Cancel Command
-```bash
-# This tests the cancel/interrupt handling
-rule-agents test --rules examples/mock-rules.yaml --capture "cancel"
+rule-agents test --rules config.yaml --capture "exit"
 ```
 
 ## Expected Behavior
 
 ### Successful Run
 ```
-> entry
 === Mock Test Script ===
 This script simulates an interactive process for testing rule-agents.
 
@@ -90,7 +113,7 @@ Do you want to proceed?
 1) Continue with mission
 2) Cancel operation
 (Type '/exit' to exit the script)
-Enter your choice: 1
+Enter your choice: 1                    # ← Automatically selected by rules
 Processing request...
 Processing... (1/3)
 Processing... (2/3)
@@ -99,6 +122,8 @@ Processing... (3/3)
 === MISSION COMPLETE ===
 The operation has been successfully completed!
 ```
+
+Note: The script starts automatically via the `on_start` trigger, and "1" is selected automatically when the "Do you want to proceed?" prompt appears.
 
 ## Manual Script Testing
 
@@ -124,7 +149,7 @@ This test scenario can be integrated into CI pipelines:
 - name: Test Mock Scenario
   run: |
     chmod +x examples/mock.sh
-    timeout 30s rule-agents test --rules examples/mock-rules.yaml --capture "entry"
+    timeout 30s rule-agents --rules config.yaml
 ```
 
 ## Troubleshooting
@@ -132,14 +157,23 @@ This test scenario can be integrated into CI pipelines:
 1. **Script not found**: Ensure you're running from the project root directory
 2. **Permission denied**: Run `chmod +x examples/mock.sh`
 3. **Timeout issues**: The full test should complete in about 10 seconds
-4. **No auto-response**: Check that the capture pattern in `mock-rules.yaml` matches exactly
+4. **No auto-response**: Check that the pattern in `config.yaml` matches exactly
+5. **Script doesn't start**: Verify the `on_start` trigger is properly configured
+
+## Key Features
+
+- **Automatic startup**: No manual intervention required
+- **Priority-based rules**: Line order determines rule priority
+- **Clear separation**: Entries for triggers, rules for detection
+- **Web interface**: View automation in real-time at http://localhost:9990
 
 ## Extending the Test
 
 You can modify the mock scenario to test more complex interactions:
 
 1. Add more prompts to `mock.sh`
-2. Define corresponding rules in `mock-rules.yaml`
-3. Test different response patterns and timing scenarios
+2. Define corresponding rules in `config.yaml`
+3. Test different trigger types and response patterns
+4. Experiment with rule priorities and pattern matching
 
 This mock test provides a foundation for developing and testing more sophisticated automation scenarios with rule-agents.

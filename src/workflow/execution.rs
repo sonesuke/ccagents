@@ -1,5 +1,5 @@
 use crate::agent::Agent;
-use crate::ruler::rule_types::ActionType;
+use crate::ruler::types::ActionType;
 use anyhow::Result;
 use tokio::time::Duration;
 

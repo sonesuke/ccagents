@@ -1,5 +1,6 @@
-use crate::ruler::rule_loader::resolve_capture_groups_in_vec;
-use crate::ruler::rule_types::{ActionType, CompiledRule};
+use crate::ruler::rule::resolve_capture_groups_in_vec;
+use crate::ruler::rule::CompiledRule;
+use crate::ruler::types::ActionType;
 
 /// Matches capture text against compiled rules and returns the appropriate action.
 ///
@@ -51,22 +52,19 @@ mod tests {
     use super::*;
     use regex::Regex;
 
-    fn create_test_rule(priority: u32, pattern: &str, keys: Vec<String>) -> CompiledRule {
+    fn create_test_rule(pattern: &str, keys: Vec<String>) -> CompiledRule {
         CompiledRule {
-            priority,
             regex: Regex::new(pattern).unwrap(),
             action: ActionType::SendKeys(keys),
         }
     }
 
     fn create_workflow_rule(
-        priority: u32,
         pattern: &str,
         workflow: String,
         args: Vec<String>,
     ) -> CompiledRule {
         CompiledRule {
-            priority,
             regex: Regex::new(pattern).unwrap(),
             action: ActionType::Workflow(workflow, args),
         }
@@ -76,11 +74,10 @@ mod tests {
     fn test_decide_action_exact_match() {
         let rules = vec![
             create_test_rule(
-                10,
                 r"issue\s+(\d+)",
                 vec!["open_issue".to_string(), "${1}".to_string()],
             ),
-            create_test_rule(20, r"resume", vec!["resume_task".to_string()]),
+            create_test_rule(r"resume", vec!["resume_task".to_string()]),
         ];
 
         let action = decide_action("issue 123", &rules);
@@ -93,8 +90,8 @@ mod tests {
     #[test]
     fn test_decide_action_priority_ordering() {
         let rules = vec![
-            create_test_rule(10, r"test", vec!["high_priority".to_string()]),
-            create_test_rule(20, r"test", vec!["low_priority".to_string()]),
+            create_test_rule(r"test", vec!["high_priority".to_string()]),
+            create_test_rule(r"test", vec!["low_priority".to_string()]),
         ];
 
         // Should match the first rule (higher priority - lower number)
@@ -108,8 +105,8 @@ mod tests {
     #[test]
     fn test_decide_action_no_match() {
         let rules = vec![
-            create_test_rule(10, r"issue\s+(\d+)", vec!["open_issue".to_string()]),
-            create_test_rule(20, r"resume", vec!["resume_task".to_string()]),
+            create_test_rule(r"issue\s+(\d+)", vec!["open_issue".to_string()]),
+            create_test_rule(r"resume", vec!["resume_task".to_string()]),
         ];
 
         let action = decide_action("no matching pattern here", &rules);
@@ -119,7 +116,6 @@ mod tests {
     #[test]
     fn test_decide_action_empty_capture() {
         let rules = vec![create_test_rule(
-            10,
             r"issue\s+(\d+)",
             vec!["open_issue".to_string()],
         )];
@@ -156,7 +152,6 @@ mod tests {
     #[test]
     fn test_decide_action_workflow() {
         let rules = vec![create_workflow_rule(
-            10,
             r"fix\s+issue\s+(\d+)",
             "github_issue_fix".to_string(),
             vec!["${1}".to_string()],
@@ -175,7 +170,7 @@ mod tests {
 
         // Create 100 test rules that don't match our test input
         let rules: Vec<CompiledRule> = (0..100)
-            .map(|i| create_test_rule(i, &format!("unique_pattern_{}", i), vec![]))
+            .map(|i| create_test_rule(&format!("unique_pattern_{}", i), vec![]))
             .collect();
 
         let start = Instant::now();
