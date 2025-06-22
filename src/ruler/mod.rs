@@ -4,43 +4,26 @@ pub mod entry;
 pub mod rule;
 pub mod types;
 
-use crate::agent::Agent;
-use crate::queue::SharedQueueManager;
 use crate::ruler::config::load_config;
 use crate::ruler::decision::decide_action;
 use crate::ruler::entry::{CompiledEntry, TriggerType};
 use crate::ruler::rule::CompiledRule;
 use crate::ruler::types::ActionType;
 use anyhow::Result;
-use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{RwLock, Semaphore};
+use tokio::sync::RwLock;
 
 pub struct Ruler {
     entries: Arc<RwLock<Vec<CompiledEntry>>>,
     rules: Arc<RwLock<Vec<CompiledRule>>>,
-    agents: HashMap<String, Agent>,
     test_mode: bool,
-    #[allow(dead_code)]
-    next_port: u16,
-    #[allow(dead_code)]
-    queue_manager: Option<SharedQueueManager>,
-    // Concurrency control for entries - maps entry name to semaphore
-    entry_semaphores: Arc<RwLock<HashMap<String, Arc<Semaphore>>>>,
     // Monitor configuration
     monitor_config: config::MonitorConfig,
 }
 
 impl Ruler {
-    #[allow(dead_code)]
-    pub async fn new(config_path: &str) -> Result<Self> {
-        Self::with_queue_manager(config_path, None).await
-    }
 
-    pub async fn with_queue_manager(
-        config_path: &str,
-        queue_manager: Option<SharedQueueManager>,
-    ) -> Result<Self> {
+    pub async fn new(config_path: &str) -> Result<Self> {
         // Load initial configuration (entries, rules, and monitor config)
         let (initial_entries, initial_rules, monitor_config) =
             load_config(std::path::Path::new(config_path))?;
@@ -65,48 +48,16 @@ impl Ruler {
                 })
                 .unwrap_or(false);
 
-        // Initialize semaphores for each entry based on their concurrency
-        let entry_semaphores = Arc::new(RwLock::new(HashMap::new()));
-        {
-            let mut semaphores_guard = entry_semaphores.write().await;
-            for entry in &initial_entries {
-                let semaphore = Arc::new(Semaphore::new(entry.concurrency));
-                semaphores_guard.insert(entry.name.clone(), semaphore);
-            }
-        }
 
         Ok(Ruler {
             entries,
             rules,
-            agents: HashMap::new(),
             test_mode: is_test,
-            next_port: monitor_config.base_port, // Start from configured base port
-            queue_manager,
-            entry_semaphores,
             monitor_config,
         })
     }
 
-    #[allow(dead_code)]
-    pub async fn create_agent(&mut self, agent_id: &str) -> Result<()> {
-        if self.agents.contains_key(agent_id) {
-            return Err(anyhow::anyhow!("Agent {} already exists", agent_id));
-        }
 
-        let port = self.next_port;
-        self.next_port += 1; // Increment for next agent
-
-        let agent = Agent::new(agent_id.to_string(), self.test_mode, port).await?;
-        self.agents.insert(agent_id.to_string(), agent);
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    pub async fn get_agent(&self, agent_id: &str) -> Result<&Agent> {
-        self.agents
-            .get(agent_id)
-            .ok_or_else(|| anyhow::anyhow!("Agent {} not found", agent_id))
-    }
 
     pub async fn get_entries(&self) -> Vec<CompiledEntry> {
         self.entries.read().await.clone()
@@ -140,55 +91,13 @@ impl Ruler {
             .collect()
     }
 
-    #[allow(dead_code)]
-    pub fn get_queue_manager(&self) -> Option<&SharedQueueManager> {
-        self.queue_manager.as_ref()
-    }
 
-    #[allow(dead_code)]
-    pub async fn reload_config(&mut self, config_path: &str) -> Result<()> {
-        let (new_entries, new_rules, new_monitor_config) =
-            load_config(std::path::Path::new(config_path))?;
-
-        // Update entries
-        let mut entries_guard = self.entries.write().await;
-        *entries_guard = new_entries.clone();
-        drop(entries_guard);
-
-        // Update rules
-        let mut rules_guard = self.rules.write().await;
-        *rules_guard = new_rules;
-        drop(rules_guard);
-
-        // Update semaphores for new entries
-        let mut semaphores_guard = self.entry_semaphores.write().await;
-        semaphores_guard.clear();
-        for entry in &new_entries {
-            let semaphore = Arc::new(Semaphore::new(entry.concurrency));
-            semaphores_guard.insert(entry.name.clone(), semaphore);
-        }
-
-        // Update monitor config
-        self.monitor_config = new_monitor_config;
-
-        println!(
-            "✅ Configuration reloaded successfully from {}",
-            config_path
-        );
-        Ok(())
-    }
 
     pub async fn decide_action_for_capture(&self, capture: &str) -> ActionType {
         let rules = self.get_rules().await;
         decide_action(capture, &rules)
     }
 
-    /// Acquire a semaphore permit for the given entry to control concurrency
-    #[allow(dead_code)]
-    pub async fn acquire_entry_permit(&self, entry_name: &str) -> Option<Arc<Semaphore>> {
-        let semaphores_guard = self.entry_semaphores.read().await;
-        semaphores_guard.get(entry_name).cloned()
-    }
 
     /// Get monitor configuration
     pub fn get_monitor_config(&self) -> &config::MonitorConfig {
@@ -199,7 +108,6 @@ impl Ruler {
 impl std::fmt::Debug for Ruler {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Ruler")
-            .field("agents", &self.agents.keys().collect::<Vec<_>>())
             .field("test_mode", &self.test_mode)
             .finish()
     }

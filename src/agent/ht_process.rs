@@ -3,10 +3,9 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
-use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
+use std::sync::{atomic::AtomicBool, Arc};
 use thiserror::Error;
 use tokio::sync::{mpsc, Mutex};
-use tokio::time::{sleep, Duration};
 use tracing::{debug, error, info, warn};
 
 #[derive(Debug, Error)]
@@ -15,9 +14,6 @@ pub enum HtProcessError {
     StartupFailure(String),
     #[error("HT process communication error: {0}")]
     CommunicationError(String),
-    #[error("HT process crashed: {0}")]
-    #[allow(dead_code)]
-    ProcessCrashed(String),
     #[error("HT process not running")]
     NotRunning,
     #[error("JSON serialization/deserialization error: {0}")]
@@ -103,25 +99,6 @@ impl HtProcess {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn with_default_config() -> Self {
-        Self::new(HtProcessConfig::default())
-    }
-
-    #[allow(dead_code)]
-    pub fn enable_auto_restart(&self) {
-        self.auto_restart.store(true, Ordering::SeqCst);
-    }
-
-    #[allow(dead_code)]
-    pub fn disable_auto_restart(&self) {
-        self.auto_restart.store(false, Ordering::SeqCst);
-    }
-
-    #[allow(dead_code)]
-    pub fn is_auto_restart_enabled(&self) -> bool {
-        self.auto_restart.load(Ordering::SeqCst)
-    }
 
     pub async fn start(&self) -> Result<(), HtProcessError> {
         let mut process_lock = self.process.lock().await;
@@ -212,46 +189,6 @@ impl HtProcess {
         Ok(())
     }
 
-    #[allow(dead_code)]
-    pub async fn stop(&self) -> Result<(), HtProcessError> {
-        // Stop the monitor first to prevent restart attempts
-        self.monitor_running.store(false, Ordering::SeqCst);
-
-        let mut process_lock = self.process.lock().await;
-
-        if let Some(mut child) = process_lock.take() {
-            info!("Stopping HT process");
-
-            // Try graceful shutdown first
-            if let Err(e) = child.kill() {
-                warn!("Failed to kill HT process gracefully: {}", e);
-            }
-
-            // Wait for process to exit
-            match child.wait() {
-                Ok(status) => {
-                    info!("HT process exited with status: {}", status);
-                }
-                Err(e) => {
-                    error!("Error waiting for HT process to exit: {}", e);
-                }
-            }
-
-            // Clear communication channels
-            *self.sender.lock().await = None;
-            *self.receiver.lock().await = None;
-        } else {
-            warn!("HT process is not running");
-        }
-
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    pub async fn is_running(&self) -> bool {
-        let process_lock = self.process.lock().await;
-        process_lock.is_some()
-    }
 
     pub async fn send_input(&self, input: String) -> Result<(), HtProcessError> {
         let sender_lock = self.sender.lock().await;
@@ -307,54 +244,6 @@ impl HtProcess {
         }
     }
 
-    #[allow(dead_code)]
-    pub async fn restart(&self) -> Result<(), HtProcessError> {
-        info!("Restarting HT process");
-
-        // Stop current process
-        self.stop().await?;
-
-        // Wait before restart
-        sleep(Duration::from_millis(self.config.restart_delay_ms)).await;
-
-        // Start new process
-        self.start().await?;
-
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    pub async fn restart_with_retry(&self) -> Result<(), HtProcessError> {
-        let mut attempts = 0;
-
-        while attempts < self.config.restart_attempts {
-            attempts += 1;
-
-            match self.restart().await {
-                Ok(()) => {
-                    info!("HT process restarted successfully on attempt {}", attempts);
-                    return Ok(());
-                }
-                Err(e) => {
-                    error!(
-                        "Failed to restart HT process on attempt {}: {}",
-                        attempts, e
-                    );
-
-                    if attempts < self.config.restart_attempts {
-                        let delay = self.config.restart_delay_ms * (2_u64.pow(attempts - 1));
-                        warn!("Retrying in {}ms...", delay);
-                        sleep(Duration::from_millis(delay)).await;
-                    }
-                }
-            }
-        }
-
-        Err(HtProcessError::ProcessCrashed(format!(
-            "Failed to restart after {} attempts",
-            self.config.restart_attempts
-        )))
-    }
 
     async fn handle_input(
         mut stdin: std::process::ChildStdin,

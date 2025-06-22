@@ -54,9 +54,7 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
     let queue_manager = create_shared_manager();
 
     // Create ruler with queue manager
-    let ruler =
-        Ruler::with_queue_manager(rules_path.to_str().unwrap(), Some(queue_manager.clone()))
-            .await?;
+    let ruler = Ruler::new(rules_path.to_str().unwrap()).await?;
 
     let base_port = ruler.get_monitor_config().base_port;
 
