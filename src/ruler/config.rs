@@ -23,14 +23,16 @@ pub fn load_config(path: &Path) -> Result<(Vec<CompiledEntry>, Vec<CompiledRule>
 
     let mut compiled_entries = Vec::new();
     for entry in config_file.entries {
-        let compiled = entry.compile()
+        let compiled = entry
+            .compile()
             .with_context(|| format!("Failed to compile entry: {}", entry.name))?;
         compiled_entries.push(compiled);
     }
 
     let mut compiled_rules = Vec::new();
     for rule in config_file.rules {
-        let compiled = rule.compile()
+        let compiled = rule
+            .compile()
             .with_context(|| format!("Failed to compile rule with pattern: {}", rule.pattern))?;
         compiled_rules.push(compiled);
     }

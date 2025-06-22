@@ -14,7 +14,6 @@ pub struct TerminalSnapshot {
     pub height: u32,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AgentState {
     /// Shell prompt is displayed
@@ -64,7 +63,6 @@ impl Default for MonitorConfig {
         }
     }
 }
-
 
 #[allow(dead_code)]
 pub struct TerminalOutputMonitor {
@@ -137,10 +135,7 @@ impl TerminalOutputMonitor {
     }
 
     /// Process a new terminal snapshot and detect state changes
-    pub async fn process_snapshot(
-        &mut self,
-        snapshot: TerminalSnapshot,
-    ) -> Result<()> {
+    pub async fn process_snapshot(&mut self, snapshot: TerminalSnapshot) -> Result<()> {
         if !self.running {
             return Err(anyhow::anyhow!("Monitor not running"));
         }
@@ -249,7 +244,6 @@ impl TerminalOutputMonitor {
     pub fn current_state(&self) -> &AgentState {
         &self.current_state
     }
-
 }
 
 #[cfg(test)]

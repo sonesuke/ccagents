@@ -59,11 +59,7 @@ mod tests {
         }
     }
 
-    fn create_workflow_rule(
-        pattern: &str,
-        workflow: String,
-        args: Vec<String>,
-    ) -> CompiledRule {
+    fn create_workflow_rule(pattern: &str, workflow: String, args: Vec<String>) -> CompiledRule {
         CompiledRule {
             regex: Regex::new(pattern).unwrap(),
             action: ActionType::Workflow(workflow, args),

@@ -65,7 +65,7 @@ impl Ruler {
 
         let port = self.next_port;
         self.next_port += 1; // Increment for next agent
-        
+
         let agent = Agent::new(agent_id.to_string(), self.test_mode, port).await?;
         self.agents.insert(agent_id.to_string(), agent);
         Ok(())
@@ -87,21 +87,25 @@ impl Ruler {
 
     pub async fn get_on_start_entries(&self) -> Vec<CompiledEntry> {
         let entries = self.get_entries().await;
-        entries.into_iter()
+        entries
+            .into_iter()
             .filter(|entry| matches!(entry.trigger, TriggerType::OnStart))
             .collect()
     }
 
     pub async fn reload_config(&self, config_path: &str) -> Result<()> {
         let (new_entries, new_rules) = load_config(std::path::Path::new(config_path))?;
-        
+
         let mut entries_guard = self.entries.write().await;
         *entries_guard = new_entries;
-        
+
         let mut rules_guard = self.rules.write().await;
         *rules_guard = new_rules;
-        
-        println!("✅ Configuration reloaded successfully from {}", config_path);
+
+        println!(
+            "✅ Configuration reloaded successfully from {}",
+            config_path
+        );
         Ok(())
     }
 

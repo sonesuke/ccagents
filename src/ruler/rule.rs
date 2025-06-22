@@ -31,10 +31,7 @@ impl Rule {
 
         let action = compile_action(&self.action, &self.keys, &self.workflow, &self.args)?;
 
-        Ok(CompiledRule {
-            regex,
-            action,
-        })
+        Ok(CompiledRule { regex, action })
     }
 }
 

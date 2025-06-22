@@ -127,13 +127,18 @@ impl HtProcess {
 
         let shell = self.config.shell_command.as_deref().unwrap_or("unknown");
         println!("🐚 Starting HT with shell: {}", shell);
-        println!("🌐 HT terminal web interface available at: http://localhost:{}", self.config.port);
+        println!(
+            "🌐 HT terminal web interface available at: http://localhost:{}",
+            self.config.port
+        );
 
         let mut command = Command::new(&self.config.ht_binary_path);
 
         // Enable web interface on configured port
-        command.arg("-l").arg(format!("0.0.0.0:{}", self.config.port));
-        
+        command
+            .arg("-l")
+            .arg(format!("0.0.0.0:{}", self.config.port));
+
         // Subscribe to snapshot events for terminal output monitoring
         command.arg("--subscribe").arg("snapshot");
 
@@ -271,7 +276,9 @@ impl HtProcess {
                 match receiver.recv().await {
                     Some(response) => match response {
                         HtResponse::View { view, .. } => view.ok_or_else(|| {
-                            HtProcessError::CommunicationError("No view data in response".to_string())
+                            HtProcessError::CommunicationError(
+                                "No view data in response".to_string(),
+                            )
                         }),
                         HtResponse::Snapshot { data, .. } => {
                             // Clean up terminal output by removing ANSI escape sequences
@@ -413,21 +420,20 @@ impl HtProcess {
         // Remove ANSI escape sequences (improved pattern)
         let ansi_regex = regex::Regex::new(r"\x1B\[[0-9;]*[a-zA-Z]|\x1B\[[\?]?[0-9;]*[hlm]|\x1B[>\=]|\x1B[c\d]|\x1B\][0-9];|\x1B\[[0-9A-Z]|\x1B[789]|\x1B\([AB]|\x1B\[[0-9]*[HJKfABCDGR`]|\x1B\[[0-9;]*[rW]|\x1B\[[0-9;]*H").unwrap();
         let without_ansi = ansi_regex.replace_all(raw_output, "");
-        
+
         // Remove control characters and non-printable characters
         let control_regex = regex::Regex::new(r"[\x00-\x1F\x7F]+").unwrap();
         let clean_text = control_regex.replace_all(&without_ansi, " ");
-        
+
         // Remove excessive whitespace and empty lines
         let lines: Vec<&str> = clean_text
             .lines()
             .map(|line| line.trim())
             .filter(|line| !line.is_empty())
             .collect();
-        
+
         lines.join("\n")
     }
-
 }
 
 impl Drop for HtProcess {
