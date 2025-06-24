@@ -4,6 +4,19 @@ use crate::ruler;
 use anyhow::Result;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+fn truncate_unicode_safe(s: &str, max_len: usize) -> &str {
+    if s.len() <= max_len {
+        return s;
+    }
+
+    // Find the last valid UTF-8 character boundary at or before max_len
+    let mut end = max_len;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
+
 /// Execute a periodic entry action (with agent context)
 pub async fn execute_periodic_entry(
     entry: &ruler::entry::CompiledEntry,
@@ -230,26 +243,33 @@ pub async fn process_terminal_output(
 ) -> Result<()> {
     if let Ok(output) = agent.get_output().await {
         if !output.trim().is_empty() {
+            // Skip if output hasn't changed
+            if let Some(ref last) = last_output {
+                if *last == output {
+                    return Ok(());
+                }
+            }
+
             // Detect differential content
             let diff_content = agent.detect_differential_content(&output, last_output.as_deref());
 
             if !diff_content.new_content.is_empty() {
                 // Check if cleaned content has meaningful text
                 if !diff_content.clean_content.trim().is_empty() {
-                    println!(
-                        "📄 NEW content detected: {:?}",
-                        &diff_content.clean_content[..diff_content.clean_content.len().min(200)]
-                    );
-                } else {
-                    println!("📄 Ignoring ANSI escape sequences");
+                    let truncated = truncate_unicode_safe(&diff_content.clean_content, 100);
+                    // Only show meaningful content, skip repetitive box drawing
+                    if !truncated
+                        .chars()
+                        .all(|c| "─│╭╮╯╰".contains(c) || c.is_whitespace())
+                    {
+                        println!("📄 {}", truncated);
+                    }
                 }
             }
 
             if last_output.is_none() {
-                println!(
-                    "📄 Initial buffer content: {:?}",
-                    &diff_content.clean_content[..diff_content.clean_content.len().min(200)]
-                );
+                let truncated = truncate_unicode_safe(&diff_content.clean_content, 100);
+                println!("📄 Initial: {}", truncated);
             }
 
             // === RULE PROCESSING ON NEW CONTENT ===
