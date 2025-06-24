@@ -1,8 +1,8 @@
-pub mod native_ht_process;
-pub mod native_ht_session;
-pub mod native_terminal;
+pub mod pty_process;
+pub mod pty_session;
+pub mod pty_terminal;
 
-use crate::agent::native_ht_process::{NativeHtProcess, NativeHtProcessConfig};
+use crate::agent::pty_process::{PtyProcess, PtyProcessConfig};
 use anyhow::Result;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -77,18 +77,18 @@ impl AgentPool {
 }
 
 pub struct Agent {
-    ht_process: NativeHtProcess,
+    ht_process: PtyProcess,
 }
 
 impl Agent {
     pub async fn new(_id: String, test_mode: bool, _port: u16) -> Result<Self> {
-        let config = NativeHtProcessConfig {
+        let config = PtyProcessConfig {
             shell_command: Some(std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string())),
             cols: 80,
             rows: 24,
         };
 
-        let ht_process = NativeHtProcess::new(config);
+        let ht_process = PtyProcess::new(config);
 
         // Start the HT process
         if !test_mode {

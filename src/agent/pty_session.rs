@@ -1,4 +1,4 @@
-use super::native_terminal::NativeTerminal;
+use super::pty_terminal::PtyTerminal;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -53,17 +53,17 @@ pub enum HtEventData {
     },
 }
 
-pub struct NativeHtSession {
-    terminal: Arc<NativeTerminal>,
+pub struct PtySession {
+    terminal: Arc<PtyTerminal>,
     event_tx: broadcast::Sender<HtEvent>,
     start_time: Instant,
     cols: usize,
     rows: usize,
 }
 
-impl NativeHtSession {
+impl PtySession {
     pub async fn new(command: String, cols: usize, rows: usize) -> Result<Self> {
-        let terminal = Arc::new(NativeTerminal::new(command, cols as u16, rows as u16).await?);
+        let terminal = Arc::new(PtyTerminal::new(command, cols as u16, rows as u16).await?);
 
         let (event_tx, _) = broadcast::channel(1024);
         let now = Instant::now();
@@ -144,7 +144,7 @@ impl NativeHtSession {
 }
 
 async fn output_handler(
-    terminal: Arc<NativeTerminal>,
+    terminal: Arc<PtyTerminal>,
     event_tx: broadcast::Sender<HtEvent>,
     start_time: Instant,
 ) {

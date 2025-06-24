@@ -8,7 +8,7 @@ use tracing::{error, info};
 
 const READ_BUF_SIZE: usize = 4096;
 
-pub struct NativeTerminal {
+pub struct PtyTerminal {
     master_pty: Arc<Mutex<Box<dyn portable_pty::MasterPty + Send>>>,
     reader_handle: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
     writer_handle: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
@@ -18,7 +18,7 @@ pub struct NativeTerminal {
     terminal: Arc<Mutex<vt100::Parser>>,
 }
 
-impl NativeTerminal {
+impl PtyTerminal {
     pub async fn new(command: String, cols: u16, rows: u16) -> Result<Self> {
         info!("Creating native terminal with size {}x{}", cols, rows);
 
@@ -120,7 +120,7 @@ impl NativeTerminal {
             let _ = child.wait();
         });
 
-        let native_terminal = NativeTerminal {
+        let pty_terminal = PtyTerminal {
             master_pty: Arc::new(Mutex::new(pair.master)),
             reader_handle: Arc::new(Mutex::new(Some(reader_handle))),
             writer_handle: Arc::new(Mutex::new(Some(writer_handle))),
@@ -130,7 +130,7 @@ impl NativeTerminal {
             terminal,
         };
 
-        Ok(native_terminal)
+        Ok(pty_terminal)
     }
 
     pub async fn write_input(&self, data: &[u8]) -> Result<()> {
@@ -175,7 +175,7 @@ impl NativeTerminal {
     }
 }
 
-impl Drop for NativeTerminal {
+impl Drop for PtyTerminal {
     fn drop(&mut self) {
         // Abort all background tasks
         if let Ok(mut handle) = self.reader_handle.try_lock() {
