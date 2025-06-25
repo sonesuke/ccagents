@@ -7,7 +7,7 @@ use tokio::sync::broadcast;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
-pub enum HtCommand {
+pub enum PtyCommand {
     #[serde(rename = "input")]
     Input { payload: String },
     #[serde(rename = "sendKeys")]
@@ -19,17 +19,17 @@ pub enum HtCommand {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HtEvent {
+pub struct PtyEvent {
     #[serde(rename = "type")]
     pub event_type: String,
     pub time: f64,
     #[serde(flatten)]
-    pub data: HtEventData,
+    pub data: PtyEventData,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum HtEventData {
+pub enum PtyEventData {
     Init {
         cols: usize,
         rows: usize,
@@ -55,7 +55,7 @@ pub enum HtEventData {
 
 pub struct PtySession {
     terminal: Arc<PtyTerminal>,
-    event_tx: broadcast::Sender<HtEvent>,
+    event_tx: broadcast::Sender<PtyEvent>,
     start_time: Instant,
     cols: usize,
     rows: usize,
@@ -81,37 +81,37 @@ impl PtySession {
         Ok(session)
     }
 
-    pub async fn handle_command(&self, command: HtCommand) -> Result<()> {
+    pub async fn handle_command(&self, command: PtyCommand) -> Result<()> {
         match command {
-            HtCommand::Input { payload } => {
+            PtyCommand::Input { payload } => {
                 self.terminal.write_input(payload.as_bytes()).await?;
             }
-            HtCommand::SendKeys { keys } => {
+            PtyCommand::SendKeys { keys } => {
                 for key in keys {
                     let bytes = parse_key(&key);
                     self.terminal.write_input(&bytes).await?;
                 }
             }
-            HtCommand::Resize { cols, rows } => {
+            PtyCommand::Resize { cols, rows } => {
                 self.terminal.resize(cols as u16, rows as u16).await?;
                 self.emit_resize_event(cols, rows).await;
             }
-            HtCommand::TakeSnapshot => {
+            PtyCommand::TakeSnapshot => {
                 self.emit_snapshot_event().await?;
             }
         }
         Ok(())
     }
 
-    pub async fn subscribe(&self) -> broadcast::Receiver<HtEvent> {
+    pub async fn subscribe(&self) -> broadcast::Receiver<PtyEvent> {
         self.event_tx.subscribe()
     }
 
     async fn emit_resize_event(&self, cols: usize, rows: usize) {
-        let event = HtEvent {
+        let event = PtyEvent {
             event_type: "resize".to_string(),
             time: self.get_elapsed_time().await,
-            data: HtEventData::Resize { cols, rows },
+            data: PtyEventData::Resize { cols, rows },
         };
         let _ = self.event_tx.send(event);
     }
@@ -120,10 +120,10 @@ impl PtySession {
         let content = self.terminal.get_screen_content().await?;
         let (cursor_x, cursor_y) = self.terminal.get_cursor_position().await;
 
-        let event = HtEvent {
+        let event = PtyEvent {
             event_type: "snapshot".to_string(),
             time: self.get_elapsed_time().await,
-            data: HtEventData::Snapshot {
+            data: PtyEventData::Snapshot {
                 cols: self.cols,
                 rows: self.rows,
                 seq: content.clone(),
@@ -145,16 +145,16 @@ impl PtySession {
 
 async fn output_handler(
     terminal: Arc<PtyTerminal>,
-    event_tx: broadcast::Sender<HtEvent>,
+    event_tx: broadcast::Sender<PtyEvent>,
     start_time: Instant,
 ) {
     while let Ok(Some(data)) = terminal.read_output().await {
         let output = String::from_utf8_lossy(&data).to_string();
 
-        let event = HtEvent {
+        let event = PtyEvent {
             event_type: "output".to_string(),
             time: start_time.elapsed().as_secs_f64(),
-            data: HtEventData::Output { data: output },
+            data: PtyEventData::Output { data: output },
         };
 
         if event_tx.send(event).is_err() {

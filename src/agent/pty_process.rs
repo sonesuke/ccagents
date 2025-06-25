@@ -1,4 +1,4 @@
-use super::pty_session::{HtCommand, HtEvent, HtEventData, PtySession};
+use super::pty_session::{PtyCommand, PtyEvent, PtyEventData, PtySession};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -20,7 +20,7 @@ pub enum PtyProcessError {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
-pub enum HtMessage {
+pub enum PtyMessage {
     #[serde(rename = "input")]
     Input { payload: String },
     #[serde(rename = "takeSnapshot")]
@@ -29,7 +29,7 @@ pub enum HtMessage {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum HtResponse {
+pub enum PtyResponse {
     View {
         view: Option<String>,
         status: String,
@@ -68,9 +68,9 @@ impl Default for PtyProcessConfig {
 pub struct PtyProcess {
     config: PtyProcessConfig,
     session: Arc<Mutex<Option<Arc<PtySession>>>>,
-    event_rx: Arc<Mutex<Option<broadcast::Receiver<HtEvent>>>>,
-    response_tx: Arc<Mutex<Option<mpsc::UnboundedSender<HtResponse>>>>,
-    response_rx: Arc<Mutex<Option<mpsc::UnboundedReceiver<HtResponse>>>>,
+    event_rx: Arc<Mutex<Option<broadcast::Receiver<PtyEvent>>>>,
+    response_tx: Arc<Mutex<Option<mpsc::UnboundedSender<PtyResponse>>>>,
+    response_rx: Arc<Mutex<Option<mpsc::UnboundedReceiver<PtyResponse>>>>,
 }
 
 impl PtyProcess {
@@ -127,7 +127,7 @@ impl PtyProcess {
         let session_lock = self.session.lock().await;
 
         if let Some(session) = session_lock.as_ref() {
-            let command = HtCommand::Input { payload: input };
+            let command = PtyCommand::Input { payload: input };
             session
                 .handle_command(command)
                 .await
@@ -143,7 +143,7 @@ impl PtyProcess {
 
         if let Some(session) = session_lock.as_ref() {
             session
-                .handle_command(HtCommand::TakeSnapshot)
+                .handle_command(PtyCommand::TakeSnapshot)
                 .await
                 .map_err(|e| PtyProcessError::CommunicationError(e.to_string()))?;
 
@@ -152,8 +152,8 @@ impl PtyProcess {
 
             if let Some(rx) = response_rx.as_mut() {
                 match rx.recv().await {
-                    Some(HtResponse::Snapshot { data, .. }) => Ok(data.seq),
-                    Some(HtResponse::View { view, .. }) => view.ok_or_else(|| {
+                    Some(PtyResponse::Snapshot { data, .. }) => Ok(data.seq),
+                    Some(PtyResponse::View { view, .. }) => view.ok_or_else(|| {
                         PtyProcessError::CommunicationError("No view data in response".to_string())
                     }),
                     None => Err(PtyProcessError::CommunicationError(
@@ -171,8 +171,8 @@ impl PtyProcess {
 
 async fn event_processor(
     _session: Arc<PtySession>,
-    event_rx: Arc<Mutex<Option<broadcast::Receiver<HtEvent>>>>,
-    response_tx: mpsc::UnboundedSender<HtResponse>,
+    event_rx: Arc<Mutex<Option<broadcast::Receiver<PtyEvent>>>>,
+    response_tx: mpsc::UnboundedSender<PtyResponse>,
 ) {
     let mut rx = {
         let guard = event_rx.lock().await;
@@ -185,11 +185,11 @@ async fn event_processor(
 
     while let Ok(event) = rx.recv().await {
         if event.event_type.as_str() == "snapshot" {
-            if let HtEventData::Snapshot {
+            if let PtyEventData::Snapshot {
                 seq, cols, rows, ..
             } = event.data
             {
-                let response = HtResponse::Snapshot {
+                let response = PtyResponse::Snapshot {
                     response_type: "snapshot".to_string(),
                     data: SnapshotData {
                         seq,
