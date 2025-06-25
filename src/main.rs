@@ -6,7 +6,7 @@ mod ruler;
 use anyhow::{Context, Result};
 use clap::Parser;
 use cli::{
-    execute_entry_action, execute_periodic_entry, process_terminal_output,
+    execute_entry_action, execute_periodic_entry, process_direct_output,
     resolve_entry_task_placeholders, Cli, Commands,
 };
 use queue::create_shared_manager;
@@ -58,10 +58,28 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
 
     let base_port = ruler.get_monitor_config().base_port;
 
+    // Clear debug log files at startup
+    if let Ok(mut file) = std::fs::File::create("pattern_match_debug.log") {
+        use std::io::Write;
+        use std::time::SystemTime;
+        let _ = writeln!(file, "=== RuleAgents Pattern Match Debug Log ===");
+        let _ = writeln!(file, "Started at: {:?}", SystemTime::now());
+        let _ = writeln!(file, "Config file: {}", rules_path.display());
+    }
+
+    if let Ok(mut file) = std::fs::File::create("pty_debug.log") {
+        use std::io::Write;
+        use std::time::SystemTime;
+        let _ = writeln!(file, "=== RuleAgents PTY Debug Log ===");
+        let _ = writeln!(file, "Started at: {:?}", SystemTime::now());
+        let _ = writeln!(file, "Config file: {}", rules_path.display());
+    }
+
     println!("🎯 RuleAgents started");
     println!("📂 Config file: {}", rules_path.display());
     println!("🌐 Terminal available at: http://localhost:{}", base_port);
     println!("🛑 Press Ctrl+C to stop");
+    println!("📝 Debug log: pattern_match_debug.log");
 
     // Create agent pool
     let monitor_config = ruler.get_monitor_config();
@@ -167,21 +185,28 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
         }
     }
 
-    let mut last_output: Option<String> = None;
-
     loop {
         tokio::select! {
             _ = signal::ctrl_c() => {
                 println!("\n🛑 Received Ctrl+C, shutting down...");
-                // Note: Child processes (HT) are automatically cleaned up by the OS
-                // when the parent process (rule-agents) terminates due to the
-                // standard parent-child process relationship established by spawn()
+
+                // Cancel all periodic tasks
+                for handle in periodic_handles {
+                    handle.abort();
+                }
+
+                // Cancel all queue listener tasks
+                for handle in queue_handles {
+                    handle.abort();
+                }
+
+                println!("🧹 Cleaned up all tasks");
                 break;
             }
             _ = tokio::time::sleep(tokio::time::Duration::from_millis(500)) => {
-                // Process terminal output and execute rules (use first agent for monitoring)
+                // Process only direct command output (no terminal diff detection)
                 let agent = agent_pool.get_agent();
-                process_terminal_output(&agent, &ruler, &queue_manager, &mut last_output).await?;
+                process_direct_output(&agent, &ruler, &queue_manager).await?;
             }
         }
     }

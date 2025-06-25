@@ -2,7 +2,23 @@ use crate::agent;
 use crate::queue::{QueueExecutor, SharedQueueManager};
 use crate::ruler;
 use anyhow::Result;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+#[allow(dead_code)]
+fn truncate_unicode_safe(s: &str, max_len: usize) -> &str {
+    if s.len() <= max_len {
+        return s;
+    }
+
+    // Find the last valid UTF-8 character boundary at or before max_len
+    let mut end = max_len;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
 
 /// Execute a periodic entry action (with agent context)
 pub async fn execute_periodic_entry(
@@ -65,10 +81,46 @@ pub async fn execute_entry_action(
     entry: &ruler::entry::CompiledEntry,
     queue_manager: &SharedQueueManager,
 ) -> Result<()> {
+    // DETAILED DEBUG LOGGING FOR ENTRY EXECUTION
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    if let Ok(mut file) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("pty_debug.log")
+    {
+        let _ = writeln!(file, "[{}] === EXECUTING ENTRY ACTION ===", timestamp);
+        let _ = writeln!(file, "Entry name: {}", entry.name);
+        let _ = writeln!(file, "Action type: {:?}", entry.action);
+        let _ = writeln!(file, "---");
+    }
+
     match &entry.action {
         ruler::types::ActionType::SendKeys(keys) => {
             println!("🤖 Executing entry '{}' → Sending: {:?}", entry.name, keys);
+
+            if let Ok(mut file) = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("pty_debug.log")
+            {
+                let _ = writeln!(
+                    file,
+                    "[{}] SendKeys action with {} keys:",
+                    timestamp,
+                    keys.len()
+                );
+                for (i, key) in keys.iter().enumerate() {
+                    let _ = writeln!(file, "  Key {}: {:?}", i, key);
+                }
+            }
+
             for key in keys {
+                println!("📤 Sending individual key: {:?}", key);
+
                 if key == "\\r" || key == "\r" {
                     if let Err(e) = agent.send_keys("\r").await {
                         eprintln!("❌ Error sending key: {}", e);
@@ -221,49 +273,45 @@ pub async fn execute_rule_action(
     Ok(())
 }
 
-/// Process terminal output and execute rules
-pub async fn process_terminal_output(
+/// Process direct command output (supports any command, not just Claude)
+pub async fn process_direct_output(
     agent: &agent::Agent,
     ruler: &ruler::Ruler,
     queue_manager: &SharedQueueManager,
-    last_output: &mut Option<String>,
 ) -> Result<()> {
-    if let Ok(output) = agent.get_output().await {
-        if !output.trim().is_empty() {
-            // Detect differential content
-            let diff_content = agent.detect_differential_content(&output, last_output.as_deref());
-
-            if !diff_content.new_content.is_empty() {
-                // Check if cleaned content has meaningful text
-                if !diff_content.clean_content.trim().is_empty() {
-                    println!(
-                        "📄 NEW content detected: {:?}",
-                        &diff_content.clean_content[..diff_content.clean_content.len().min(200)]
-                    );
+    // Check for direct command output and process
+    while let Some(command_output) = agent.get_command_output().await {
+        if let Ok(mut file) = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("pattern_match_debug.log")
+        {
+            let timestamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            let _ = writeln!(file, "\n[{}] === DIRECT COMMAND OUTPUT ===", timestamp);
+            let _ = writeln!(
+                file,
+                "Source: {}",
+                if command_output.is_stdout {
+                    "stdout"
                 } else {
-                    println!("📄 Ignoring ANSI escape sequences");
+                    "stderr"
                 }
-            }
-
-            if last_output.is_none() {
-                println!(
-                    "📄 Initial buffer content: {:?}",
-                    &diff_content.clean_content[..diff_content.clean_content.len().min(200)]
-                );
-            }
-
-            // === RULE PROCESSING ON NEW CONTENT ===
-            // Apply rules only to the newly detected content
-            if !diff_content.new_content.is_empty() {
-                let action = ruler
-                    .decide_action_for_capture(&diff_content.new_content)
-                    .await;
-                execute_rule_action(&action, agent, queue_manager).await?;
-            }
-
-            // Update the stored output for next comparison
-            *last_output = Some(output.trim().to_string());
+            );
+            let _ = writeln!(file, "Content: {:?}", command_output.content);
+            let _ = writeln!(file, "==> Will check rules for command output");
         }
+
+        println!("📤 Command output: {}", command_output.content);
+
+        let action = ruler
+            .decide_action_for_capture(&command_output.content)
+            .await;
+        execute_rule_action(&action, agent, queue_manager).await?;
     }
+
+    // Terminal diff detection removed - only direct command output monitoring remains
     Ok(())
 }

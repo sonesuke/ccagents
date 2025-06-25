@@ -1,0 +1,15 @@
+# Test configuration to reproduce the issue
+monitor:
+  base_port: 9990
+  agent_pool_size: 1
+
+entries: []
+
+rules:
+  - pattern: "Do you want to proceed"
+    action: "send_keys"
+    keys: ["1", "\r"]
+    
+  - pattern: "こんにちは|Hello"
+    action: "send_keys"
+    keys: ["q", "\r"]

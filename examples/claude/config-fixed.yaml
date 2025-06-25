@@ -1,0 +1,26 @@
+# Entry and Rule definitions for agent automation
+
+# External triggers - initiated by user commands
+entries:
+  - name: "claude"
+    trigger: "on_start"
+    action: "send_keys"
+    keys: ["claude 'say hello, in Japanese'", "\r"]
+
+# Automatic detection rules - triggered by terminal state changes
+# Higher priority = earlier in the list (line order matters)
+rules:
+  - pattern: "Do you want to proceed"
+    action: "send_keys"
+    keys: ["1", "\r"]
+    
+  # Match only Claude's actual Japanese response
+  # Avoid matching UI elements by being more specific
+  - pattern: "⏺ こんにちは"  # Claude's responses start with ⏺
+    action: "send_keys"
+    keys: ["q", "\r"]
+    
+  # Alternative patterns that are more specific:
+  # - pattern: "Assistant: こんにちは"
+  # - pattern: "^\\s*こんにちは[!！]?\\s*$"  # Match only if it's on its own line
+  # - pattern: "say hello.*\\n.*こんにちは"  # Match in context of the request
