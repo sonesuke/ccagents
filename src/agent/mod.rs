@@ -1,12 +1,38 @@
-pub mod ht_process;
+pub mod pty_process;
+pub mod pty_session;
+pub mod pty_terminal;
 
-use crate::agent::ht_process::{HtProcess, HtProcessConfig};
+use crate::agent::pty_process::{PtyProcess, PtyProcessConfig};
 use anyhow::Result;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
 };
 use tracing::info;
+
+fn clean_terminal_output(raw_output: &str) -> String {
+    if raw_output.is_empty() {
+        return String::new();
+    }
+
+    let ansi_regex = regex::Regex::new(r"\x1B\[[0-9;]*[a-zA-Z]|\x1B\[[\?]?[0-9;]*[hlm]|\x1B[>\=]|\x1B[c\d]|\x1B\][0-9];|\x1B\[[0-9A-Z]|\x1B[789]|\x1B\([AB]|\x1B\[[0-9]*[HJKfABCDGR`]|\x1B\[[0-9;]*[rW]|\x1B\[[0-9;]*H|\u{9b}[0-9;]*[a-zA-Z]|\u{9b}[\?]?[0-9;]*[hlm]").unwrap();
+    let without_ansi = ansi_regex.replace_all(raw_output, "");
+
+    let control_regex = regex::Regex::new(r"[\x00-\x1F\x7F\u{9b}]+").unwrap();
+    let clean_text = control_regex.replace_all(&without_ansi, "");
+
+    let lines: Vec<&str> = clean_text
+        .lines()
+        .map(|line| line.trim())
+        .filter(|line| !line.is_empty())
+        .collect();
+
+    if lines.is_empty() {
+        String::new()
+    } else {
+        lines.join(" ")
+    }
+}
 
 /// Result of terminal differential detection
 pub struct DifferentialContent {
@@ -51,37 +77,18 @@ impl AgentPool {
 }
 
 pub struct Agent {
-    ht_process: HtProcess,
+    ht_process: PtyProcess,
 }
 
 impl Agent {
-    pub async fn new(_id: String, test_mode: bool, port: u16) -> Result<Self> {
-        let config = if test_mode {
-            // Test configuration
-            HtProcessConfig {
-                ht_binary_path: "mock_ht".to_string(),
-                shell_command: Some("bash".to_string()),
-                restart_attempts: 1,
-                restart_delay_ms: 100,
-                port,
-            }
-        } else {
-            // Production configuration
-            HtProcessConfig {
-                ht_binary_path: which::which("ht")
-                    .map_err(|_| anyhow::anyhow!("ht binary not found in PATH"))?
-                    .to_string_lossy()
-                    .to_string(),
-                shell_command: Some(
-                    std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string()),
-                ),
-                restart_attempts: 3,
-                restart_delay_ms: 1000,
-                port,
-            }
+    pub async fn new(_id: String, test_mode: bool, _port: u16) -> Result<Self> {
+        let config = PtyProcessConfig {
+            shell_command: Some(std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string())),
+            cols: 80,
+            rows: 24,
         };
 
-        let ht_process = HtProcess::new(config);
+        let ht_process = PtyProcess::new(config);
 
         // Start the HT process
         if !test_mode {
@@ -155,8 +162,8 @@ impl Agent {
             new_content = current_output.to_string();
         }
 
-        // Clean the content
-        let clean_content = HtProcess::clean_terminal_output(&new_content);
+        // Clean the content (simple ANSI escape sequence removal)
+        let clean_content = clean_terminal_output(&new_content);
 
         DifferentialContent {
             new_content,

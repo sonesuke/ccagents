@@ -173,12 +173,21 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
         tokio::select! {
             _ = signal::ctrl_c() => {
                 println!("\n🛑 Received Ctrl+C, shutting down...");
-                // Note: Child processes (HT) are automatically cleaned up by the OS
-                // when the parent process (rule-agents) terminates due to the
-                // standard parent-child process relationship established by spawn()
+
+                // Cancel all periodic tasks
+                for handle in periodic_handles {
+                    handle.abort();
+                }
+
+                // Cancel all queue listener tasks
+                for handle in queue_handles {
+                    handle.abort();
+                }
+
+                println!("🧹 Cleaned up all tasks");
                 break;
             }
-            _ = tokio::time::sleep(tokio::time::Duration::from_millis(500)) => {
+            _ = tokio::time::sleep(tokio::time::Duration::from_millis(1000)) => {
                 // Process terminal output and execute rules (use first agent for monitoring)
                 let agent = agent_pool.get_agent();
                 process_terminal_output(&agent, &ruler, &queue_manager, &mut last_output).await?;
