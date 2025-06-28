@@ -2,6 +2,7 @@ mod agent;
 mod cli;
 mod queue;
 mod ruler;
+mod web;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -14,14 +15,32 @@ use ruler::decision::decide_action;
 use ruler::entry::TriggerType;
 use ruler::Ruler;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::signal;
 use tokio::time::interval;
+use web::WebServer;
+
+// Global debug flag
+pub static DEBUG_MODE: AtomicBool = AtomicBool::new(false);
+
+// Debug print macro
+#[macro_export]
+macro_rules! debug_print {
+    ($($arg:tt)*) => {
+        if $crate::DEBUG_MODE.load(std::sync::atomic::Ordering::Relaxed) {
+            println!($($arg)*);
+        }
+    };
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
     // Parse command line arguments first to get debug flag
     let cli = Cli::parse();
+
+    // Set global debug mode
+    DEBUG_MODE.store(cli.debug, Ordering::Relaxed);
 
     // Initialize logging based on debug flag
     if cli.debug {
@@ -88,15 +107,47 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
             monitor_config.agent_pool_size,
             monitor_config.base_port,
             false,
+            monitor_config,
         )
         .await?,
     );
+
+    // Start web servers for each agent (if enabled)
+    let mut web_server_handles = Vec::new();
+    if monitor_config.web_ui.enabled {
+        for i in 0..monitor_config.agent_pool_size {
+            let port = monitor_config.base_port + i as u16;
+            let agent = agent_pool.get_agent_by_index(i);
+            let web_server = WebServer::new(port, monitor_config.web_ui.host.clone(), agent);
+
+            let handle = tokio::spawn(async move {
+                if let Err(e) = web_server.start().await {
+                    eprintln!("❌ Web server failed on port {}: {}", port, e);
+                }
+            });
+            web_server_handles.push(handle);
+        }
+    }
 
     // Wait a moment for terminal to be ready
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
     println!("🚀 Ready to monitor terminal commands...");
     println!("💡 Agent pool size: {}", agent_pool.size());
-    println!("💡 Open http://localhost:{} in your browser", base_port);
+
+    // Show all web UI URLs (if enabled)
+    if monitor_config.web_ui.enabled {
+        for i in 0..monitor_config.agent_pool_size {
+            let port = monitor_config.base_port + i as u16;
+            println!(
+                "💡 Agent {} web UI: http://{}:{}",
+                i + 1,
+                monitor_config.web_ui.host,
+                port
+            );
+        }
+    } else {
+        println!("💡 Web UI disabled in configuration");
+    }
 
     // Execute on_start entries
     let on_start_entries = ruler.get_on_start_entries().await;
@@ -140,7 +191,7 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
 
     // Setup queue listeners for enqueue entries
     let enqueue_entries = ruler.get_enqueue_entries().await;
-    println!("📡 Setting up {} queue listeners...", enqueue_entries.len());
+    debug_print!("📡 Setting up {} queue listeners...", enqueue_entries.len());
     let mut queue_handles = Vec::new();
     for entry in enqueue_entries {
         if let TriggerType::Enqueue { queue_name } = &entry.trigger {
@@ -185,33 +236,40 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
         }
     }
 
-    loop {
-        tokio::select! {
-            _ = signal::ctrl_c() => {
-                println!("\n🛑 Received Ctrl+C, shutting down...");
-
-                // Cancel all periodic tasks
-                for handle in periodic_handles {
-                    handle.abort();
-                }
-
-                // Cancel all queue listener tasks
-                for handle in queue_handles {
-                    handle.abort();
-                }
-
-                println!("🧹 Cleaned up all tasks");
-                break;
-            }
-            _ = tokio::time::sleep(tokio::time::Duration::from_millis(500)) => {
+    tokio::select! {
+        _ = signal::ctrl_c() => {
+            println!("\n🛑 Received Ctrl+C, shutting down...");
+        }
+        _ = async {
+            let mut interval_timer = tokio::time::interval(tokio::time::Duration::from_millis(500));
+            loop {
+                interval_timer.tick().await;
                 // Process only direct command output (no terminal diff detection)
                 let agent = agent_pool.get_agent();
-                process_direct_output(&agent, &ruler, &queue_manager).await?;
+                if let Err(e) = process_direct_output(&agent, &ruler, &queue_manager).await {
+                    eprintln!("❌ Error processing output: {}", e);
+                }
             }
+        } => {
+            // This branch should never be reached since the loop is infinite
         }
     }
 
-    Ok(())
+    // Just abort all tasks - OS will clean up child processes
+    for handle in periodic_handles {
+        handle.abort();
+    }
+    for handle in queue_handles {
+        handle.abort();
+    }
+    for handle in web_server_handles {
+        handle.abort();
+    }
+
+    println!("🧹 Shutting down...");
+
+    // Force exit to ensure all threads terminate
+    std::process::exit(0);
 }
 
 /// Handle show command

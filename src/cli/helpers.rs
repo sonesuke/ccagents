@@ -119,7 +119,7 @@ pub async fn execute_entry_action(
             }
 
             for key in keys {
-                println!("📤 Sending individual key: {:?}", key);
+                crate::debug_print!("📤 Sending individual key: {:?}", key);
 
                 if key == "\\r" || key == "\r" {
                     if let Err(e) = agent.send_keys("\r").await {

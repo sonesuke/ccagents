@@ -44,6 +44,18 @@ Multiple agents running in parallel for improved performance.
 cargo run -- --config examples/agent_pool/concurrency_demo.yaml
 ```
 
+### [Web UI Configuration](./web-ui/)
+Web-based terminal interface configuration examples.
+- **config.yaml**: Multi-agent web UI setup
+- Real-time terminal display with AVT color support
+- Configurable terminal dimensions
+
+```bash
+# Run with web UI enabled
+cargo run -- --config examples/web-ui/config.yaml
+# Access: http://localhost:9990, http://localhost:9991
+```
+
 ## Quick Start
 
 ```bash

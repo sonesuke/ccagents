@@ -177,7 +177,7 @@ impl PtyProcess {
 
             if should_monitor {
                 info!("🎯 Detected claude command, starting output monitoring");
-                println!("🎯 Detected claude command: {}", input.trim());
+                crate::debug_print!("🎯 Detected claude command: {}", input.trim());
                 self.start_command_monitoring(&input).await?;
             } else {
                 info!("❌ Not a claude command: '{}'", input.trim());
@@ -214,7 +214,7 @@ impl PtyProcess {
         let command_output_tx = self.command_output_tx.lock().await;
 
         if let Some(tx) = command_output_tx.as_ref() {
-            println!("✅ Command monitoring channel available, spawning monitor task");
+            crate::debug_print!("✅ Command monitoring channel available, spawning monitor task");
 
             if let Ok(mut file) = std::fs::OpenOptions::new()
                 .create(true)
@@ -230,7 +230,7 @@ impl PtyProcess {
 
             // Spawn a background task to monitor command process
             tokio::spawn(async move {
-                println!("🚀 Command monitor task started");
+                crate::debug_print!("🚀 Command monitor task started");
                 if let Err(e) = Self::monitor_command_process(command_clone, tx_clone).await {
                     error!("Command monitoring failed: {}", e);
                     println!("❌ Command monitoring failed: {}", e);
@@ -341,9 +341,10 @@ impl PtyProcess {
             "Starting process monitoring: {} with args: {:?}",
             command_name, command_args
         );
-        println!(
+        crate::debug_print!(
             "🔍 Starting process monitoring: {} with args: {:?}",
-            command_name, command_args
+            command_name,
+            command_args
         );
 
         if let Ok(mut file) = std::fs::OpenOptions::new()
@@ -365,7 +366,7 @@ impl PtyProcess {
 
         let mut child = match spawn_result {
             Ok(child) => {
-                println!("✅ Process spawned successfully: {}", command_name);
+                crate::debug_print!("✅ Process spawned successfully: {}", command_name);
                 if let Ok(mut file) = std::fs::OpenOptions::new()
                     .create(true)
                     .append(true)
@@ -395,12 +396,12 @@ impl PtyProcess {
             let tx_stdout = output_tx.clone();
             let command_name_clone = command_name.to_string();
             tokio::spawn(async move {
-                println!("📡 Starting stdout monitoring for {}", command_name_clone);
+                crate::debug_print!("📡 Starting stdout monitoring for {}", command_name_clone);
                 let reader = BufReader::new(stdout);
                 let mut lines = reader.lines();
 
                 while let Ok(Some(line)) = lines.next_line().await {
-                    println!("📤 {} stdout: {:?}", command_name_clone, line);
+                    crate::debug_print!("📤 {} stdout: {:?}", command_name_clone, line);
                     if !line.trim().is_empty() {
                         let output = CommandOutput {
                             content: line.clone(),
@@ -410,11 +411,11 @@ impl PtyProcess {
                             println!("❌ Failed to send stdout: {}", e);
                             break;
                         } else {
-                            println!("✅ Sent stdout to channel: {:?}", line);
+                            crate::debug_print!("✅ Sent stdout to channel: {:?}", line);
                         }
                     }
                 }
-                println!("📡 Stdout monitoring ended for {}", command_name_clone);
+                crate::debug_print!("📡 Stdout monitoring ended for {}", command_name_clone);
             });
         } else {
             println!("❌ No stdout pipe available");
@@ -425,12 +426,12 @@ impl PtyProcess {
             let tx_stderr = output_tx.clone();
             let command_name_clone = command_name.to_string();
             tokio::spawn(async move {
-                println!("📡 Starting stderr monitoring for {}", command_name_clone);
+                crate::debug_print!("📡 Starting stderr monitoring for {}", command_name_clone);
                 let reader = BufReader::new(stderr);
                 let mut lines = reader.lines();
 
                 while let Ok(Some(line)) = lines.next_line().await {
-                    println!("📤 {} stderr: {:?}", command_name_clone, line);
+                    crate::debug_print!("📤 {} stderr: {:?}", command_name_clone, line);
                     if !line.trim().is_empty() {
                         let output = CommandOutput {
                             content: line.clone(),
@@ -440,11 +441,11 @@ impl PtyProcess {
                             println!("❌ Failed to send stderr: {}", e);
                             break;
                         } else {
-                            println!("✅ Sent stderr to channel: {:?}", line);
+                            crate::debug_print!("✅ Sent stderr to channel: {:?}", line);
                         }
                     }
                 }
-                println!("📡 Stderr monitoring ended for {}", command_name_clone);
+                crate::debug_print!("📡 Stderr monitoring ended for {}", command_name_clone);
             });
         } else {
             println!("❌ No stderr pipe available");
@@ -453,9 +454,10 @@ impl PtyProcess {
         // Wait for process to complete
         let exit_status = child.wait().await;
         info!("Process monitoring completed: {}", command_name);
-        println!(
+        crate::debug_print!(
             "🏁 Process {} completed with status: {:?}",
-            command_name, exit_status
+            command_name,
+            exit_status
         );
 
         if let Ok(mut file) = std::fs::OpenOptions::new()
@@ -484,6 +486,17 @@ impl PtyProcess {
         }
     }
 
+    /// Get properly processed screen dump from AVT terminal
+    pub async fn get_avt_terminal_output(&self) -> String {
+        let session_lock = self.session.lock().await;
+
+        if let Some(session) = session_lock.as_ref() {
+            session.get_avt_terminal_output().await
+        } else {
+            String::new()
+        }
+    }
+
     #[allow(dead_code)]
     pub async fn get_view(&self) -> Result<String, PtyProcessError> {
         let session_lock = self.session.lock().await;
@@ -499,7 +512,10 @@ impl PtyProcess {
 
             if let Some(rx) = response_rx.as_mut() {
                 match rx.recv().await {
-                    Some(PtyResponse::Snapshot { data, .. }) => Ok(data.seq),
+                    Some(PtyResponse::Snapshot { data, .. }) => {
+                        // Return the actual screen content from snapshot seq
+                        Ok(data.seq.clone())
+                    }
                     Some(PtyResponse::View { view, .. }) => view.ok_or_else(|| {
                         PtyProcessError::CommunicationError("No view data in response".to_string())
                     }),

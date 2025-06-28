@@ -1,5 +1,19 @@
 # Entry and Rule definitions for agent automation
 
+# Monitor configuration
+monitor:
+  base_port: 9990
+  agent_pool_size: 1
+  web_ui:
+    enabled: true
+    host: "localhost"
+    theme: "default"
+  # Agent configurations (optional - defaults to 80x24)
+  agents:
+    - name: "default"
+      cols: 120
+      rows: 80
+
 # External triggers - initiated by user commands
 entries:
   - name: "claude"
@@ -15,6 +29,6 @@ rules:
     keys: ["1", "\r"]
     
   # Match Claude's response when it starts generating text
-  - pattern: "こんにちは|Hello"
+  - pattern: "こんにちは"
     action: "send_keys"
-    keys: ["q", "\r"]
+    keys: ["/exit", "\r"]
