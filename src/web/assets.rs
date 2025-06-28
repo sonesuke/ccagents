@@ -54,8 +54,10 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
             flex: 1;
             background-color: #000;
             border-radius: 6px;
-            overflow: hidden;
+            overflow: auto;
             border: 1px solid #333;
+            min-width: 640px;
+            max-width: 800px;
         }
         
         /* Override asciinema-player styles for better integration */
@@ -63,8 +65,8 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
             background-color: #000 !important;
             color: #fff !important;
             font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace !important;
-            font-size: 14px !important;
-            line-height: 1.4 !important;
+            font-size: 12px !important;
+            line-height: 1.2 !important;
         }
         
         .asciinema-player .asciinema-player-wrapper {
@@ -73,6 +75,16 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
         
         .asciinema-player .asciinema-terminal .line {
             height: auto !important;
+        }
+        
+        .asciinema-player {
+            width: 100% !important;
+            height: 100% !important;
+        }
+        
+        .asciinema-player .asciinema-terminal {
+            max-width: none !important;
+            max-height: none !important;
         }
         
         .terminal::-webkit-scrollbar {
@@ -95,14 +107,15 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
         .input-area {
             background-color: #1a1a1a;
             border-top: 1px solid #333;
-            padding: 10px 20px;
+            padding: 8px 20px;
             display: flex;
             align-items: center;
         }
         
         .prompt {
             color: #4a9eff;
-            margin-right: 10px;
+            margin-right: 8px;
+            font-size: 12px;
         }
         
         #commandInput {
@@ -110,9 +123,10 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
             background: transparent;
             border: none;
             color: #fff;
-            font-family: inherit;
-            font-size: 14px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 12px;
             outline: none;
+            line-height: 1.2;
         }
         
         .cursor {
@@ -208,9 +222,9 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
                         autoPlay: true,
                         loop: false,
                         controls: false,
-                        terminalFontSize: '14px',
+                        terminalFontSize: '12px',
                         terminalFontFamily: 'Monaco, Menlo, Ubuntu Mono, monospace',
-                        fit: 'width',
+                        fit: false,
                         theme: 'asciinema'
                     }
                 );
@@ -246,9 +260,9 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
                                 autoPlay: true,
                                 loop: false,
                                 controls: false,
-                                terminalFontSize: '14px',
+                                terminalFontSize: '12px',
                                 terminalFontFamily: 'Monaco, Menlo, Ubuntu Mono, monospace',
-                                fit: 'width',
+                                fit: false,
                                 theme: 'asciinema'
                             }
                         );
@@ -289,15 +303,20 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
             setupEventListeners() {
                 this.input.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter') {
+                        e.preventDefault(); // Prevent default form submission
                         const command = this.input.value;
-                        if (command.trim() && this.ws && this.ws.readyState === WebSocket.OPEN) {
-                            this.ws.send(command + '\n');
+                        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                            console.log('Sending command:', JSON.stringify(command));
+                            // Send command with proper line ending
+                            this.ws.send(command + '\r');
                             this.input.value = '';
                             
                             // Add input to terminal data for asciinema
                             const timestamp = (Date.now() - this.startTime) / 1000;
                             this.terminalData.push([timestamp, "o", command + "\r\n"]);
                             this.updatePlayerData();
+                        } else {
+                            console.log('WebSocket not ready, state:', this.ws ? this.ws.readyState : 'null');
                         }
                     }
                 });

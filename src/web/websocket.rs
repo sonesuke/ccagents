@@ -27,7 +27,15 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
         while let Some(msg) = receiver.next().await {
             match msg {
                 Ok(Message::Text(text)) => {
-                    debug!("Received WebSocket input: {}", text);
+                    debug!(
+                        "Received WebSocket input: {:?} (length: {})",
+                        text,
+                        text.len()
+                    );
+                    // Print each character for detailed debugging
+                    for (i, ch) in text.chars().enumerate() {
+                        debug!("  char[{}]: {:?} (code: {})", i, ch, ch as u32);
+                    }
                     if let Err(e) = agent_input.send_input(&text).await {
                         error!("Failed to send input to agent: {}", e);
                         break;
