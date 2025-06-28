@@ -4,6 +4,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use axum::{
     extract::{State, WebSocketUpgrade},
+    http::header,
     response::{Html, Json, Response},
     routing::get,
     Router,
@@ -62,6 +63,8 @@ impl WebServer {
     fn create_app(&self) -> Router {
         Router::new()
             .route("/", get(serve_index))
+            .route("/styles/main.css", get(serve_css))
+            .route("/scripts/terminal-client.js", get(serve_js))
             .route("/ws", get(websocket_handler))
             .route("/config", get(serve_config))
             .with_state(self.agent.clone())
@@ -73,6 +76,22 @@ async fn serve_index() -> Html<&'static str> {
     info!("📄 Serving index.html to client");
     println!("📄 HTTP request for index page received");
     Html(assets::INDEX_HTML)
+}
+
+async fn serve_css() -> Response {
+    info!("🎨 Serving main.css to client");
+    Response::builder()
+        .header(header::CONTENT_TYPE, "text/css")
+        .body(assets::MAIN_CSS.into())
+        .unwrap()
+}
+
+async fn serve_js() -> Response {
+    info!("📜 Serving terminal-client.js to client");
+    Response::builder()
+        .header(header::CONTENT_TYPE, "application/javascript")
+        .body(assets::TERMINAL_CLIENT_JS.into())
+        .unwrap()
 }
 
 async fn websocket_handler(ws: WebSocketUpgrade, State(agent): State<Arc<Agent>>) -> Response {

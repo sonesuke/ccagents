@@ -1,0 +1,164 @@
+body {
+    margin: 0;
+    padding: 0;
+    background-color: #282a36;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    color: #f8f8f2;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.container {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.header {
+    background-color: #44475a;
+    padding: 10px 20px;
+    border-bottom: 1px solid #6272a4;
+    font-size: 14px;
+}
+
+.title {
+    color: #bd93f9;
+    font-weight: bold;
+}
+
+.status {
+    color: #50fa7b;
+    margin-left: 20px;
+}
+
+.terminal {
+    flex: 1;
+    background-color: #282a36;
+    padding: 20px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.terminal-container {
+    flex: 1;
+    background-color: #282a36;
+    overflow: auto;
+    border: none;
+    width: 100%;
+    min-height: 400px;
+}
+
+/* Override asciinema-player styles for better integration */
+.asciinema-player .asciinema-terminal {
+    background-color: #282a36 !important;
+    color: #f8f8f2 !important;
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace !important;
+    font-size: clamp(10px, 1.2vw, 14px) !important;
+    font-variant-ligatures: none !important;
+    font-feature-settings: "liga" 0 !important;
+    font-variant-numeric: tabular-nums !important;
+    font-kerning: none !important;
+    letter-spacing: 0 !important;
+    overflow: visible !important;
+    line-height: 1.2 !important;
+    text-rendering: optimizeSpeed !important;
+}
+
+.asciinema-player .asciinema-player-wrapper {
+    background-color: transparent !important;
+}
+
+.asciinema-player {
+    width: 100% !important;
+    height: 100% !important;
+    font-size: clamp(8px, 1.2vw, 14px) !important;
+}
+
+.asciinema-player .asciinema-terminal {
+    max-width: none !important;
+    max-height: none !important;
+    padding: 10px !important;
+}
+
+.asciinema-player .asciinema-terminal .line {
+    white-space: pre !important;
+    overflow: visible !important;
+    font-feature-settings: "liga" 0 !important;
+    text-rendering: optimizeSpeed !important;
+}
+
+
+/* Hide scrollbars but keep scroll functionality */
+.terminal::-webkit-scrollbar,
+.terminal-container::-webkit-scrollbar,
+.asciinema-player::-webkit-scrollbar {
+    width: 0px;
+    background: transparent;
+}
+
+.terminal,
+.terminal-container,
+.asciinema-player {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* Internet Explorer 10+ */
+}
+
+.input-area {
+    background-color: #44475a;
+    border-top: 1px solid #6272a4;
+    padding: 8px 20px;
+    display: flex;
+    align-items: center;
+}
+
+.prompt {
+    color: #bd93f9;
+    margin-right: 8px;
+    font-size: 12px;
+}
+
+#commandInput {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #f8f8f2;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 12px;
+    outline: none;
+}
+
+.cursor {
+    background-color: #f8f8f2;
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+}
+
+.connection-status {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    padding: 5px 10px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.connected {
+    background-color: #50fa7b;
+    color: #000;
+}
+
+.disconnected {
+    background-color: #ff5555;
+    color: #fff;
+}
+
+.reconnecting {
+    background-color: #f1fa8c;
+    color: #000;
+}
