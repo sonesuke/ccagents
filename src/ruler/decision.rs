@@ -1,6 +1,8 @@
 use crate::ruler::rule::CompiledRule;
 use crate::ruler::rule::{resolve_capture_groups, resolve_capture_groups_in_vec};
 use crate::ruler::types::ActionType;
+use std::fs::OpenOptions;
+use std::io::Write;
 
 /// Matches capture text against compiled rules and returns the appropriate action.
 ///
@@ -19,8 +21,57 @@ use crate::ruler::types::ActionType;
 /// Early termination on first match ensures optimal performance.
 /// Should complete within 1ms for 100 rules with typical patterns.
 pub fn decide_action(capture: &str, rules: &[CompiledRule]) -> ActionType {
-    for rule in rules {
+    // Debug log the capture being checked
+    if !capture.trim().is_empty() {
+        tracing::debug!("🔍 Checking capture against rules: {:?}", capture);
+    }
+
+    // Log to file for debugging
+    if let Ok(mut file) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("pattern_match_debug.log")
+    {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let _ = writeln!(file, "[{}] CHECKING: {:?}", timestamp, capture);
+        let _ = writeln!(file, "  Clean content: {}", capture.trim());
+        let _ = writeln!(file, "  Length: {}", capture.len());
+        let _ = writeln!(file, "  Rules to check: {}", rules.len());
+    }
+
+    for (i, rule) in rules.iter().enumerate() {
         if let Some(captures) = rule.regex.captures(capture) {
+            // Log the matched pattern
+            tracing::info!(
+                "✅ Pattern matched! Pattern: {:?}, Capture: {:?}",
+                rule.regex.as_str(),
+                capture
+            );
+
+            // Log to file
+            if let Ok(mut file) = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("pattern_match_debug.log")
+            {
+                let _ = writeln!(
+                    file,
+                    "  ✅ MATCHED! Rule #{} Pattern: {:?}",
+                    i,
+                    rule.regex.as_str()
+                );
+                let _ = writeln!(file, "     Action: {:?}", rule.action);
+                let _ = writeln!(
+                    file,
+                    "     Full match: {:?}",
+                    captures.get(0).map(|m| m.as_str())
+                );
+                let _ = writeln!(file, "---");
+            }
+
             // Extract capture groups
             let captured_groups: Vec<String> = captures
                 .iter()
@@ -193,6 +244,26 @@ mod tests {
             duration.as_millis() < 100,
             "Should complete within 100ms for 100 rules, took {}ms",
             duration.as_millis()
+        );
+    }
+
+    #[test]
+    fn test_japanese_hello_pattern() {
+        let rules = vec![create_test_rule(
+            r"こんにちは|Hello",
+            vec!["q".to_string(), "\r".to_string()],
+        )];
+
+        // Test case from actual log
+        let actual_content = "Users/sonesuke/rule-agents                │\n╰───────────────────────────────────────────────────╯\n\n\n> say hello, in Japanese\n\n⏺ こんにちは！\n\n╭──────────────────────────────────────────────────────────────────────────────╮\n│ > Try \"how does compiled_rule.rs work?\"                                      │\n╰──────────────────────────────────────────────────────────────────────────────╯\n  ? for shortcuts";
+
+        let action = decide_action(actual_content, &rules);
+
+        // This should match!
+        assert_eq!(
+            action,
+            ActionType::SendKeys(vec!["q".to_string(), "\r".to_string()]),
+            "Pattern should match こんにちは in the content"
         );
     }
 }
