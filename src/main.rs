@@ -250,7 +250,9 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
     }
 
     println!("🧹 Shutting down...");
-    Ok(())
+
+    // Force exit to ensure all threads terminate
+    std::process::exit(0);
 }
 
 /// Handle show command
