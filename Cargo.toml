@@ -49,6 +49,14 @@ libc = "0.2"
 nix = { version = "0.27", features = ["signal", "process"] }
 tokio-util = { version = "0.7", features = ["compat"] }
 
+# Web UI dependencies
+axum = { version = "0.7", features = ["ws", "json", "tower-log"] }
+tower = { version = "0.4", features = ["util"] }
+tower-http = { version = "0.5", features = ["cors", "fs"] }
+hyper = { version = "1.0", features = ["full"] }
+tokio-tungstenite = { version = "0.21", features = ["native-tls"] }
+futures-util = "0.3"
+
 [dev-dependencies]
 tempfile = "3.0"
 tokio-test = "0.4"

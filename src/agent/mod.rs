@@ -43,6 +43,11 @@ impl AgentPool {
     pub fn size(&self) -> usize {
         self.agents.len()
     }
+
+    /// Get agent by index for web server assignment
+    pub fn get_agent_by_index(&self, index: usize) -> Arc<Agent> {
+        Arc::clone(&self.agents[index % self.agents.len()])
+    }
 }
 
 pub struct Agent {
@@ -96,6 +101,20 @@ impl Agent {
     /// Get command's direct output (stdout/stderr)
     pub async fn get_command_output(&self) -> Option<crate::agent::pty_process::CommandOutput> {
         self.ht_process.get_command_output().await
+    }
+
+    /// Send input to the terminal (for WebSocket)
+    pub async fn send_input(&self, input: &str) -> Result<()> {
+        self.send_keys(input).await
+    }
+
+    /// Get current terminal output (for WebSocket)
+    pub async fn get_terminal_output(&self) -> Result<String> {
+        // Get the actual terminal screen content
+        match self.ht_process.get_view().await {
+            Ok(content) => Ok(content),
+            Err(_) => Ok("Terminal initializing...\n$ ".to_string()),
+        }
     }
 }
 

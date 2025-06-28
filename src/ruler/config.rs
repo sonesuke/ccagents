@@ -11,6 +11,19 @@ pub struct MonitorConfig {
     pub base_port: u16,
     #[serde(default = "default_agent_pool_size")]
     pub agent_pool_size: usize,
+    #[serde(default)]
+    pub web_ui: WebUIConfig,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct WebUIConfig {
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_host")]
+    pub host: String,
+    #[serde(default = "default_theme")]
+    #[allow(dead_code)]  // Theme will be used in future theme support
+    pub theme: String,
 }
 
 impl Default for MonitorConfig {
@@ -18,6 +31,17 @@ impl Default for MonitorConfig {
         Self {
             base_port: default_base_port(),
             agent_pool_size: default_agent_pool_size(),
+            web_ui: WebUIConfig::default(),
+        }
+    }
+}
+
+impl Default for WebUIConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_enabled(),
+            host: default_host(),
+            theme: default_theme(),
         }
     }
 }
@@ -28,6 +52,18 @@ fn default_base_port() -> u16 {
 
 fn default_agent_pool_size() -> usize {
     1
+}
+
+fn default_enabled() -> bool {
+    true
+}
+
+fn default_host() -> String {
+    "localhost".to_string()
+}
+
+fn default_theme() -> String {
+    "default".to_string()
 }
 
 // YAML structure for loading complete configuration

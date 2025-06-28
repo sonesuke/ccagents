@@ -2,6 +2,7 @@ mod agent;
 mod cli;
 mod queue;
 mod ruler;
+mod web;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -17,6 +18,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::signal;
 use tokio::time::interval;
+use web::WebServer;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -92,11 +94,42 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
         .await?,
     );
 
+    // Start web servers for each agent (if enabled)
+    let mut web_server_handles = Vec::new();
+    if monitor_config.web_ui.enabled {
+        for i in 0..monitor_config.agent_pool_size {
+            let port = monitor_config.base_port + i as u16;
+            let agent = agent_pool.get_agent_by_index(i);
+            let web_server = WebServer::new(port, monitor_config.web_ui.host.clone(), agent);
+
+            let handle = tokio::spawn(async move {
+                if let Err(e) = web_server.start().await {
+                    eprintln!("❌ Web server failed on port {}: {}", port, e);
+                }
+            });
+            web_server_handles.push(handle);
+        }
+    }
+
     // Wait a moment for terminal to be ready
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
     println!("🚀 Ready to monitor terminal commands...");
     println!("💡 Agent pool size: {}", agent_pool.size());
-    println!("💡 Open http://localhost:{} in your browser", base_port);
+
+    // Show all web UI URLs (if enabled)
+    if monitor_config.web_ui.enabled {
+        for i in 0..monitor_config.agent_pool_size {
+            let port = monitor_config.base_port + i as u16;
+            println!(
+                "💡 Agent {} web UI: http://{}:{}",
+                i + 1,
+                monitor_config.web_ui.host,
+                port
+            );
+        }
+    } else {
+        println!("💡 Web UI disabled in configuration");
+    }
 
     // Execute on_start entries
     let on_start_entries = ruler.get_on_start_entries().await;
@@ -197,6 +230,11 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
 
                 // Cancel all queue listener tasks
                 for handle in queue_handles {
+                    handle.abort();
+                }
+
+                // Cancel all web server tasks
+                for handle in web_server_handles {
                     handle.abort();
                 }
 
