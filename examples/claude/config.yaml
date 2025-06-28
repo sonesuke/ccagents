@@ -1,5 +1,14 @@
 # Entry and Rule definitions for agent automation
 
+# Monitor configuration
+monitor:
+  base_port: 9990
+  agent_pool_size: 1
+  web_ui:
+    enabled: true
+    host: "localhost"
+    theme: "default"
+
 # External triggers - initiated by user commands
 entries:
   - name: "claude"

@@ -31,7 +31,13 @@ impl WebServer {
 
     pub async fn start(&self) -> Result<()> {
         let app = self.create_app();
-        let addr: SocketAddr = format!("{}:{}", self.host, self.port).parse()?;
+        // Convert localhost to 127.0.0.1 for proper parsing
+        let host = if self.host == "localhost" {
+            "127.0.0.1"
+        } else {
+            &self.host
+        };
+        let addr: SocketAddr = format!("{}:{}", host, self.port).parse()?;
 
         info!("Starting web server on http://{}:{}", self.host, self.port);
 

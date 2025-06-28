@@ -22,7 +22,7 @@ pub struct WebUIConfig {
     #[serde(default = "default_host")]
     pub host: String,
     #[serde(default = "default_theme")]
-    #[allow(dead_code)]  // Theme will be used in future theme support
+    #[allow(dead_code)] // Theme will be used in future theme support
     pub theme: String,
 }
 
