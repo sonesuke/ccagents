@@ -53,6 +53,7 @@ impl WebServer {
             "🚀 Web server ready and listening on http://{}:{}",
             self.host, self.port
         );
+
         axum::serve(listener, app).await?;
 
         Ok(())

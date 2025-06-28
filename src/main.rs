@@ -238,23 +238,18 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
         }
     }
 
-    // Cancel all periodic tasks
+    // Just abort all tasks - OS will clean up child processes
     for handle in periodic_handles {
         handle.abort();
     }
-
-    // Cancel all queue listener tasks
     for handle in queue_handles {
         handle.abort();
     }
-
-    // Cancel all web server tasks
     for handle in web_server_handles {
         handle.abort();
     }
 
-    println!("🧹 Cleaned up all tasks");
-
+    println!("🧹 Shutting down...");
     Ok(())
 }
 

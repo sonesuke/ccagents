@@ -13,7 +13,6 @@ pub struct PtyTerminal {
     master_pty: Arc<Mutex<Box<dyn portable_pty::MasterPty + Send>>>,
     reader_handle: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
     writer_handle: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
-    child_handle: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
     input_tx: mpsc::UnboundedSender<Bytes>,
     output_rx: Arc<Mutex<mpsc::UnboundedReceiver<Bytes>>>,
     terminal: Arc<Mutex<vt100::Parser>>,
@@ -60,7 +59,7 @@ impl PtyTerminal {
             }
         }
 
-        let mut child = pair
+        let child = pair
             .slave
             .spawn_command(cmd)
             .context("Failed to spawn command")?;
@@ -153,15 +152,13 @@ impl PtyTerminal {
             }
         });
 
-        let child_handle = tokio::spawn(async move {
-            let _ = child.wait();
-        });
+        // Child process will be cleaned up when parent exits
+        drop(child);
 
         let pty_terminal = PtyTerminal {
             master_pty: Arc::new(Mutex::new(pair.master)),
             reader_handle: Arc::new(Mutex::new(Some(reader_handle))),
             writer_handle: Arc::new(Mutex::new(Some(writer_handle))),
-            child_handle: Arc::new(Mutex::new(Some(child_handle))),
             input_tx,
             output_rx: Arc::new(Mutex::new(output_rx)),
             terminal,
@@ -244,7 +241,7 @@ impl PtyTerminal {
 
 impl Drop for PtyTerminal {
     fn drop(&mut self) {
-        // Abort all background tasks
+        // Abort reader/writer tasks
         if let Ok(mut handle) = self.reader_handle.try_lock() {
             if let Some(h) = handle.take() {
                 h.abort();
@@ -255,10 +252,6 @@ impl Drop for PtyTerminal {
                 h.abort();
             }
         }
-        if let Ok(mut handle) = self.child_handle.try_lock() {
-            if let Some(h) = handle.take() {
-                h.abort();
-            }
-        }
+        // Child process will be cleaned up by the OS when parent exits
     }
 }
