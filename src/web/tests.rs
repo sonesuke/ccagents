@@ -39,5 +39,19 @@ fn test_monitor_config_with_web_ui() {
 fn test_assets_html_not_empty() {
     assert!(!crate::web::assets::INDEX_HTML.is_empty());
     assert!(crate::web::assets::INDEX_HTML.contains("Rule Agents Terminal"));
-    assert!(crate::web::assets::INDEX_HTML.contains("WebSocket"));
+    assert!(crate::web::assets::INDEX_HTML.contains("terminal-client.js"));
+}
+
+#[test]
+fn test_assets_css_not_empty() {
+    assert!(!crate::web::assets::MAIN_CSS.is_empty());
+    assert!(crate::web::assets::MAIN_CSS.contains("body"));
+    assert!(crate::web::assets::MAIN_CSS.contains("#282a36"));
+}
+
+#[test]
+fn test_assets_js_not_empty() {
+    assert!(!crate::web::assets::TERMINAL_CLIENT_JS.is_empty());
+    assert!(crate::web::assets::TERMINAL_CLIENT_JS.contains("TerminalClient"));
+    assert!(crate::web::assets::TERMINAL_CLIENT_JS.contains("WebSocket"));
 }
