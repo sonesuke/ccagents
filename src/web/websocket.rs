@@ -32,7 +32,7 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
     // Wait a bit for terminal to be ready
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-    // Send HTプロジェクト style initial event
+    // Send initial terminal state
     let (cols, rows) = agent.get_terminal_size();
 
     // Get initial screen dump
@@ -63,10 +63,7 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
         _ => unreachable!(),
     };
 
-    println!(
-        "📋 Sending HT-style init event: cols={}, rows={}",
-        cols, rows
-    );
+    println!("📋 Sending init event: cols={}, rows={}", cols, rows);
 
     if let Err(e) = sender.send(Message::Text(init_message.to_string())).await {
         error!("Failed to send init event: {}", e);
@@ -130,7 +127,7 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
                         };
 
                         if !new_content.is_empty() {
-                            // Create HT-style output event
+                            // Create output event
                             let timestamp = start_time_clone.elapsed().as_secs_f64();
                             let output_event = json!({
                                 "type": "output",
@@ -140,7 +137,7 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
 
                             debug!("Sending incremental update: {} chars", new_content.len());
                             println!(
-                                "📨 Sending HT-style output: timestamp={:.3}, content_len={}",
+                                "📨 Sending output: timestamp={:.3}, content_len={}",
                                 timestamp,
                                 new_content.len()
                             );

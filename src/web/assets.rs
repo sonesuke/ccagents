@@ -245,17 +245,17 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
                 ws.onmessage = (event) => {
                     try {
                         const data = JSON.parse(event.data);
-                        console.log('📨 Received HT-style event:', data);
+                        console.log('📨 Received event:', data);
                         
                         if (data.type === 'init') {
-                            // This is the HT-style init event
+                            // Initial terminal state
                             console.log('📋 Received init event:', data);
                             this.createTerminalDisplay(data);
                             if (data.data) {
                                 this.setTerminalContent(data.data);
                             }
                         } else if (data.type === 'output') {
-                            // This is an HT-style output event
+                            // Terminal output update
                             console.log('📝 Received output event:', data);
                             if (this.terminalOutput) {
                                 this.appendContent(data.data);
@@ -285,9 +285,9 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
             }
             
             createTerminalDisplay(initData) {
-                console.log('🎬 Creating HT-style terminal display:', initData);
+                console.log('🎬 Creating terminal display:', initData);
                 
-                // Create a simple terminal display instead of asciinema player
+                // Create a simple terminal display
                 this.terminal.innerHTML = `
                     <div style="
                         font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
@@ -308,7 +308,7 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
                 this.cols = initData.cols;
                 this.rows = initData.rows;
                 
-                console.log('✅ HT-style terminal display created successfully');
+                console.log('✅ Terminal display created successfully');
             }
             
             setTerminalContent(content) {
