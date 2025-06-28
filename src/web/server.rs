@@ -77,14 +77,16 @@ async fn serve_index() -> Html<&'static str> {
 
 async fn websocket_handler(ws: WebSocketUpgrade, State(agent): State<Arc<Agent>>) -> Response {
     info!("🔌 WebSocket upgrade request received");
-    println!("🔌 WebSocket connection attempt");
+    crate::debug_print!("🔌 WebSocket connection attempt");
     ws.on_upgrade(move |socket| handle_websocket(socket, agent))
 }
 
 async fn serve_config(State(agent): State<Arc<Agent>>) -> Json<serde_json::Value> {
     let (cols, rows) = agent.get_terminal_size();
+    let debug = crate::DEBUG_MODE.load(std::sync::atomic::Ordering::Relaxed);
     Json(json!({
         "cols": cols,
-        "rows": rows
+        "rows": rows,
+        "debug": debug
     }))
 }

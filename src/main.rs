@@ -15,15 +15,32 @@ use ruler::decision::decide_action;
 use ruler::entry::TriggerType;
 use ruler::Ruler;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::signal;
 use tokio::time::interval;
 use web::WebServer;
 
+// Global debug flag
+pub static DEBUG_MODE: AtomicBool = AtomicBool::new(false);
+
+// Debug print macro
+#[macro_export]
+macro_rules! debug_print {
+    ($($arg:tt)*) => {
+        if $crate::DEBUG_MODE.load(std::sync::atomic::Ordering::Relaxed) {
+            println!($($arg)*);
+        }
+    };
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Parse command line arguments first to get debug flag
     let cli = Cli::parse();
+
+    // Set global debug mode
+    DEBUG_MODE.store(cli.debug, Ordering::Relaxed);
 
     // Initialize logging based on debug flag
     if cli.debug {
@@ -174,7 +191,7 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
 
     // Setup queue listeners for enqueue entries
     let enqueue_entries = ruler.get_enqueue_entries().await;
-    println!("📡 Setting up {} queue listeners...", enqueue_entries.len());
+    debug_print!("📡 Setting up {} queue listeners...", enqueue_entries.len());
     let mut queue_handles = Vec::new();
     for entry in enqueue_entries {
         if let TriggerType::Enqueue { queue_name } = &entry.trigger {

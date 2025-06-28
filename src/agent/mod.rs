@@ -93,7 +93,7 @@ impl Agent {
 
     pub async fn send_keys(&self, keys: &str) -> Result<()> {
         // AGENT SEND_KEYS DEBUG
-        println!("🔄 Agent::send_keys called with: {:?}", keys);
+        crate::debug_print!("🔄 Agent::send_keys called with: {:?}", keys);
 
         if let Ok(mut file) = std::fs::OpenOptions::new()
             .create(true)

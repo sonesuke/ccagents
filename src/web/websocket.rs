@@ -24,7 +24,7 @@ pub enum TerminalEvent {
 
 pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
     info!("WebSocket connection established");
-    println!("🔌 WebSocket connection established for ALiS protocol");
+    crate::debug_print!("🔌 WebSocket connection established for ALiS protocol");
 
     let (mut sender, mut receiver) = socket.split();
     let start_time = Instant::now();
@@ -63,7 +63,7 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
         _ => unreachable!(),
     };
 
-    println!("📋 Sending init event: cols={}, rows={}", cols, rows);
+    crate::debug_print!("📋 Sending init event: cols={}, rows={}", cols, rows);
 
     if let Err(e) = sender.send(Message::Text(init_message.to_string())).await {
         error!("Failed to send init event: {}", e);
@@ -136,7 +136,7 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
                             });
 
                             debug!("Sending incremental update: {} chars", new_content.len());
-                            println!(
+                            crate::debug_print!(
                                 "📨 Sending output: timestamp={:.3}, content_len={}",
                                 timestamp,
                                 new_content.len()

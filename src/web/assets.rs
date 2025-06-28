@@ -216,7 +216,10 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
                     const config = await response.json();
                     this.cols = config.cols;
                     this.rows = config.rows;
-                    console.log('📐 Terminal config loaded:', { cols: this.cols, rows: this.rows });
+                    this.debugMode = config.debug || false;
+                    if (this.debugMode) {
+                        console.log('📐 Terminal config loaded:', { cols: this.cols, rows: this.rows });
+                    }
                     
                     // Create player using ALiS protocol (direct WebSocket)
                     this.setupALiSPlayer();
