@@ -112,9 +112,25 @@ impl Agent {
     pub async fn get_terminal_output(&self) -> Result<String> {
         // Get the actual terminal screen content
         match self.ht_process.get_view().await {
-            Ok(content) => Ok(content),
-            Err(_) => Ok("Terminal initializing...\n$ ".to_string()),
+            Ok(content) => {
+                // Format content for better terminal display
+                if content.is_empty() {
+                    Ok("Terminal ready\r\n$ ".to_string())
+                } else {
+                    // Ensure proper line endings for terminal display
+                    let formatted = content.replace('\n', "\r\n");
+                    Ok(formatted)
+                }
+            }
+            Err(_) => Ok("Terminal initializing...\r\n$ ".to_string()),
         }
+    }
+
+    /// Get terminal dimensions for asciinema integration
+    #[allow(dead_code)] // Will be used in future enhancements
+    pub fn get_terminal_size(&self) -> (u16, u16) {
+        // Return cols, rows based on PTY configuration
+        (80, 24) // Default size, can be made configurable later
     }
 }
 

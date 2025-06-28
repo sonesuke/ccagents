@@ -6,6 +6,7 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rule Agents Terminal</title>
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.7.0/dist/bundle/asciinema-player.css" />
     <style>
         body {
             margin: 0;
@@ -44,10 +45,34 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
             flex: 1;
             background-color: #000;
             padding: 20px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            font-size: 14px;
-            line-height: 1.4;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .terminal-container {
+            flex: 1;
+            background-color: #000;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid #333;
+        }
+        
+        /* Override asciinema-player styles for better integration */
+        .asciinema-player .asciinema-terminal {
+            background-color: #000 !important;
+            color: #fff !important;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace !important;
+            font-size: 14px !important;
+            line-height: 1.4 !important;
+        }
+        
+        .asciinema-player .asciinema-player-wrapper {
+            background-color: transparent !important;
+        }
+        
+        .asciinema-player .asciinema-terminal .line {
+            height: auto !important;
         }
         
         .terminal::-webkit-scrollbar {
@@ -133,7 +158,11 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
             <span class="status">Connected to Agent</span>
         </div>
         
-        <div id="terminal" class="terminal"></div>
+        <div class="terminal">
+            <div id="terminal-container" class="terminal-container">
+                <div id="asciinema-player"></div>
+            </div>
+        </div>
         
         <div class="input-area">
             <span class="prompt">$</span>
@@ -143,15 +172,88 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
     
     <div id="connectionStatus" class="connection-status disconnected">Disconnected</div>
     
+    <script src="https://cdn.jsdelivr.net/npm/asciinema-player@3.7.0/dist/bundle/asciinema-player.min.js"></script>
     <script>
         class TerminalClient {
             constructor() {
                 this.ws = null;
-                this.terminal = document.getElementById('terminal');
+                this.terminal = document.getElementById('asciinema-player');
                 this.input = document.getElementById('commandInput');
                 this.status = document.getElementById('connectionStatus');
+                this.player = null;
+                this.terminalData = [];
+                this.startTime = Date.now();
+                this.cols = 80;
+                this.rows = 24;
+                this.setupPlayer();
                 this.setupEventListeners();
                 this.connect();
+            }
+            
+            setupPlayer() {
+                // Initialize asciinema player with empty data
+                const initialData = {
+                    version: 2,
+                    width: this.cols,
+                    height: this.rows,
+                    timestamp: Math.floor(this.startTime / 1000)
+                };
+                
+                this.player = AsciinemaPlayer.create(
+                    { 
+                        data: [initialData, [0, "o", "Rule Agents Terminal Ready\r\n$ "]]
+                    },
+                    this.terminal,
+                    {
+                        autoPlay: true,
+                        loop: false,
+                        controls: false,
+                        terminalFontSize: '14px',
+                        terminalFontFamily: 'Monaco, Menlo, Ubuntu Mono, monospace',
+                        fit: 'width',
+                        theme: 'asciinema'
+                    }
+                );
+            }
+            
+            updatePlayerData() {
+                // Debounce updates to avoid too frequent recreations
+                if (this.updateTimeout) {
+                    clearTimeout(this.updateTimeout);
+                }
+                
+                this.updateTimeout = setTimeout(() => {
+                    if (this.player && this.terminalData.length > 0) {
+                        const header = {
+                            version: 2,
+                            width: this.cols,
+                            height: this.rows,
+                            timestamp: Math.floor(this.startTime / 1000)
+                        };
+                        
+                        const fullData = {
+                            data: [header, ...this.terminalData]
+                        };
+                        
+                        // Recreate player with new data
+                        if (this.player.dispose) {
+                            this.player.dispose();
+                        }
+                        this.player = AsciinemaPlayer.create(
+                            fullData,
+                            this.terminal,
+                            {
+                                autoPlay: true,
+                                loop: false,
+                                controls: false,
+                                terminalFontSize: '14px',
+                                terminalFontFamily: 'Monaco, Menlo, Ubuntu Mono, monospace',
+                                fit: 'width',
+                                theme: 'asciinema'
+                            }
+                        );
+                    }
+                }, 100); // Debounce by 100ms
             }
             
             connect() {
@@ -191,26 +293,32 @@ pub const INDEX_HTML: &str = r#"<!DOCTYPE html>
                         if (command.trim() && this.ws && this.ws.readyState === WebSocket.OPEN) {
                             this.ws.send(command + '\n');
                             this.input.value = '';
+                            
+                            // Add input to terminal data for asciinema
+                            const timestamp = (Date.now() - this.startTime) / 1000;
+                            this.terminalData.push([timestamp, "o", command + "\r\n"]);
+                            this.updatePlayerData();
                         }
                     }
                 });
                 
-                // Focus input when clicking on terminal
-                this.terminal.addEventListener('click', () => {
-                    this.input.focus();
-                });
+                // Focus input when clicking on terminal container
+                const terminalContainer = document.getElementById('terminal-container');
+                if (terminalContainer) {
+                    terminalContainer.addEventListener('click', () => {
+                        this.input.focus();
+                    });
+                }
                 
                 // Auto-focus input on page load
                 this.input.focus();
             }
             
             appendToTerminal(text) {
-                this.terminal.textContent = text;
-                this.scrollToBottom();
-            }
-            
-            scrollToBottom() {
-                this.terminal.scrollTop = this.terminal.scrollHeight;
+                // Add terminal output to asciinema data
+                const timestamp = (Date.now() - this.startTime) / 1000;
+                this.terminalData.push([timestamp, "o", text]);
+                this.updatePlayerData();
             }
             
             updateStatus(className, text) {
