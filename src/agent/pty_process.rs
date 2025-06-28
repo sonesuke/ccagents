@@ -484,6 +484,17 @@ impl PtyProcess {
         }
     }
 
+    /// Get properly processed screen dump from AVT terminal
+    pub async fn get_avt_terminal_output(&self) -> String {
+        let session_lock = self.session.lock().await;
+
+        if let Some(session) = session_lock.as_ref() {
+            session.get_avt_terminal_output().await
+        } else {
+            String::new()
+        }
+    }
+
     #[allow(dead_code)]
     pub async fn get_view(&self) -> Result<String, PtyProcessError> {
         let session_lock = self.session.lock().await;
@@ -499,7 +510,10 @@ impl PtyProcess {
 
             if let Some(rx) = response_rx.as_mut() {
                 match rx.recv().await {
-                    Some(PtyResponse::Snapshot { data, .. }) => Ok(data.seq),
+                    Some(PtyResponse::Snapshot { data, .. }) => {
+                        // Return the actual screen content from snapshot seq
+                        Ok(data.seq.clone())
+                    }
                     Some(PtyResponse::View { view, .. }) => view.ok_or_else(|| {
                         PtyProcessError::CommunicationError("No view data in response".to_string())
                     }),

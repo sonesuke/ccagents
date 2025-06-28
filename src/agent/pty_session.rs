@@ -117,8 +117,9 @@ impl PtySession {
     }
 
     async fn emit_snapshot_event(&self) -> Result<()> {
-        let content = self.terminal.get_screen_content().await?;
-        let (cursor_x, cursor_y) = self.terminal.get_cursor_position().await;
+        // Use vt100 screen dump
+        let content = self.terminal.get_screen_dump().await;
+        let (_cursor_x, _cursor_y) = self.terminal.get_cursor_position().await;
 
         let event = PtyEvent {
             event_type: "snapshot".to_string(),
@@ -127,10 +128,7 @@ impl PtySession {
                 cols: self.cols,
                 rows: self.rows,
                 seq: content.clone(),
-                data: format!(
-                    "{}x{} cursor@({},{})",
-                    self.cols, self.rows, cursor_x, cursor_y
-                ),
+                data: content, // Return the actual screen content, not cursor info
             },
         };
         let _ = self.event_tx.send(event);
@@ -140,6 +138,11 @@ impl PtySession {
     async fn get_elapsed_time(&self) -> f64 {
         let elapsed = self.start_time.elapsed();
         elapsed.as_secs_f64()
+    }
+
+    /// Get properly processed screen dump from AVT terminal
+    pub async fn get_avt_terminal_output(&self) -> String {
+        self.terminal.get_avt_screen_dump().await
     }
 }
 

@@ -90,6 +90,7 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
             monitor_config.agent_pool_size,
             monitor_config.base_port,
             false,
+            monitor_config,
         )
         .await?,
     );
@@ -218,36 +219,41 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
         }
     }
 
-    loop {
-        tokio::select! {
-            _ = signal::ctrl_c() => {
-                println!("\n🛑 Received Ctrl+C, shutting down...");
-
-                // Cancel all periodic tasks
-                for handle in periodic_handles {
-                    handle.abort();
-                }
-
-                // Cancel all queue listener tasks
-                for handle in queue_handles {
-                    handle.abort();
-                }
-
-                // Cancel all web server tasks
-                for handle in web_server_handles {
-                    handle.abort();
-                }
-
-                println!("🧹 Cleaned up all tasks");
-                break;
-            }
-            _ = tokio::time::sleep(tokio::time::Duration::from_millis(500)) => {
+    tokio::select! {
+        _ = signal::ctrl_c() => {
+            println!("\n🛑 Received Ctrl+C, shutting down...");
+        }
+        _ = async {
+            let mut interval_timer = tokio::time::interval(tokio::time::Duration::from_millis(500));
+            loop {
+                interval_timer.tick().await;
                 // Process only direct command output (no terminal diff detection)
                 let agent = agent_pool.get_agent();
-                process_direct_output(&agent, &ruler, &queue_manager).await?;
+                if let Err(e) = process_direct_output(&agent, &ruler, &queue_manager).await {
+                    eprintln!("❌ Error processing output: {}", e);
+                }
             }
+        } => {
+            // This branch should never be reached since the loop is infinite
         }
     }
+
+    // Cancel all periodic tasks
+    for handle in periodic_handles {
+        handle.abort();
+    }
+
+    // Cancel all queue listener tasks
+    for handle in queue_handles {
+        handle.abort();
+    }
+
+    // Cancel all web server tasks
+    for handle in web_server_handles {
+        handle.abort();
+    }
+
+    println!("🧹 Cleaned up all tasks");
 
     Ok(())
 }

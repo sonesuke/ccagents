@@ -6,7 +6,7 @@ use std::sync::Arc;
 #[tokio::test]
 async fn test_web_server_creation() {
     let agent = Arc::new(
-        Agent::new("test-agent".to_string(), true, 9999)
+        Agent::new("test-agent".to_string(), true, 9999, 80, 24)
             .await
             .unwrap(),
     );

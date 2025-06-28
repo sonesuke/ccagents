@@ -3,6 +3,7 @@ pub mod pty_session;
 pub mod pty_terminal;
 
 use crate::agent::pty_process::{PtyProcess, PtyProcessConfig};
+use crate::ruler::config::MonitorConfig;
 use anyhow::Result;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -17,13 +18,19 @@ pub struct AgentPool {
 
 impl AgentPool {
     /// Create a new agent pool with the specified size
-    pub async fn new(pool_size: usize, base_port: u16, test_mode: bool) -> Result<Self> {
+    pub async fn new(
+        pool_size: usize,
+        base_port: u16,
+        test_mode: bool,
+        monitor_config: &MonitorConfig,
+    ) -> Result<Self> {
         let mut agents = Vec::new();
 
         for i in 0..pool_size {
             let port = base_port + i as u16;
             let agent_id = format!("agent-{}", i);
-            let agent = Arc::new(Agent::new(agent_id, test_mode, port).await?);
+            let (cols, rows) = monitor_config.get_agent_dimensions(i);
+            let agent = Arc::new(Agent::new(agent_id, test_mode, port, cols, rows).await?);
             agents.push(agent);
         }
 
@@ -52,14 +59,22 @@ impl AgentPool {
 
 pub struct Agent {
     ht_process: PtyProcess,
+    cols: u16,
+    rows: u16,
 }
 
 impl Agent {
-    pub async fn new(_id: String, test_mode: bool, _port: u16) -> Result<Self> {
+    pub async fn new(
+        _id: String,
+        test_mode: bool,
+        _port: u16,
+        cols: u16,
+        rows: u16,
+    ) -> Result<Self> {
         let config = PtyProcessConfig {
             shell_command: Some(std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string())),
-            cols: 80,
-            rows: 24,
+            cols,
+            rows,
         };
 
         let ht_process = PtyProcess::new(config);
@@ -69,7 +84,11 @@ impl Agent {
             ht_process.start().await?;
         }
 
-        Ok(Agent { ht_process })
+        Ok(Agent {
+            ht_process,
+            cols,
+            rows,
+        })
     }
 
     pub async fn send_keys(&self, keys: &str) -> Result<()> {
@@ -110,27 +129,18 @@ impl Agent {
 
     /// Get current terminal output (for WebSocket)
     pub async fn get_terminal_output(&self) -> Result<String> {
-        // Get the actual terminal screen content
-        match self.ht_process.get_view().await {
-            Ok(content) => {
-                // Format content for better terminal display
-                if content.is_empty() {
-                    Ok("Terminal ready\r\n$ ".to_string())
-                } else {
-                    // Ensure proper line endings for terminal display
-                    let formatted = content.replace('\n', "\r\n");
-                    Ok(formatted)
-                }
-            }
-            Err(_) => Ok("Terminal initializing...\r\n$ ".to_string()),
+        // Use AVT terminal dump for properly processed output with colors
+        let content = self.ht_process.get_avt_terminal_output().await;
+        if content.trim().is_empty() {
+            Ok("Terminal ready\r\n$ ".to_string())
+        } else {
+            Ok(content)
         }
     }
 
     /// Get terminal dimensions for asciinema integration
-    #[allow(dead_code)] // Will be used in future enhancements
     pub fn get_terminal_size(&self) -> (u16, u16) {
-        // Return cols, rows based on PTY configuration
-        (80, 24) // Default size, can be made configurable later
+        (self.cols, self.rows)
     }
 }
 
@@ -140,7 +150,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_agent_creation() {
-        let _agent = Agent::new("test-agent".to_string(), true, 9999)
+        let _agent = Agent::new("test-agent".to_string(), true, 9999, 80, 24)
             .await
             .unwrap();
         // Just verify the agent can be created successfully
