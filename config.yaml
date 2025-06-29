@@ -8,9 +8,12 @@
 # - examples/agent_pool/concurrency_demo.yaml - Multiple agents running in parallel
 
 # Optional monitor configuration
-# monitor:
-#   base_port: 9990        # First agent port (default: 9990)
-#   agent_pool_size: 1     # Number of parallel agents (default: 1)
+monitor:
+  base_port: 9990        # First agent port (default: 9990)
+  agent_pool_size: 1     # Number of parallel agents (default: 1)
+  web_ui:
+    enabled: true        # Enable/disable web interface
+    host: "localhost"    # Bind address (use "0.0.0.0" for external access)
 
 # External triggers - initiated by system events
 entries:

@@ -63,10 +63,9 @@ pub struct PtySession {
 
 impl PtySession {
     pub async fn new(command: String, cols: usize, rows: usize) -> Result<Self> {
-        let terminal = Arc::new(PtyTerminal::new(command, cols as u16, rows as u16).await?);
-
         let (event_tx, _) = broadcast::channel(1024);
         let now = Instant::now();
+        let terminal = Arc::new(PtyTerminal::new(command, cols as u16, rows as u16, event_tx.clone(), now).await?);
 
         let session = Self {
             terminal: terminal.clone(),
@@ -76,15 +75,24 @@ impl PtySession {
             rows,
         };
 
-        tokio::spawn(output_handler(terminal, event_tx, now));
+        // No need for separate output_handler since PTY terminal emits events directly
 
         Ok(session)
     }
 
     pub async fn handle_command(&self, command: PtyCommand) -> Result<()> {
+        use tracing::info;
+        info!("🎯 handle_command called with: {:?}", command);
+
         match command {
             PtyCommand::Input { payload } => {
+                info!(
+                    "🔄 Processing Input command: {} bytes: {:?}",
+                    payload.len(),
+                    payload
+                );
                 self.terminal.write_input(payload.as_bytes()).await?;
+                info!("✅ Input written to terminal successfully");
             }
             PtyCommand::SendKeys { keys } => {
                 for key in keys {
@@ -151,6 +159,41 @@ impl PtySession {
     pub async fn get_raw_ansi_output(&self) -> Result<Option<String>> {
         self.terminal.get_raw_ansi_output().await
     }
+
+    /// Send output data directly to the terminal's output channel
+    pub async fn send_output_data(&self, data: &str) -> Result<()> {
+        use bytes::Bytes;
+        self.terminal
+            .write_output(Bytes::from(data.to_string()))
+            .await
+    }
+
+    /// Get direct access to PTY output broadcast receiver for WebSocket streaming
+    pub async fn get_pty_output_receiver(&self) -> Result<tokio::sync::broadcast::Receiver<String>> {
+        // Get a receiver for the terminal's output channel
+        let mut bytes_rx = self.terminal.get_output_receiver().await?;
+        let (string_tx, string_rx) = tokio::sync::broadcast::channel(1024);
+        
+        // Spawn a converter task that converts Bytes to String
+        tokio::spawn(async move {
+            use tracing::info;
+            info!("🔄 PTY session converter task started");
+            
+            while let Ok(bytes) = bytes_rx.recv().await {
+                let string_data = String::from_utf8_lossy(&bytes).to_string();
+                info!("🔄 Converting {} bytes to string: {:?}", bytes.len(), &string_data[..std::cmp::min(100, string_data.len())]);
+                
+                if let Err(_) = string_tx.send(string_data.clone()) {
+                    info!("❌ Converter task: No more string receivers, stopping");
+                    break;
+                }
+                info!("✅ Converter task: String data sent to channel");
+            }
+            info!("🔚 PTY session converter task terminated");
+        });
+        
+        Ok(string_rx)
+    }
 }
 
 async fn output_handler(
@@ -158,8 +201,12 @@ async fn output_handler(
     event_tx: broadcast::Sender<PtyEvent>,
     start_time: Instant,
 ) {
+    use tracing::{debug, info};
+    info!("🚀 Output handler started");
+
     while let Ok(Some(data)) = terminal.read_output().await {
         let output = String::from_utf8_lossy(&data).to_string();
+        info!("📄 PTY output received: {} bytes: {:?}", data.len(), output);
 
         let event = PtyEvent {
             event_type: "output".to_string(),
@@ -168,9 +215,13 @@ async fn output_handler(
         };
 
         if event_tx.send(event).is_err() {
+            info!("❌ Failed to send output event");
             break;
+        } else {
+            info!("✅ Output event sent successfully");
         }
     }
+    info!("⚠️ Output handler terminated");
 }
 
 fn parse_key(key: &str) -> Vec<u8> {

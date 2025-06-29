@@ -25,8 +25,25 @@
       "Bash(mkdir:*)",
       "Bash(cargo:*)",
       "Bash(find:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(nohup:*)",
+      "Bash(grep:*)",
+      "Bash(pkill:*)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_type",
+      "mcp__playwright__browser_wait_for",
+      "mcp__playwright__browser_console_messages",
+      "mcp__playwright__browser_network_requests",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_snapshot",
+      "mcp__repomix__pack_remote_repository",
+      "mcp__repomix__grep_repomix_output"
     ],
     "deny": []
-  }
+  },
+  "enabledMcpjsonServers": [
+    "repomix",
+    "playwright"
+  ]
 }

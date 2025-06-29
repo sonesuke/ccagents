@@ -11,17 +11,13 @@ monitor:
 
 # Example entries for automation
 entries:
-  - name: "startup_message"
-    trigger:
-      type: "on_start"
-    action:
-      type: "send_keys" 
-      keys: "echo 'Rule Agents Web UI is ready!'\n"
+  - name: "compound_command_test"
+    trigger: "on_start"
+    action: "send_keys"
+    keys: ["echo 'First message'; echo 'Second message'; pwd; ls -la; echo 'Final message'", "\r"]
 
 # Example rules for pattern matching
 rules:
   - pattern: "Web UI ready"
-    action:
-      type: "enqueue"
-      queue: "web_ui_events"
-      item: "ui_ready"
+    action: "send_keys"
+    keys: ["echo 'UI is ready'", "\r"]

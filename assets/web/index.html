@@ -6,43 +6,73 @@
     <title>Rule Agents Terminal</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.7.0/dist/bundle/asciinema-player.css" />
     <style>
-        body {
+        html, body {
+            height: 100%;
             margin: 0;
-            padding: 20px;
-            background-color: #1e1e1e;
-            color: #ffffff;
-            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
+            padding: 0;
+            background-color: #282a36;
+            overflow: hidden;
         }
-        .container {
-            max-width: 100%;
-            margin: 0 auto;
+        
+        body {
+            box-sizing: border-box;
+            padding: 40px;
         }
+        
         .header {
             margin-bottom: 20px;
             text-align: center;
+            color: #f8f8f2;
+            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
         }
+        
         #terminal {
-            width: 100%;
-            height: 600px;
-            border: 1px solid #333;
-            border-radius: 4px;
-            overflow: hidden;
+            border: none !important;
+            border-radius: 0 !important;
         }
+        
+        .ap-wrapper {
+            width: 100% !important;
+            height: auto !important;
+            display: block !important;
+        }
+        
+        .ap-player {
+            width: 100% !important;
+            height: auto !important;
+            display: block !important;
+            box-shadow: #141518 0px 0px 60px 5px;
+            margin: 0;
+        }
+        
+        .ap-terminal {
+            width: 100% !important;
+            height: auto !important;
+            display: block !important;
+            line-height: 1.2 !important;
+            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace !important;
+            font-size: 14px !important;
+        }
+        
         .input-area {
             margin-top: 20px;
             display: flex;
             align-items: center;
             gap: 10px;
+            color: #f8f8f2;
+            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
         }
+        
         #input {
             flex: 1;
             padding: 10px;
-            background-color: #2d2d2d;
-            border: 1px solid #444;
+            background-color: #44475a;
+            border: 1px solid #6272a4;
             border-radius: 4px;
-            color: #ffffff;
+            color: #f8f8f2;
             font-family: inherit;
         }
+        
         .status {
             position: fixed;
             top: 10px;
@@ -50,212 +80,155 @@
             padding: 5px 10px;
             border-radius: 4px;
             font-size: 12px;
+            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
         }
-        .connected { background-color: #28a745; }
-        .disconnected { background-color: #dc3545; }
-        .reconnecting { background-color: #ffc107; color: #000; }
+        
+        .connected { background-color: #50fa7b; color: #282a36; }
+        .disconnected { background-color: #ff5555; color: #f8f8f2; }
+        .reconnecting { background-color: #ffb86c; color: #282a36; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>Rule Agents Terminal</h1>
-        </div>
-        
-        <div id="terminal"></div>
-        
-        <div class="input-area">
-            <span>$</span>
-            <input id="input" type="text" placeholder="Type commands and press Enter...">
-        </div>
+    <div class="header">
+        <h1>Rule Agents Terminal</h1>
+    </div>
+    
+    <div id="terminal" style="width: 100%; background-color: #1a1a1a; border: none; border-radius: 0;"></div>
+    
+    <div class="input-area">
+        <span>$</span>
+        <input id="input" type="text" placeholder="Type commands and press Enter...">
     </div>
     
     <div id="status" class="status disconnected">Disconnected</div>
     
     <script src="https://cdn.jsdelivr.net/npm/asciinema-player@3.7.0/dist/bundle/asciinema-player.min.js"></script>
     <script>
-        class TerminalClient {
-            constructor() {
-                this.terminal = document.getElementById('terminal');
-                this.input = document.getElementById('input');
-                this.status = document.getElementById('status');
-                this.ws = null;
-                this.eventLog = [];
-                this.startTime = null;
-                this.setupEventListeners();
-                this.connect();
-            }
-
-            connect() {
-                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const wsUrl = `${protocol}//${window.location.host}/ws`;
-                
-                console.log('Connecting to WebSocket:', wsUrl);
-                this.updateStatus('reconnecting', 'Connecting...');
-                
-                this.ws = new WebSocket(wsUrl);
-                
-                this.ws.onopen = () => {
-                    console.log('WebSocket connected');
-                    this.updateStatus('connected', 'Connected');
-                    this.startTime = Date.now();
-                    this.initializePlayer();
-                };
-                
-                this.ws.onmessage = (event) => {
-                    console.log('📨 Received WebSocket data:', event.data);
-                    console.log('📨 Data length:', event.data.length);
-                    console.log('📨 Data type:', typeof event.data);
-                    this.handleTerminalData(event.data);
-                };
-                
-                this.ws.onclose = () => {
-                    console.log('WebSocket disconnected');
-                    this.updateStatus('disconnected', 'Disconnected');
-                    setTimeout(() => this.connect(), 3000);
-                };
-                
-                this.ws.onerror = (error) => {
-                    console.error('WebSocket error:', error);
-                    this.updateStatus('reconnecting', 'Reconnecting...');
-                };
-            }
+        // Simple implementation like ht project
+        const loc = window.location;
+        const src = loc.protocol.replace("http", "ws") + '//' + loc.host + '/ws';
+        
+        console.log('Connecting to WebSocket:', src);
+        
+        const opts = {
+            logger: console,
+            fit: false,
+            theme: 'dracula', 
+            controls: false,
+            autoPlay: true,
+            cols: 80,
+            rows: 24,
+            terminalFontSize: '14px'
+        };
+        
+        // Wait for DOM to be ready and container to have proper size
+        function initializePlayer() {
+            const terminal = document.getElementById('terminal');
+            console.log('Terminal container rect:', terminal.getBoundingClientRect());
             
-            initializePlayer() {
-                // Create initial asciinema recording with a welcome message
-                const initialCast = {
-                    version: 2,
-                    width: 80,
-                    height: 24,
-                    timestamp: Math.floor(this.startTime / 1000),
-                    env: {
-                        TERM: "xterm-256color",
-                        SHELL: "/bin/bash"
-                    }
-                };
-                
-                // Create initial cast string with welcome message
-                const welcomeEvent = [0, "o", "Terminal ready. Type commands below.\r\n$ "];
-                const initialCastString = JSON.stringify(initialCast) + '\n' + JSON.stringify(welcomeEvent);
-                
-                // Create a Blob URL from the cast data
-                const blob = new Blob([initialCastString], { type: 'application/json' });
-                const blobUrl = URL.createObjectURL(blob);
-                this.currentBlobUrl = blobUrl;
-                
-                console.log('Creating asciinema player with blob URL:', blobUrl);
-                
-                // Initialize player with blob URL
-                this.player = AsciinemaPlayer.create(blobUrl, this.terminal, {
-                    cols: 80,
-                    rows: 24,
-                    autoPlay: true,
-                    preload: true,
-                    loop: false,
-                    startAt: 0,
-                    speed: 1,
-                    idleTimeLimit: 2,
-                    theme: {
-                        background: "transparent",
-                        foreground: "#f8f8f2"
-                    }
-                });
-                
-                console.log('Asciinema player created successfully');
-            }
+            // Force container to have proper size
+            terminal.style.width = '100%';
+            terminal.style.display = 'block';
             
-            handleTerminalData(data) {
-                if (!this.startTime || !data) {
-                    console.log('⚠️ Skipping terminal data - no startTime or empty data');
-                    return;
+            console.log('Creating asciinema player with container size:', terminal.getBoundingClientRect());
+            
+            // Let asciinema player handle WebSocket connection directly
+            window.player = AsciinemaPlayer.create(src, terminal, opts);
+            
+            // Simple approach - let asciinema player use full container width
+            setTimeout(() => {
+                const wrapperElement = document.querySelector('.ap-wrapper');
+                if (wrapperElement) {
+                    wrapperElement.style.width = '100%';
+                    wrapperElement.style.height = 'auto';
+                    wrapperElement.style.display = 'block';
+                    console.log('Set wrapper to full width, current size:', wrapperElement.getBoundingClientRect());
                 }
                 
-                const timestamp = (Date.now() - this.startTime) / 1000;
-                this.eventLog.push([timestamp, "o", data]);
-                
-                console.log('📝 Adding event:', [timestamp, "o", data]);
-                console.log('📊 Total events now:', this.eventLog.length);
-                
-                // Try to feed data to existing player or recreate
-                this.updatePlayerWithNewData();
-            }
-            
-            updatePlayerWithNewData() {
-                if (this.eventLog.length === 0) return;
-                
-                // Create new cast with accumulated events
-                const cast = {
-                    version: 2,
-                    width: 80,
-                    height: 24,
-                    timestamp: Math.floor(this.startTime / 1000),
-                    env: {
-                        TERM: "xterm-256color",
-                        SHELL: "/bin/bash"
-                    }
-                };
-                
-                // Add events inline (asciinema v2 format)
-                const castWithEvents = JSON.stringify(cast) + '\n' + 
-                    this.eventLog.map(event => JSON.stringify(event)).join('\n');
-                
-                // Create new blob URL with updated events
-                const blob = new Blob([castWithEvents], { type: 'application/json' });
-                const blobUrl = URL.createObjectURL(blob);
-                
-                console.log('Updating player with new data, events:', this.eventLog.length);
-                
-                // Clean up old blob URL if exists
-                if (this.currentBlobUrl) {
-                    URL.revokeObjectURL(this.currentBlobUrl);
+                const playerElement = document.querySelector('.ap-player');
+                if (playerElement) {
+                    playerElement.style.width = '100%';
+                    playerElement.style.height = 'auto';
+                    playerElement.style.display = 'block';
+                    console.log('Set player to full width, current size:', playerElement.getBoundingClientRect());
                 }
-                this.currentBlobUrl = blobUrl;
                 
-                // Clear and recreate player with updated events
-                this.terminal.innerHTML = '';
-                this.player = AsciinemaPlayer.create(blobUrl, this.terminal, {
-                    cols: 80,
-                    rows: 24,
-                    autoPlay: true,
-                    preload: true,
-                    loop: false,
-                    startAt: "last",
-                    speed: 1,
-                    theme: {
-                        background: "transparent",
-                        foreground: "#f8f8f2"
-                    }
-                });
-            }
-
-            setupEventListeners() {
-                this.input.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        const command = this.input.value;
-                        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                            console.log('Sending command:', command);
-                            this.ws.send(command + '\r');
-                            this.input.value = '';
-                        } else {
-                            console.error('WebSocket not connected');
-                        }
-                    }
+                const terminalElement = document.querySelector('.ap-terminal');
+                if (terminalElement) {
+                    terminalElement.style.width = '100%';
+                    terminalElement.style.height = 'auto';
+                    terminalElement.style.display = 'block';
+                    terminalElement.style.lineHeight = '1.2';
+                    terminalElement.style.fontFamily = "'SF Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace";
+                    terminalElement.style.fontSize = '14px';
+                    console.log('Set terminal to full width with font adjustments, current size:', terminalElement.getBoundingClientRect());
+                }
+                
+                if (window.player && window.player.resize) {
+                    window.player.resize();
+                }
+            }, 100);
+        }
+        
+        // Initialize after a short delay to ensure DOM is ready
+        setTimeout(initializePlayer, 100);
+        
+        // Simple input handling using HTTP API
+        const input = document.getElementById('input');
+        const status = document.getElementById('status');
+        
+        // Set initial status to connected (since WebSocket is handled by asciinema player)
+        status.className = 'status connected';
+        status.textContent = 'Connected';
+        
+        // Function to send command via HTTP API
+        async function sendCommand(command) {
+            try {
+                const response = await fetch('/api/command', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ command: command + '\r' }),
                 });
                 
-                this.input.focus();
-            }
-
-            updateStatus(className, text) {
-                this.status.className = `status ${className}`;
-                this.status.textContent = text;
+                const result = await response.json();
+                
+                if (result.success) {
+                    console.log('Command sent successfully:', command);
+                } else {
+                    console.error('Failed to send command:', result.message);
+                    status.className = 'status disconnected';
+                    status.textContent = 'Error';
+                    setTimeout(() => {
+                        status.className = 'status connected';
+                        status.textContent = 'Connected';
+                    }, 2000);
+                }
+            } catch (error) {
+                console.error('Error sending command:', error);
+                status.className = 'status disconnected';
+                status.textContent = 'Error';
+                setTimeout(() => {
+                    status.className = 'status connected';
+                    status.textContent = 'Connected';
+                }, 2000);
             }
         }
-
-        // Initialize when page loads
-        document.addEventListener('DOMContentLoaded', () => {
-            new TerminalClient();
+        
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const command = input.value;
+                if (command.trim()) {
+                    console.log('Sending command:', command);
+                    sendCommand(command);
+                    input.value = '';
+                }
+            }
         });
+        
+        input.focus();
     </script>
 </body>
 </html>

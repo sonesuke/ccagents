@@ -5,18 +5,30 @@ use anyhow::Result;
 use axum::{
     extract::{State, WebSocketUpgrade},
     http::StatusCode,
-    response::{Html, Response},
-    routing::get,
+    response::{Html, Response, Json},
+    routing::{get, post},
     Router,
 };
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
 use tracing::info;
+use serde::{Deserialize, Serialize};
 
 use super::websocket::handle_websocket;
 use crate::agent::Agent;
 use crate::web_ui::assets::AssetCache;
+
+#[derive(Deserialize)]
+struct CommandRequest {
+    command: String,
+}
+
+#[derive(Serialize)]
+struct CommandResponse {
+    success: bool,
+    message: String,
+}
 
 #[derive(Clone)]
 pub struct WebServer {
@@ -69,6 +81,7 @@ impl WebServer {
         Router::new()
             .route("/", get(serve_index))
             .route("/ws", get(websocket_handler))
+            .route("/api/command", post(send_command))
             .with_state((self.agent.clone(), self.asset_cache.clone()))
             .layer(ServiceBuilder::new().layer(CorsLayer::permissive()))
     }
@@ -96,4 +109,28 @@ async fn websocket_handler(
     info!("🔌 WebSocket upgrade request received");
     crate::debug_print!("🔌 WebSocket connection attempt");
     ws.on_upgrade(move |socket| handle_websocket(socket, agent))
+}
+
+async fn send_command(
+    State((agent, _)): State<(Arc<Agent>, AssetCache)>,
+    Json(request): Json<CommandRequest>,
+) -> Json<CommandResponse> {
+    info!("📨 Command API request: {}", request.command);
+    
+    match agent.send_input(&request.command).await {
+        Ok(_) => {
+            info!("✅ Command sent successfully: {}", request.command);
+            Json(CommandResponse {
+                success: true,
+                message: "Command sent successfully".to_string(),
+            })
+        }
+        Err(e) => {
+            tracing::error!("❌ Failed to send command: {}", e);
+            Json(CommandResponse {
+                success: false,
+                message: format!("Failed to send command: {}", e),
+            })
+        }
+    }
 }
