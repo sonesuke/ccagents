@@ -4,7 +4,7 @@ This directory demonstrates the queue system for periodic task execution and aut
 
 ## Files
 
-### simple_queue.yaml
+### config.yaml
 Minimal queue system demonstration:
 - **Periodic triggers**: Execute commands at regular intervals
 - **Enqueue actions**: Add command output to named queues

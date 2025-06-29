@@ -1,13 +1,17 @@
 # Example configuration with Web UI enabled
 # This shows how to configure the web terminal interface
 
-monitor:
+# Web UI configuration
+web_ui:
+  enabled: true          # Enable/disable web interface
+  host: "localhost"      # Bind address (use "0.0.0.0" for external access)
   base_port: 9990        # First agent web interface port
-  agent_pool_size: 2     # Multiple agents get sequential ports (9990, 9991)
-  web_ui:
-    enabled: true        # Enable/disable web interface
-    host: "localhost"    # Bind address (use "0.0.0.0" for external access)
-    theme: "default"     # UI theme selection (for future use)
+
+# Agent configuration
+agents:
+  concurrency: 2         # Number of agents (get sequential ports: 9990, 9991)
+  cols: 120              # Terminal width for all agents
+  rows: 40               # Terminal height for all agents
 
 # Example entries for automation
 entries:

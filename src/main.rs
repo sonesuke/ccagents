@@ -76,7 +76,7 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
     // Create ruler with queue manager
     let ruler = Ruler::new(rules_path.to_str().unwrap()).await?;
 
-    let base_port = ruler.get_monitor_config().base_port;
+    let base_port = ruler.get_monitor_config().get_web_ui_port();
 
     // Clear debug log files at startup
     if let Ok(mut file) = std::fs::File::create("pattern_match_debug.log") {
@@ -105,8 +105,8 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
     let monitor_config = ruler.get_monitor_config();
     let agent_pool = Arc::new(
         agent::AgentPool::new(
-            monitor_config.agent_pool_size,
-            monitor_config.base_port,
+            monitor_config.get_agent_pool_size(),
+            monitor_config.get_web_ui_port(),
             false,
             monitor_config,
         )
@@ -116,8 +116,8 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
     // Start web servers for each agent (if enabled)
     let mut web_server_handles = Vec::new();
     if monitor_config.web_ui.enabled {
-        for i in 0..monitor_config.agent_pool_size {
-            let port = monitor_config.base_port + i as u16;
+        for i in 0..monitor_config.get_agent_pool_size() {
+            let port = monitor_config.get_web_ui_port() + i as u16;
             let agent = agent_pool.get_agent_by_index(i);
             let web_server = WebServer::new(port, monitor_config.web_ui.host.clone(), agent);
 
@@ -137,8 +137,8 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
 
     // Show all web UI URLs (if enabled)
     if monitor_config.web_ui.enabled {
-        for i in 0..monitor_config.agent_pool_size {
-            let port = monitor_config.base_port + i as u16;
+        for i in 0..monitor_config.get_agent_pool_size() {
+            let port = monitor_config.get_web_ui_port() + i as u16;
             println!(
                 "💡 Agent {} web UI: http://{}:{}",
                 i + 1,
@@ -280,10 +280,14 @@ async fn handle_show_command(args: &cli::ShowArgs) -> Result<()> {
         ruler::config::load_config(&args.config).context("Failed to load config")?;
 
     println!("Loaded {} entries and {} rules", entries.len(), rules.len());
-    println!(
-        "Monitor config: base_port = {}, agent_pool_size = {}",
-        monitor_config.base_port, monitor_config.agent_pool_size
-    );
+    println!("\nWeb UI config:");
+    println!("  enabled: {}", monitor_config.web_ui.enabled);
+    println!("  host: {}", monitor_config.web_ui.host);
+    println!("  base_port: {}", monitor_config.web_ui.base_port);
+    println!("\nAgents config:");
+    println!("  concurrency: {}", monitor_config.agents.concurrency);
+    println!("  cols: {}", monitor_config.agents.cols);
+    println!("  rows: {}", monitor_config.agents.rows);
 
     if !entries.is_empty() {
         println!("\nEntries:");

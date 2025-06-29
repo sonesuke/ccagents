@@ -29,10 +29,12 @@ fn test_web_ui_config_defaults() {
 fn test_monitor_config_with_web_ui() {
     let config = MonitorConfig::default();
 
-    assert_eq!(config.base_port, 9990);
-    assert_eq!(config.agent_pool_size, 1);
+    assert_eq!(config.get_web_ui_port(), 9990);
+    assert_eq!(config.get_agent_pool_size(), 1);
     assert!(config.web_ui.enabled);
     assert_eq!(config.web_ui.host, "localhost");
+    assert_eq!(config.web_ui.base_port, 9990);
+    assert_eq!(config.agents.concurrency, 1);
 }
 
 #[tokio::test]

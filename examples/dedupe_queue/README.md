@@ -4,7 +4,7 @@ This directory demonstrates queue processing with automatic deduplication to pre
 
 ## Files
 
-### dedupe_example.yaml
+### config.yaml
 Comprehensive deduplication demonstration:
 - **Periodic triggers with duplicates**: Script outputs include duplicate items
 - **Enqueue dedupe actions**: Only unique items are added to queues

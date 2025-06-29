@@ -7,13 +7,17 @@
 # - examples/dedupe_queue/dedupe_example.yaml - Duplicate filtering queues
 # - examples/agent_pool/concurrency_demo.yaml - Multiple agents running in parallel
 
-# Optional monitor configuration
-monitor:
-  base_port: 9990        # First agent port (default: 9990)
-  agent_pool_size: 1     # Number of parallel agents (default: 1)
-  web_ui:
-    enabled: true        # Enable/disable web interface
-    host: "localhost"    # Bind address (use "0.0.0.0" for external access)
+# Web UI configuration
+web_ui:
+  enabled: true        # Enable/disable web interface
+  host: "localhost"    # Bind address (use "0.0.0.0" for external access)
+  base_port: 9990      # First agent port (default: 9990)
+
+# Agent configuration
+agents:
+  concurrency: 1       # Number of parallel agents (default: 1)
+  cols: 80             # Terminal width
+  rows: 24             # Terminal height
 
 # External triggers - initiated by system events
 entries:

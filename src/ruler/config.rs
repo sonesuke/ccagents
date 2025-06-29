@@ -4,21 +4,19 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::path::Path;
 
-// Monitor configuration for base port and other monitoring settings
-#[derive(Debug, Deserialize)]
+// Configuration structure with separate web_ui and agents sections
+#[derive(Debug, Deserialize, Default)]
 pub struct MonitorConfig {
-    #[serde(default = "default_base_port")]
-    pub base_port: u16,
-    #[serde(default = "default_agent_pool_size")]
-    pub agent_pool_size: usize,
     #[serde(default)]
     pub web_ui: WebUIConfig,
     #[serde(default)]
-    pub agents: Vec<AgentConfig>,
+    pub agents: AgentsConfig,
 }
 
-#[derive(Debug, Deserialize, Clone)]
-pub struct AgentConfig {
+#[derive(Debug, Deserialize)]
+pub struct AgentsConfig {
+    #[serde(default = "default_concurrency")]
+    pub concurrency: usize,
     #[serde(default = "default_cols")]
     pub cols: u16,
     #[serde(default = "default_rows")]
@@ -31,22 +29,14 @@ pub struct WebUIConfig {
     pub enabled: bool,
     #[serde(default = "default_host")]
     pub host: String,
+    #[serde(default = "default_base_port")]
+    pub base_port: u16,
 }
 
-impl Default for MonitorConfig {
+impl Default for AgentsConfig {
     fn default() -> Self {
         Self {
-            base_port: default_base_port(),
-            agent_pool_size: default_agent_pool_size(),
-            web_ui: WebUIConfig::default(),
-            agents: Vec::new(),
-        }
-    }
-}
-
-impl Default for AgentConfig {
-    fn default() -> Self {
-        Self {
+            concurrency: default_concurrency(),
             cols: default_cols(),
             rows: default_rows(),
         }
@@ -58,6 +48,7 @@ impl Default for WebUIConfig {
         Self {
             enabled: default_enabled(),
             host: default_host(),
+            base_port: default_base_port(),
         }
     }
 }
@@ -66,7 +57,7 @@ fn default_base_port() -> u16 {
     9990
 }
 
-fn default_agent_pool_size() -> usize {
+fn default_concurrency() -> usize {
     1
 }
 
@@ -94,7 +85,9 @@ pub struct ConfigFile {
     #[serde(default)]
     pub rules: Vec<Rule>,
     #[serde(default)]
-    pub monitor: MonitorConfig,
+    pub web_ui: WebUIConfig,
+    #[serde(default)]
+    pub agents: AgentsConfig,
 }
 
 /// Load configuration from a YAML file and compile entries and rules
@@ -123,18 +116,27 @@ pub fn load_config(path: &Path) -> Result<(Vec<CompiledEntry>, Vec<CompiledRule>
 
     // Rules are processed in order (no sorting needed - line order = priority)
 
-    Ok((compiled_entries, compiled_rules, config_file.monitor))
+    let monitor_config = MonitorConfig {
+        web_ui: config_file.web_ui,
+        agents: config_file.agents,
+    };
+
+    Ok((compiled_entries, compiled_rules, monitor_config))
 }
 
 impl MonitorConfig {
-    /// Get terminal dimensions for a specific agent index
-    pub fn get_agent_dimensions(&self, index: usize) -> (u16, u16) {
-        if index < self.agents.len() {
-            let agent = &self.agents[index];
-            (agent.cols, agent.rows)
-        } else {
-            // Use default dimensions if no specific agent config
-            (default_cols(), default_rows())
-        }
+    /// Get terminal dimensions for agents (same for all agents)
+    pub fn get_agent_dimensions(&self, _index: usize) -> (u16, u16) {
+        (self.agents.cols, self.agents.rows)
+    }
+
+    /// Get web UI base port (for backward compatibility)
+    pub fn get_web_ui_port(&self) -> u16 {
+        self.web_ui.base_port
+    }
+
+    /// Get agent pool size (for backward compatibility)
+    pub fn get_agent_pool_size(&self) -> usize {
+        self.agents.concurrency
     }
 }

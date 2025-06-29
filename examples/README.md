@@ -16,32 +16,32 @@ cargo run -- --config examples/basic/config.yaml
 
 ### [Simple Queue System](./simple_queue/)
 Periodic task execution and queue-based processing.
-- **simple_queue.yaml**: Basic queue operations
+- **config.yaml**: Basic queue operations
 - Periodic triggers and automatic task processing
 
 ```bash
 # Run queue examples
-cargo run -- --config examples/simple_queue/simple_queue.yaml
+cargo run -- --config examples/simple_queue/config.yaml
 ```
 
 ### [Dedupe Queue System](./dedupe_queue/)
 Queue processing with automatic deduplication.
-- **dedupe_example.yaml**: Prevents duplicate item processing
+- **config.yaml**: Prevents duplicate item processing
 - In-memory deduplication with automatic filtering
 
 ```bash
 # Run dedupe queue examples
-cargo run -- --config examples/dedupe_queue/dedupe_example.yaml
+cargo run -- --config examples/dedupe_queue/config.yaml
 ```
 
 ### [Agent Pool System](./agent_pool/)
 Multiple agents running in parallel for improved performance.
-- **concurrency_demo.yaml**: 2 agents running tasks in parallel
+- **config.yaml**: 2 agents running tasks in parallel
 - Round-robin task distribution across agents
 
 ```bash
 # Run agent pool examples
-cargo run -- --config examples/agent_pool/concurrency_demo.yaml
+cargo run -- --config examples/agent_pool/config.yaml
 ```
 
 ### [Web UI Configuration](./web-ui/)
@@ -63,7 +63,7 @@ cargo run -- --config examples/web-ui/config.yaml
 cargo run
 
 # With specific config
-cargo run -- --config examples/[folder]/[config].yaml
+cargo run -- --config examples/[folder]/config.yaml
 ```
 
 ## Core Features Demonstrated
