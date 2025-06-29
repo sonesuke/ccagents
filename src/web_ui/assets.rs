@@ -45,12 +45,6 @@ impl AssetCache {
     pub async fn get_index_html(&self) -> Result<String> {
         self.get_asset("index.html").await
     }
-
-    #[allow(dead_code)]
-    pub fn clear_cache(&self) {
-        let mut cache = self.cache.write().unwrap();
-        cache.clear();
-    }
 }
 
 impl Default for AssetCache {

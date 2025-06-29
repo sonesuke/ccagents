@@ -60,7 +60,7 @@ pub struct SnapshotData {
 #[derive(Debug, Clone)]
 pub struct CommandOutput {
     pub content: String,
-    #[allow(dead_code)]
+
     pub is_stdout: bool, // true for stdout, false for stderr
 }
 
@@ -495,18 +495,6 @@ impl PtyProcess {
         }
     }
 
-    /// Get properly processed screen dump from AVT terminal
-    #[allow(dead_code)]
-    pub async fn get_avt_terminal_output(&self) -> String {
-        let session_lock = self.session.lock().await;
-
-        if let Some(session) = session_lock.as_ref() {
-            session.get_avt_terminal_output().await
-        } else {
-            String::new()
-        }
-    }
-
     /// Get accumulated terminal output for initial WebSocket state
     pub async fn get_accumulated_output(&self) -> Vec<u8> {
         let session_lock = self.session.lock().await;
@@ -515,28 +503,6 @@ impl PtyProcess {
             session.get_accumulated_output().await
         } else {
             Vec::new()
-        }
-    }
-
-    /// Get raw ANSI output from terminal
-    #[allow(dead_code)]
-    pub async fn get_raw_ansi_output(&self) -> Result<Option<String>, PtyProcessError> {
-        // Use try_lock to avoid blocking WebSocket polling when input is being processed
-        match self.session.try_lock() {
-            Ok(session_guard) => {
-                if let Some(session) = session_guard.as_ref() {
-                    session
-                        .get_raw_ansi_output()
-                        .await
-                        .map_err(|e| PtyProcessError::CommunicationError(e.to_string()))
-                } else {
-                    Err(PtyProcessError::NotRunning)
-                }
-            }
-            Err(_) => {
-                // Session is locked by input processing, skip this poll cycle
-                Ok(None)
-            }
         }
     }
 
@@ -551,44 +517,6 @@ impl PtyProcess {
                 .get_pty_output_receiver()
                 .await
                 .map_err(|e| PtyProcessError::CommunicationError(e.to_string()))
-        } else {
-            Err(PtyProcessError::NotRunning)
-        }
-    }
-
-    #[allow(dead_code)]
-    pub async fn get_view(&self) -> Result<String, PtyProcessError> {
-        let session_lock = self.session.lock().await;
-
-        if let Some(session) = session_lock.as_ref() {
-            session
-                .handle_command(PtyCommand::TakeSnapshot)
-                .await
-                .map_err(|e| PtyProcessError::CommunicationError(e.to_string()))?;
-
-            drop(session_lock);
-            let mut response_rx = self.response_rx.lock().await;
-
-            if let Some(rx) = response_rx.as_mut() {
-                match rx.recv().await {
-                    Some(PtyResponse::Snapshot { data, .. }) => {
-                        // Return the actual screen content from snapshot seq
-                        Ok(data.seq.clone())
-                    }
-                    Some(PtyResponse::View { view, .. }) => view.ok_or_else(|| {
-                        PtyProcessError::CommunicationError("No view data in response".to_string())
-                    }),
-                    Some(PtyResponse::Output { data, .. }) => {
-                        // Output responses are handled elsewhere, this shouldn't be called for them
-                        Ok(data)
-                    }
-                    None => Err(PtyProcessError::CommunicationError(
-                        "No response received".to_string(),
-                    )),
-                }
-            } else {
-                Err(PtyProcessError::NotRunning)
-            }
         } else {
             Err(PtyProcessError::NotRunning)
         }

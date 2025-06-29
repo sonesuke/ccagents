@@ -1,13 +1,12 @@
 use crate::agent::pty_session::{PtyEvent, PtyEventData};
 use anyhow::{Context, Result};
-use avt::Vt;
 use bytes::Bytes;
 use portable_pty::{Child, CommandBuilder, NativePtySystem, PtySize, PtySystem};
 use std::io::Write;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{broadcast, mpsc, Mutex};
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 const READ_BUF_SIZE: usize = 4096;
 
@@ -18,12 +17,9 @@ pub struct PtyTerminal {
     writer_handle: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
     input_tx: mpsc::UnboundedSender<Bytes>,
     output_tx: broadcast::Sender<Bytes>,
-    #[allow(dead_code)]
+
     _persistent_rx: broadcast::Receiver<Bytes>,
     terminal: Arc<Mutex<vt100::Parser>>,
-    avt_terminal: Arc<Mutex<Vt>>,
-    #[allow(dead_code)]
-    raw_output_buffer: Arc<Mutex<String>>,
     // Accumulated terminal state for initial WebSocket sync
     accumulated_output: Arc<Mutex<Vec<u8>>>,
 }
@@ -93,14 +89,6 @@ impl PtyTerminal {
         let terminal = vt100::Parser::new(rows, cols, 0);
         let terminal = Arc::new(Mutex::new(terminal));
 
-        // Create AVT terminal for proper ANSI handling
-        let avt_terminal = Vt::builder()
-            .size(cols as usize, rows as usize)
-            .scrollback_limit(1000)
-            .build();
-        let avt_terminal = Arc::new(Mutex::new(avt_terminal));
-
-        let raw_output_buffer = Arc::new(Mutex::new(String::new()));
         let accumulated_output = Arc::new(Mutex::new(Vec::new()));
 
         let reader = pair
@@ -110,8 +98,6 @@ impl PtyTerminal {
         let writer = pair.master.take_writer().context("Failed to take writer")?;
 
         let terminal_clone = terminal.clone();
-        let avt_terminal_clone = avt_terminal.clone();
-        let raw_buffer_clone = raw_output_buffer.clone();
         let output_tx_clone = output_tx.clone();
         let event_tx_clone = event_tx.clone();
         let accumulated_output_clone = accumulated_output.clone();
@@ -137,31 +123,10 @@ impl PtyTerminal {
                             String::from_utf8_lossy(data)
                         );
 
-                        // Store raw output with ANSI sequences
-                        let raw_str = String::from_utf8_lossy(data);
-                        {
-                            let mut raw_buffer = raw_buffer_clone.lock().await;
-                            raw_buffer.push_str(&raw_str);
-                            // Keep only the last 10KB to prevent unbounded growth
-                            if raw_buffer.len() > 10240 {
-                                // Find a safe character boundary to avoid splitting UTF-8 characters
-                                let mut start = raw_buffer.len().saturating_sub(8192);
-                                while start > 0 && !raw_buffer.is_char_boundary(start) {
-                                    start -= 1;
-                                }
-                                *raw_buffer = raw_buffer[start..].to_string();
-                            }
-                        }
-
                         // Process through vt100 parser for structured access
                         let mut term = terminal_clone.lock().await;
                         term.process(data);
                         drop(term);
-
-                        // Process through AVT terminal for proper ANSI handling
-                        let mut avt_term = avt_terminal_clone.lock().await;
-                        avt_term.feed_str(&raw_str);
-                        drop(avt_term);
 
                         // Accumulate output for initial state
                         {
@@ -173,6 +138,8 @@ impl PtyTerminal {
                                 accumulated.drain(..start);
                             }
                         }
+
+                        let raw_str = String::from_utf8_lossy(data);
 
                         info!(
                             "📤 PTY reader: broadcasting {} bytes to output channel",
@@ -257,8 +224,6 @@ impl PtyTerminal {
             output_tx,
             _persistent_rx: persistent_rx,
             terminal,
-            avt_terminal,
-            raw_output_buffer,
             accumulated_output,
         };
 
@@ -278,50 +243,12 @@ impl PtyTerminal {
         Ok(())
     }
 
-    pub async fn read_output(&self) -> Result<Option<Bytes>> {
-        let mut rx = self.output_tx.subscribe();
-        match rx.try_recv() {
-            Ok(bytes) => Ok(Some(bytes)),
-            Err(broadcast::error::TryRecvError::Lagged(_)) => {
-                // Handle lagged receiver by getting a fresh subscription
-                rx = self.output_tx.subscribe();
-                match rx.try_recv() {
-                    Ok(bytes) => Ok(Some(bytes)),
-                    Err(_) => Ok(None),
-                }
-            }
-            Err(broadcast::error::TryRecvError::Empty) => {
-                // No data available right now, which is fine for polling
-                Ok(None)
-            }
-            Err(broadcast::error::TryRecvError::Closed) => {
-                // Channel closed
-                Ok(None)
-            }
-        }
-    }
-
     /// Get a new broadcast receiver for output data (blocking receive)
     pub async fn get_output_receiver(&self) -> Result<broadcast::Receiver<Bytes>> {
         Ok(self.output_tx.subscribe())
     }
 
-    /// Get raw ANSI output stream for asciinema player - this is the only output method needed
-    pub async fn get_raw_ansi_output(&self) -> Result<Option<String>> {
-        match self.read_output().await? {
-            Some(bytes) => {
-                let output = String::from_utf8_lossy(&bytes).to_string();
-                info!("🔍 PTY raw output: {} bytes", bytes.len());
-                debug!("🔍 PTY content: {:?}", output);
-                Ok(Some(output))
-            }
-            None => {
-                debug!("🔍 PTY no output available");
-                Ok(None)
-            }
-        }
-    }
-
+    /// Resize the terminal
     pub async fn resize(&self, cols: u16, rows: u16) -> Result<()> {
         let master = self.master_pty.lock().await;
         let pty_size = PtySize {
@@ -338,25 +265,9 @@ impl PtyTerminal {
         Ok(())
     }
 
-    #[allow(dead_code)]
-    pub async fn get_screen_content(&self) -> Result<String> {
-        let terminal = self.terminal.lock().await;
-        let screen = terminal.screen();
-
-        let content = screen.contents();
-        Ok(content)
-    }
-
     pub async fn get_cursor_position(&self) -> (u16, u16) {
         let terminal = self.terminal.lock().await;
         terminal.screen().cursor_position()
-    }
-
-    /// Get raw output with ANSI escape sequences preserved
-    #[allow(dead_code)]
-    pub async fn get_raw_output(&self) -> String {
-        let buffer = self.raw_output_buffer.lock().await;
-        buffer.clone()
     }
 
     /// Get properly processed screen dump using vt100 terminal
@@ -364,20 +275,6 @@ impl PtyTerminal {
         let terminal = self.terminal.lock().await;
         let screen = terminal.screen();
         screen.contents()
-    }
-
-    /// Get properly processed screen dump using AVT terminal
-    #[allow(dead_code)]
-    pub async fn get_avt_screen_dump(&self) -> String {
-        let avt_terminal = self.avt_terminal.lock().await;
-        avt_terminal.dump()
-    }
-
-    /// Get clean text content from AVT terminal (no ANSI codes)
-    #[allow(dead_code)]
-    pub async fn get_avt_text(&self) -> Vec<String> {
-        let avt_terminal = self.avt_terminal.lock().await;
-        avt_terminal.text()
     }
 
     /// Get accumulated terminal output for initial WebSocket state

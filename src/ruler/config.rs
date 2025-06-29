@@ -19,9 +19,6 @@ pub struct MonitorConfig {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct AgentConfig {
-    #[serde(default = "default_agent_name")]
-    #[allow(dead_code)]
-    pub name: String,
     #[serde(default = "default_cols")]
     pub cols: u16,
     #[serde(default = "default_rows")]
@@ -34,9 +31,6 @@ pub struct WebUIConfig {
     pub enabled: bool,
     #[serde(default = "default_host")]
     pub host: String,
-    #[serde(default = "default_theme")]
-    #[allow(dead_code)] // Theme will be used in future theme support
-    pub theme: String,
 }
 
 impl Default for MonitorConfig {
@@ -53,7 +47,6 @@ impl Default for MonitorConfig {
 impl Default for AgentConfig {
     fn default() -> Self {
         Self {
-            name: default_agent_name(),
             cols: default_cols(),
             rows: default_rows(),
         }
@@ -65,7 +58,6 @@ impl Default for WebUIConfig {
         Self {
             enabled: default_enabled(),
             host: default_host(),
-            theme: default_theme(),
         }
     }
 }
@@ -84,14 +76,6 @@ fn default_enabled() -> bool {
 
 fn default_host() -> String {
     "localhost".to_string()
-}
-
-fn default_theme() -> String {
-    "default".to_string()
-}
-
-fn default_agent_name() -> String {
-    "default".to_string()
 }
 
 fn default_cols() -> u16 {
@@ -152,11 +136,5 @@ impl MonitorConfig {
             // Use default dimensions if no specific agent config
             (default_cols(), default_rows())
         }
-    }
-
-    /// Get the default agent config (from first agent or defaults)
-    #[allow(dead_code)]
-    pub fn get_default_agent_config(&self) -> AgentConfig {
-        self.agents.first().cloned().unwrap_or_default()
     }
 }

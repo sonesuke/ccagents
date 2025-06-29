@@ -150,18 +150,6 @@ impl PtySession {
         elapsed.as_secs_f64()
     }
 
-    /// Get properly processed screen dump from AVT terminal
-    #[allow(dead_code)]
-    pub async fn get_avt_terminal_output(&self) -> String {
-        self.terminal.get_avt_screen_dump().await
-    }
-
-    /// Get raw ANSI output from terminal
-    #[allow(dead_code)]
-    pub async fn get_raw_ansi_output(&self) -> Result<Option<String>> {
-        self.terminal.get_raw_ansi_output().await
-    }
-
     /// Send output data directly to the terminal's output channel
     pub async fn send_output_data(&self, data: &str) -> Result<()> {
         use bytes::Bytes;

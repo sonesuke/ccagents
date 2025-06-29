@@ -6,20 +6,6 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[allow(dead_code)]
-fn truncate_unicode_safe(s: &str, max_len: usize) -> &str {
-    if s.len() <= max_len {
-        return s;
-    }
-
-    // Find the last valid UTF-8 character boundary at or before max_len
-    let mut end = max_len;
-    while end > 0 && !s.is_char_boundary(end) {
-        end -= 1;
-    }
-    &s[..end]
-}
-
 /// Execute a periodic entry action (with agent context)
 pub async fn execute_periodic_entry(
     entry: &ruler::entry::CompiledEntry,

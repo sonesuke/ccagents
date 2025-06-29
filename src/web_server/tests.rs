@@ -23,7 +23,6 @@ fn test_web_ui_config_defaults() {
 
     assert!(config.enabled);
     assert_eq!(config.host, "localhost");
-    assert_eq!(config.theme, "default");
 }
 
 #[test]
