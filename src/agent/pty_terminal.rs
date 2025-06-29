@@ -24,6 +24,8 @@ pub struct PtyTerminal {
     avt_terminal: Arc<Mutex<Vt>>,
     #[allow(dead_code)]
     raw_output_buffer: Arc<Mutex<String>>,
+    // Accumulated terminal state for initial WebSocket sync
+    accumulated_output: Arc<Mutex<Vec<u8>>>,
 }
 
 impl PtyTerminal {
@@ -79,6 +81,9 @@ impl PtyTerminal {
 
         info!("✅ Shell process spawned successfully");
 
+        // Give the shell a moment to initialize
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
         let (input_tx, mut input_rx) = mpsc::unbounded_channel::<Bytes>();
         let (output_tx, _rx) = broadcast::channel(1024);
 
@@ -96,6 +101,7 @@ impl PtyTerminal {
         let avt_terminal = Arc::new(Mutex::new(avt_terminal));
 
         let raw_output_buffer = Arc::new(Mutex::new(String::new()));
+        let accumulated_output = Arc::new(Mutex::new(Vec::new()));
 
         let reader = pair
             .master
@@ -108,6 +114,7 @@ impl PtyTerminal {
         let raw_buffer_clone = raw_output_buffer.clone();
         let output_tx_clone = output_tx.clone();
         let event_tx_clone = event_tx.clone();
+        let accumulated_output_clone = accumulated_output.clone();
         let reader_handle = tokio::spawn(async move {
             use std::io::Read;
             let mut reader = reader;
@@ -155,6 +162,17 @@ impl PtyTerminal {
                         let mut avt_term = avt_terminal_clone.lock().await;
                         avt_term.feed_str(&raw_str);
                         drop(avt_term);
+
+                        // Accumulate output for initial state
+                        {
+                            let mut accumulated = accumulated_output_clone.lock().await;
+                            accumulated.extend_from_slice(data);
+                            // Keep reasonable size limit (100KB)
+                            if accumulated.len() > 102400 {
+                                let start = accumulated.len().saturating_sub(81920);
+                                accumulated.drain(..start);
+                            }
+                        }
 
                         info!(
                             "📤 PTY reader: broadcasting {} bytes to output channel",
@@ -241,6 +259,7 @@ impl PtyTerminal {
             terminal,
             avt_terminal,
             raw_output_buffer,
+            accumulated_output,
         };
 
         Ok(pty_terminal)
@@ -359,6 +378,12 @@ impl PtyTerminal {
     pub async fn get_avt_text(&self) -> Vec<String> {
         let avt_terminal = self.avt_terminal.lock().await;
         avt_terminal.text()
+    }
+
+    /// Get accumulated terminal output for initial WebSocket state
+    pub async fn get_accumulated_output(&self) -> Vec<u8> {
+        let accumulated = self.accumulated_output.lock().await;
+        accumulated.clone()
     }
 }
 

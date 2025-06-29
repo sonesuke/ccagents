@@ -202,6 +202,11 @@ impl PtySession {
 
         Ok(string_rx)
     }
+
+    /// Get accumulated terminal output for initial WebSocket state
+    pub async fn get_accumulated_output(&self) -> Vec<u8> {
+        self.terminal.get_accumulated_output().await
+    }
 }
 
 fn parse_key(key: &str) -> Vec<u8> {

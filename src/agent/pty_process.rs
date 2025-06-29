@@ -507,6 +507,17 @@ impl PtyProcess {
         }
     }
 
+    /// Get accumulated terminal output for initial WebSocket state
+    pub async fn get_accumulated_output(&self) -> Vec<u8> {
+        let session_lock = self.session.lock().await;
+
+        if let Some(session) = session_lock.as_ref() {
+            session.get_accumulated_output().await
+        } else {
+            Vec::new()
+        }
+    }
+
     /// Get raw ANSI output from terminal
     #[allow(dead_code)]
     pub async fn get_raw_ansi_output(&self) -> Result<Option<String>, PtyProcessError> {

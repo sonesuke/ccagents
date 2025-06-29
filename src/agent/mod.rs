@@ -144,6 +144,12 @@ impl Agent {
         Ok(self.ht_process.get_avt_terminal_output().await)
     }
 
+    /// Get accumulated terminal output for initial WebSocket state
+    pub async fn get_accumulated_output(&self) -> Result<String> {
+        let bytes = self.ht_process.get_accumulated_output().await;
+        Ok(String::from_utf8_lossy(&bytes).to_string())
+    }
+
     /// Get terminal dimensions for asciinema integration
     #[allow(dead_code)]
     pub fn get_terminal_size(&self) -> (u16, u16) {

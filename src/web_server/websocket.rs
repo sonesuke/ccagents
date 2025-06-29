@@ -41,22 +41,29 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
 
     info!("✅ Asciinema header sent successfully");
 
-    // Send current terminal state to new client
-    if let Ok(current_screen) = agent.get_terminal_output().await {
-        if !current_screen.is_empty() {
+    // Send accumulated terminal state to new client
+    if let Ok(accumulated_output) = agent.get_accumulated_output().await {
+        if !accumulated_output.is_empty() {
             let time = 0.0; // Initial state at time 0
-            let initial_event = json!([time, "o", current_screen]);
+            let initial_event = json!([time, "o", accumulated_output]);
             let event_str = initial_event.to_string();
 
             info!(
-                "📤 Sending initial terminal state: {} bytes",
+                "📤 Sending initial terminal state: {} bytes (accumulated output)",
                 event_str.len()
             );
+            debug!(
+                "Initial state preview: {:?}",
+                &accumulated_output[..std::cmp::min(200, accumulated_output.len())]
+            );
+
             if sender.send(Message::Text(event_str)).await.is_err() {
                 error!("Failed to send initial terminal state");
                 return;
             }
             info!("✅ Initial terminal state sent successfully");
+        } else {
+            info!("⚠️ No accumulated output available for initial state");
         }
     }
 
