@@ -80,6 +80,8 @@
                 this.input = document.getElementById('input');
                 this.status = document.getElementById('status');
                 this.ws = null;
+                this.events = [];
+                this.startTime = Date.now();
                 this.setupEventListeners();
                 this.connect();
             }
@@ -100,10 +102,12 @@
                 };
                 
                 this.ws.onmessage = (event) => {
-                    // Raw ANSI data is fed directly to the player via our custom stream
-                    if (this.streamController) {
-                        this.streamController.enqueue(event.data);
-                    }
+                    // Add raw ANSI data as asciinema event
+                    const timestamp = (Date.now() - this.startTime) / 1000;
+                    this.events.push([timestamp, 'o', event.data]);
+                    
+                    // Update player with new events
+                    this.updatePlayer();
                 };
                 
                 this.ws.onclose = () => {
@@ -119,21 +123,51 @@
             }
             
             createPlayer() {
-                // Create a readable stream that feeds ANSI data to asciinema player
-                const stream = new ReadableStream({
-                    start: (controller) => {
-                        this.streamController = controller;
-                    }
-                });
+                // Create asciinema recording format
+                const recording = {
+                    version: 2,
+                    width: 80,
+                    height: 24,
+                    timestamp: Math.floor(this.startTime / 1000),
+                    env: { TERM: "xterm-256color", SHELL: "/bin/bash" },
+                    events: this.events
+                };
                 
-                // Use asciinema player with live stream
-                AsciinemaPlayer.create(stream, this.terminal, {
+                // Use asciinema player with recording
+                this.player = AsciinemaPlayer.create(recording, this.terminal, {
                     autoPlay: true,
+                    loop: false,
                     controls: false,
                     fit: 'width',
                     terminalFontSize: '14px',
                     theme: 'dracula'
                 });
+            }
+            
+            updatePlayer() {
+                if (this.player && this.events.length > 0) {
+                    // Recreate player with updated events
+                    const recording = {
+                        version: 2,
+                        width: 80,
+                        height: 24,
+                        timestamp: Math.floor(this.startTime / 1000),
+                        env: { TERM: "xterm-256color", SHELL: "/bin/bash" },
+                        events: [...this.events]
+                    };
+                    
+                    // Clear and recreate player
+                    this.terminal.innerHTML = '';
+                    this.player = AsciinemaPlayer.create(recording, this.terminal, {
+                        autoPlay: true,
+                        loop: false,
+                        controls: false,
+                        fit: 'width',
+                        terminalFontSize: '14px',
+                        theme: 'dracula',
+                        startAt: this.events.length > 0 ? this.events[this.events.length - 1][0] : 0
+                    });
+                }
             }
 
             setupEventListeners() {

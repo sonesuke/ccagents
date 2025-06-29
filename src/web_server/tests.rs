@@ -45,7 +45,7 @@ async fn test_asset_cache_html() {
         Ok(content) => {
             assert!(!content.is_empty());
             assert!(content.contains("Rule Agents Terminal"));
-            assert!(content.contains("AsciinemaPlayer"));
+            assert!(content.contains("AsciinemaPlayer.create"));
         }
         Err(_) => {
             // Asset file might not exist in test environment, which is acceptable
