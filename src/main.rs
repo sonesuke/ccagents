@@ -2,7 +2,8 @@ mod agent;
 mod cli;
 mod queue;
 mod ruler;
-mod web;
+mod web_server;
+mod web_ui;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -19,7 +20,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::signal;
 use tokio::time::interval;
-use web::WebServer;
+use web_server::WebServer;
 
 // Global debug flag
 pub static DEBUG_MODE: AtomicBool = AtomicBool::new(false);

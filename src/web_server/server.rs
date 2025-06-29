@@ -14,9 +14,9 @@ use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
-use super::assets;
 use super::websocket::handle_websocket;
 use crate::agent::Agent;
+use crate::web_ui::assets;
 use serde_json::json;
 
 #[derive(Clone)]
