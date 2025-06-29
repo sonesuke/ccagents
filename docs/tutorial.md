@@ -58,12 +58,24 @@ Our example uses a mock script that simulates an interactive process:
 Let's examine `config.yaml`:
 
 ```yaml
+# Web UI configuration
+web_ui:
+  enabled: true
+  host: "localhost"
+  base_port: 9990
+
+# Agent configuration  
+agents:
+  concurrency: 1
+  cols: 80
+  rows: 24
+
 # Entry: Automatic startup
 entries:
   - name: "start_mock"
     trigger: "on_start"           # Runs when RuleAgents starts
     action: "send_keys"
-    keys: ["bash examples/mock.sh", "\r"]  # Executes the mock script
+    keys: ["bash examples/basic/mock.sh", "\r"]  # Executes the mock script
 
 # Rules: Automated responses
 rules:
@@ -109,6 +121,16 @@ RuleAgents provides a test command to verify rule matching:
 
 ### Example 1: Automating Git Operations
 ```yaml
+web_ui:
+  enabled: true
+  host: "localhost"
+  base_port: 9990
+
+agents:
+  concurrency: 1
+  cols: 80
+  rows: 24
+
 entries:
   - name: "git_status"
     trigger: "on_start"
@@ -123,6 +145,16 @@ rules:
 
 ### Example 2: Handling Yes/No Prompts
 ```yaml
+web_ui:
+  enabled: true
+  host: "localhost"
+  base_port: 9990
+
+agents:
+  concurrency: 1
+  cols: 80
+  rows: 24
+
 rules:
   - pattern: "Are you sure.*\\[y/N\\]"  # Regex pattern
     action: "send_keys"
@@ -135,6 +167,16 @@ rules:
 
 ### Example 3: Queue-Based Task Processing
 ```yaml
+web_ui:
+  enabled: true
+  host: "localhost"
+  base_port: 9990
+
+agents:
+  concurrency: 1
+  cols: 80
+  rows: 24
+
 entries:
   # Generate tasks every 30 seconds
   - name: "task_generator"
@@ -165,6 +207,16 @@ rules:
 
 ### Example 4: Deduplication Queue
 ```yaml
+web_ui:
+  enabled: true
+  host: "localhost"
+  base_port: 9990
+
+agents:
+  concurrency: 1
+  cols: 80
+  rows: 24
+
 entries:
   # Generate items with potential duplicates
   - name: "item_generator"
@@ -202,6 +254,16 @@ entries:
 
 ### 4. Safety Considerations
 ```yaml
+web_ui:
+  enabled: true
+  host: "localhost"
+  base_port: 9990
+
+agents:
+  concurrency: 1
+  cols: 80
+  rows: 24
+
 rules:
   # Dangerous - too broad
   - pattern: "yes"
@@ -218,6 +280,16 @@ rules:
 
 ### Variable Expansion in Queue Actions
 ```yaml
+web_ui:
+  enabled: true
+  host: "localhost"
+  base_port: 9990
+
+agents:
+  concurrency: 1
+  cols: 80
+  rows: 24
+
 entries:
   - name: "file_processor"
     trigger: "periodic"
@@ -236,6 +308,16 @@ entries:
 
 ### Regular Expression Patterns
 ```yaml
+web_ui:
+  enabled: true
+  host: "localhost"
+  base_port: 9990
+
+agents:
+  concurrency: 1
+  cols: 80
+  rows: 24
+
 rules:
   # Match version numbers
   - pattern: "Version: (\\d+\\.\\d+\\.\\d+)"
@@ -250,6 +332,16 @@ rules:
 
 ### Combining Rules
 ```yaml
+web_ui:
+  enabled: true
+  host: "localhost"
+  base_port: 9990
+
+agents:
+  concurrency: 1
+  cols: 80
+  rows: 24
+
 rules:
   # Handle different prompt formats
   - pattern: "(Continue|Proceed|Go ahead)\\?"

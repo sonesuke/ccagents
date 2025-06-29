@@ -4,11 +4,12 @@ use std::sync::Arc;
 use anyhow::Result;
 use axum::{
     extract::{State, WebSocketUpgrade},
-    http::{header, StatusCode},
+    http::StatusCode,
     response::{Html, Json, Response},
-    routing::get,
+    routing::{get, post},
     Router,
 };
+use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
@@ -17,7 +18,23 @@ use tracing::info;
 use super::websocket::handle_websocket;
 use crate::agent::Agent;
 use crate::web_ui::assets::AssetCache;
-use serde_json::json;
+
+#[derive(Deserialize)]
+struct CommandRequest {
+    command: String,
+}
+
+#[derive(Serialize)]
+struct CommandResponse {
+    success: bool,
+    message: String,
+}
+
+#[derive(Serialize)]
+struct TerminalSizeResponse {
+    cols: u16,
+    rows: u16,
+}
 
 #[derive(Clone)]
 pub struct WebServer {
@@ -69,10 +86,9 @@ impl WebServer {
     fn create_app(&self) -> Router {
         Router::new()
             .route("/", get(serve_index))
-            .route("/styles/main.css", get(serve_css))
-            .route("/scripts/terminal-client.js", get(serve_js))
             .route("/ws", get(websocket_handler))
-            .route("/config", get(serve_config))
+            .route("/api/command", post(send_command))
+            .route("/api/terminal-size", get(get_terminal_size))
             .with_state((self.agent.clone(), self.asset_cache.clone()))
             .layer(ServiceBuilder::new().layer(CorsLayer::permissive()))
     }
@@ -93,49 +109,6 @@ async fn serve_index(
     }
 }
 
-async fn serve_css(
-    State((_, asset_cache)): State<(Arc<Agent>, AssetCache)>,
-) -> Result<Response, (StatusCode, String)> {
-    info!("🎨 Serving main.css to client");
-
-    match asset_cache.get_main_css().await {
-        Ok(content) => {
-            let response = Response::builder()
-                .header(header::CONTENT_TYPE, "text/css")
-                .body(content.into())
-                .unwrap();
-            Ok(response)
-        }
-        Err(e) => {
-            tracing::error!("Failed to serve main.css: {}", e);
-            Err((StatusCode::NOT_FOUND, "main.css not found".to_string()))
-        }
-    }
-}
-
-async fn serve_js(
-    State((_, asset_cache)): State<(Arc<Agent>, AssetCache)>,
-) -> Result<Response, (StatusCode, String)> {
-    info!("📜 Serving terminal-client.js to client");
-
-    match asset_cache.get_terminal_client_js().await {
-        Ok(content) => {
-            let response = Response::builder()
-                .header(header::CONTENT_TYPE, "application/javascript")
-                .body(content.into())
-                .unwrap();
-            Ok(response)
-        }
-        Err(e) => {
-            tracing::error!("Failed to serve terminal-client.js: {}", e);
-            Err((
-                StatusCode::NOT_FOUND,
-                "terminal-client.js not found".to_string(),
-            ))
-        }
-    }
-}
-
 async fn websocket_handler(
     ws: WebSocketUpgrade,
     State((agent, _)): State<(Arc<Agent>, AssetCache)>,
@@ -145,14 +118,35 @@ async fn websocket_handler(
     ws.on_upgrade(move |socket| handle_websocket(socket, agent))
 }
 
-async fn serve_config(
+async fn send_command(
     State((agent, _)): State<(Arc<Agent>, AssetCache)>,
-) -> Json<serde_json::Value> {
+    Json(request): Json<CommandRequest>,
+) -> Json<CommandResponse> {
+    info!("📨 Command API request: {}", request.command);
+
+    match agent.send_input(&request.command).await {
+        Ok(_) => {
+            info!("✅ Command sent successfully: {}", request.command);
+            Json(CommandResponse {
+                success: true,
+                message: "Command sent successfully".to_string(),
+            })
+        }
+        Err(e) => {
+            tracing::error!("❌ Failed to send command: {}", e);
+            Json(CommandResponse {
+                success: false,
+                message: format!("Failed to send command: {}", e),
+            })
+        }
+    }
+}
+
+async fn get_terminal_size(
+    State((agent, _)): State<(Arc<Agent>, AssetCache)>,
+) -> Json<TerminalSizeResponse> {
     let (cols, rows) = agent.get_terminal_size();
-    let debug = crate::DEBUG_MODE.load(std::sync::atomic::Ordering::Relaxed);
-    Json(json!({
-        "cols": cols,
-        "rows": rows,
-        "debug": debug
-    }))
+    info!("📐 Terminal size API request: {}x{}", cols, rows);
+
+    Json(TerminalSizeResponse { cols, rows })
 }

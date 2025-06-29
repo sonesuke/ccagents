@@ -42,6 +42,11 @@ pub enum PtyResponse {
         response_type: String,
         data: SnapshotData,
     },
+    Output {
+        #[serde(rename = "type")]
+        response_type: String,
+        data: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,7 +60,7 @@ pub struct SnapshotData {
 #[derive(Debug, Clone)]
 pub struct CommandOutput {
     pub content: String,
-    #[allow(dead_code)]
+
     pub is_stdout: bool, // true for stdout, false for stderr
 }
 
@@ -169,7 +174,9 @@ impl PtyProcess {
 
         info!("🔍 send_input called with: {:?}", input);
 
+        info!("🔐 Attempting to acquire session lock...");
         let session_lock = self.session.lock().await;
+        info!("✅ Session lock acquired");
 
         if let Some(session) = session_lock.as_ref() {
             // Check if this is a claude command and start monitoring
@@ -184,10 +191,12 @@ impl PtyProcess {
             }
 
             let command = PtyCommand::Input { payload: input };
+            info!("📨 About to call session.handle_command");
             session
                 .handle_command(command)
                 .await
                 .map_err(|e| PtyProcessError::CommunicationError(e.to_string()))?;
+            info!("✅ session.handle_command completed");
             Ok(())
         } else {
             Err(PtyProcessError::NotRunning)
@@ -486,46 +495,28 @@ impl PtyProcess {
         }
     }
 
-    /// Get properly processed screen dump from AVT terminal
-    pub async fn get_avt_terminal_output(&self) -> String {
+    /// Get accumulated terminal output for initial WebSocket state
+    pub async fn get_accumulated_output(&self) -> Vec<u8> {
         let session_lock = self.session.lock().await;
 
         if let Some(session) = session_lock.as_ref() {
-            session.get_avt_terminal_output().await
+            session.get_accumulated_output().await
         } else {
-            String::new()
+            Vec::new()
         }
     }
 
-    #[allow(dead_code)]
-    pub async fn get_view(&self) -> Result<String, PtyProcessError> {
+    /// Get direct access to PTY output broadcast receiver for WebSocket streaming
+    pub async fn get_pty_output_receiver(
+        &self,
+    ) -> Result<tokio::sync::broadcast::Receiver<String>, PtyProcessError> {
         let session_lock = self.session.lock().await;
 
         if let Some(session) = session_lock.as_ref() {
             session
-                .handle_command(PtyCommand::TakeSnapshot)
+                .get_pty_output_receiver()
                 .await
-                .map_err(|e| PtyProcessError::CommunicationError(e.to_string()))?;
-
-            drop(session_lock);
-            let mut response_rx = self.response_rx.lock().await;
-
-            if let Some(rx) = response_rx.as_mut() {
-                match rx.recv().await {
-                    Some(PtyResponse::Snapshot { data, .. }) => {
-                        // Return the actual screen content from snapshot seq
-                        Ok(data.seq.clone())
-                    }
-                    Some(PtyResponse::View { view, .. }) => view.ok_or_else(|| {
-                        PtyProcessError::CommunicationError("No view data in response".to_string())
-                    }),
-                    None => Err(PtyProcessError::CommunicationError(
-                        "No response received".to_string(),
-                    )),
-                }
-            } else {
-                Err(PtyProcessError::NotRunning)
-            }
+                .map_err(|e| PtyProcessError::CommunicationError(e.to_string()))
         } else {
             Err(PtyProcessError::NotRunning)
         }
@@ -533,7 +524,7 @@ impl PtyProcess {
 }
 
 async fn event_processor(
-    _session: Arc<PtySession>,
+    session: Arc<PtySession>,
     event_rx: Arc<Mutex<Option<broadcast::Receiver<PtyEvent>>>>,
     response_tx: mpsc::UnboundedSender<PtyResponse>,
 ) {
@@ -547,23 +538,56 @@ async fn event_processor(
     };
 
     while let Ok(event) = rx.recv().await {
-        if event.event_type.as_str() == "snapshot" {
-            if let PtyEventData::Snapshot {
-                seq, cols, rows, ..
-            } = event.data
-            {
-                let response = PtyResponse::Snapshot {
-                    response_type: "snapshot".to_string(),
-                    data: SnapshotData {
-                        seq,
-                        cols: cols as u32,
-                        rows: rows as u32,
-                    },
-                };
+        match event.event_type.as_str() {
+            "snapshot" => {
+                if let PtyEventData::Snapshot {
+                    seq, cols, rows, ..
+                } = event.data
+                {
+                    let response = PtyResponse::Snapshot {
+                        response_type: "snapshot".to_string(),
+                        data: SnapshotData {
+                            seq,
+                            cols: cols as u32,
+                            rows: rows as u32,
+                        },
+                    };
 
-                if response_tx.send(response).is_err() {
-                    break;
+                    if response_tx.send(response).is_err() {
+                        break;
+                    }
                 }
+            }
+            "output" => {
+                if let PtyEventData::Output { data } = event.data {
+                    info!(
+                        "🎉 Processing Output event: {} bytes: {:?}",
+                        data.len(),
+                        data
+                    );
+
+                    // Send the output data to the terminal's output channel
+                    if let Err(e) = session.send_output_data(&data).await {
+                        error!("Failed to send output to terminal: {}", e);
+                    } else {
+                        info!("✅ Output data sent to terminal successfully");
+                    }
+
+                    let response = PtyResponse::Output {
+                        response_type: "output".to_string(),
+                        data,
+                    };
+
+                    if response_tx.send(response).is_err() {
+                        error!("❌ Failed to send output response");
+                        break;
+                    } else {
+                        info!("✅ Output response sent successfully");
+                    }
+                }
+            }
+            _ => {
+                // Ignore other event types for now
             }
         }
     }

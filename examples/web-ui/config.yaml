@@ -1,27 +1,27 @@
 # Example configuration with Web UI enabled
 # This shows how to configure the web terminal interface
 
-monitor:
+# Web UI configuration
+web_ui:
+  enabled: true          # Enable/disable web interface
+  host: "localhost"      # Bind address (use "0.0.0.0" for external access)
   base_port: 9990        # First agent web interface port
-  agent_pool_size: 2     # Multiple agents get sequential ports (9990, 9991)
-  web_ui:
-    enabled: true        # Enable/disable web interface
-    host: "localhost"    # Bind address (use "0.0.0.0" for external access)
-    theme: "default"     # UI theme selection (for future use)
+
+# Agent configuration
+agents:
+  concurrency: 2         # Number of agents (get sequential ports: 9990, 9991)
+  cols: 120              # Terminal width for all agents
+  rows: 40               # Terminal height for all agents
 
 # Example entries for automation
 entries:
-  - name: "startup_message"
-    trigger:
-      type: "on_start"
-    action:
-      type: "send_keys" 
-      keys: "echo 'Rule Agents Web UI is ready!'\n"
+  - name: "compound_command_test"
+    trigger: "on_start"
+    action: "send_keys"
+    keys: ["ls --color=always", "\r"]
 
 # Example rules for pattern matching
 rules:
   - pattern: "Web UI ready"
-    action:
-      type: "enqueue"
-      queue: "web_ui_events"
-      item: "ui_ready"
+    action: "send_keys"
+    keys: ["echo 'UI is ready'", "\r"]

@@ -91,10 +91,17 @@ entries:
 
 ### Agent Pool Configuration
 ```yaml
-# Monitor section with agent pool settings
-monitor:
+# Web UI configuration
+web_ui:
+  enabled: true
+  host: "localhost"
   base_port: 9990      # First agent port (default: 9990)
-  agent_pool_size: 2   # Number of parallel agents (default: 1)
+
+# Agent configuration
+agents:
+  concurrency: 2       # Number of parallel agents (default: 1)
+  cols: 80             # Terminal width
+  rows: 24             # Terminal height
 
 # Multiple agents will run tasks in parallel
 entries:
@@ -176,7 +183,7 @@ Multiple terminal agents running in parallel for improved performance:
 - **Round-Robin Distribution**: Tasks automatically distributed across available agents
 - **Scalable Performance**: Add more agents to handle increased workload
 - **Independent Terminals**: Each agent runs in its own terminal process
-- **Configurable Pool Size**: Set `agent_pool_size` to control number of agents
+- **Configurable Pool Size**: Set `agents.concurrency` to control number of agents
 
 ### Queue System
 
@@ -223,13 +230,13 @@ The web interface URLs are automatically displayed when the HT processes start.
 ./target/release/rule-agents --config examples/basic/config.yaml
 
 # Start with queue system example
-./target/release/rule-agents --config examples/simple_queue/simple_queue.yaml
+./target/release/rule-agents --config examples/simple_queue/config.yaml
 
 # Start with dedupe queue example
-./target/release/rule-agents --config examples/dedupe_queue/dedupe_example.yaml
+./target/release/rule-agents --config examples/dedupe_queue/config.yaml
 
 # Start with agent pool example
-./target/release/rule-agents --config examples/agent_pool/concurrency_demo.yaml
+./target/release/rule-agents --config examples/agent_pool/config.yaml
 
 # Test rule matching
 ./target/release/rule-agents test --config examples/basic/config.yaml --capture "Do you want to proceed"
@@ -252,7 +259,7 @@ Multiple example configurations are provided to demonstrate different features:
 
 ### 2. Queue System (`examples/simple_queue/`)
 ```bash
-./target/release/rule-agents --config examples/simple_queue/simple_queue.yaml
+./target/release/rule-agents --config examples/simple_queue/config.yaml
 ```
 - Shows periodic task generation and automatic processing
 - Demonstrates queue-based workflows with `<task>` variable expansion
@@ -260,7 +267,7 @@ Multiple example configurations are provided to demonstrate different features:
 
 ### 3. Dedupe Queue (`examples/dedupe_queue/`)
 ```bash
-./target/release/rule-agents --config examples/dedupe_queue/dedupe_example.yaml
+./target/release/rule-agents --config examples/dedupe_queue/config.yaml
 ```
 - Demonstrates automatic duplicate detection and filtering
 - Prevents reprocessing of identical items
@@ -268,7 +275,7 @@ Multiple example configurations are provided to demonstrate different features:
 
 ### 4. Agent Pool (`examples/agent_pool/`)
 ```bash
-./target/release/rule-agents --config examples/agent_pool/concurrency_demo.yaml
+./target/release/rule-agents --config examples/agent_pool/config.yaml
 ```
 - Demonstrates multiple agents running in parallel
 - Shows round-robin task distribution across agents

@@ -102,6 +102,66 @@ GitHub Actions runs the same checks as pre-commit hooks. To avoid CI failures:
 - Ensure tests don't depend on local environment
 - Use proper test isolation with `tempfile`
 
+## Debugging Web UI and PTY Issues
+
+
+### Browser Console Debugging with Playwright
+
+Use Playwright to check frontend JavaScript logs and errors:
+
+1. **Access console logs**:
+```bash
+# After navigating to the Web UI
+mcp__playwright__browser_console_messages
+```
+
+2. **Monitor real-time console output**:
+   - Check for WebSocket connection status
+   - Verify data transmission logs
+   - Look for JavaScript errors
+
+3. **Key console log patterns to look for**:
+   - `Connecting to WebSocket: ws://localhost:9990/ws` - WebSocket initialization
+   - `WebSocket connected` - Connection established
+   - `Creating asciinema player` - Terminal player setup
+   - `Asciinema player created successfully` - Player ready
+   - `Sending command: <command>` - Command transmission
+   - **Missing**: Data reception logs indicate server-side issues
+
+4. **Identify problem areas**:
+   - ✅ **Frontend working**: WebSocket connects, commands sent
+   - ❌ **Backend issue**: No data reception logs = PTY output not captured/transmitted
+
+5. **Example debugging session**:
+```bash
+# 1. Start server in background
+nohup cargo run -- --config examples/web-ui-test/config.yaml --debug > debug.log 2>&1 &
+
+# 2. Access with Playwright
+mcp__playwright__browser_navigate http://localhost:9990
+
+# 3. Wait for connection
+mcp__playwright__browser_wait_for "Connected"
+
+# 4. Send test command
+mcp__playwright__browser_type "echo test" (submit)
+
+# 5. Check console logs
+mcp__playwright__browser_console_messages
+
+# 6. Analyze: If no data reception logs → server-side PTY issue
+```
+
+### Debug Log Analysis
+
+Key log patterns to look for:
+- `🎯 RuleAgents started` - Application startup
+- `🚀 Web server ready` - Server initialization
+- `PTY process started successfully` - Terminal ready
+- `WebSocket connection established` - Client connected
+- `🔍 send_input called with` - Command execution
+- `📤 Sending WebSocket data` - Output transmission
+
 ## Questions or Issues?
 
 If you encounter problems with the development workflow:

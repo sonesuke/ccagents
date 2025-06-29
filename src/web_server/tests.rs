@@ -23,17 +23,18 @@ fn test_web_ui_config_defaults() {
 
     assert!(config.enabled);
     assert_eq!(config.host, "localhost");
-    assert_eq!(config.theme, "default");
 }
 
 #[test]
 fn test_monitor_config_with_web_ui() {
     let config = MonitorConfig::default();
 
-    assert_eq!(config.base_port, 9990);
-    assert_eq!(config.agent_pool_size, 1);
+    assert_eq!(config.get_web_ui_port(), 9990);
+    assert_eq!(config.get_agent_pool_size(), 1);
     assert!(config.web_ui.enabled);
     assert_eq!(config.web_ui.host, "localhost");
+    assert_eq!(config.web_ui.base_port, 9990);
+    assert_eq!(config.agents.concurrency, 1);
 }
 
 #[tokio::test]
@@ -45,42 +46,7 @@ async fn test_asset_cache_html() {
         Ok(content) => {
             assert!(!content.is_empty());
             assert!(content.contains("Rule Agents Terminal"));
-            assert!(content.contains("terminal-client.js"));
-        }
-        Err(_) => {
-            // Asset file might not exist in test environment, which is acceptable
-            println!("Asset file not found in test environment");
-        }
-    }
-}
-
-#[tokio::test]
-async fn test_asset_cache_css() {
-    let cache = AssetCache::new();
-    let result = cache.get_main_css().await;
-
-    match result {
-        Ok(content) => {
-            assert!(!content.is_empty());
-            assert!(content.contains("body"));
-        }
-        Err(_) => {
-            // Asset file might not exist in test environment, which is acceptable
-            println!("Asset file not found in test environment");
-        }
-    }
-}
-
-#[tokio::test]
-async fn test_asset_cache_js() {
-    let cache = AssetCache::new();
-    let result = cache.get_terminal_client_js().await;
-
-    match result {
-        Ok(content) => {
-            assert!(!content.is_empty());
-            assert!(content.contains("TerminalClient"));
-            assert!(content.contains("WebSocket"));
+            assert!(content.contains("AsciinemaPlayer.create"));
         }
         Err(_) => {
             // Asset file might not exist in test environment, which is acceptable

@@ -27,12 +27,15 @@ cargo run -- --config examples/web-ui/config.yaml
 ## Key Configuration Options
 
 ```yaml
-monitor:
-  base_port: 9990          # Starting port for web interfaces
-  agent_pool_size: 2       # Number of agent instances
-  web_ui:
-    enabled: true          # Enable web terminal interface
-    host: "localhost"      # Bind address (use "0.0.0.0" for external access)
+web_ui:
+  enabled: true          # Enable web terminal interface
+  host: "localhost"      # Bind address (use "0.0.0.0" for external access)
+  base_port: 9990        # Starting port for web interfaces
+
+agents:
+  concurrency: 2         # Number of agent instances
+  cols: 120              # Terminal width
+  rows: 40               # Terminal height
 ```
 
 ## Web Interface Features

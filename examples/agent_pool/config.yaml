@@ -6,10 +6,17 @@
 #
 # Usage: cargo run -- --rules examples/agent_pool/concurrency_demo.yaml
 
-# Monitor configuration with agent pool
-monitor:
+# Web UI configuration
+web_ui:
+  enabled: true
+  host: "localhost"
   base_port: 9990     # First agent on port 9990
-  agent_pool_size: 2  # 2 agents: 9990, 9991
+
+# Agent configuration
+agents:
+  concurrency: 2      # 2 agents: 9990, 9991
+  cols: 80
+  rows: 24
 
 entries:
   # Task A - will go to agent 1

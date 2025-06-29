@@ -2,14 +2,14 @@
 
 ## Overview
 
-RuleAgents is a terminal automation tool that provides YAML-driven control of interactive terminal sessions. It integrates with HyperTerminal (HT) to monitor terminal output and automatically respond based on configured rules.
+RuleAgents is a terminal automation tool that provides YAML-driven control of interactive terminal sessions. It uses built-in PTY (Pseudo Terminal) processes to monitor terminal output and automatically respond based on configured rules.
 
 ## Core Architecture
 
 ### Single Agent Mode (Default)
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌────────────────┐
-│   RuleAgents    │────▶│   HT Process     │────▶│  Web Terminal  │
+│   RuleAgents    │────▶│   PTY Process    │────▶│  Web Terminal  │
 │   (Controller)  │     │  (Terminal Emu)  │     │ localhost:9990 │
 └────────┬────────┘     └─────────┬────────┘     └────────────────┘
          │                        │
@@ -22,20 +22,20 @@ RuleAgents is a terminal automation tool that provides YAML-driven control of in
 └─────────────────┘     └──────────────────┘
 ```
 
-### Agent Pool Mode (agent_pool_size > 1)
+### Agent Pool Mode (agents.concurrency > 1)
 ```
                             ┌──────────────────┐     ┌────────────────┐
-                       ┌───▶│   HT Process 1   │────▶│  Web Terminal  │
+                       ┌───▶│   PTY Process 1  │────▶│  Web Terminal  │
                        │    │  (Terminal Emu)  │     │ localhost:9990 │
 ┌─────────────────┐    │    └──────────────────┘     └────────────────┘
 │   RuleAgents    │────┤    
 │  (Controller)   │    │    ┌──────────────────┐     ┌────────────────┐
-│   Agent Pool    │    ├───▶│   HT Process 2   │────▶│  Web Terminal  │
+│   Agent Pool    │    ├───▶│   PTY Process 2  │────▶│  Web Terminal  │
 │                 │    │    │  (Terminal Emu)  │     │ localhost:9991 │
 └─────────────────┘    │    └──────────────────┘     └────────────────┘
                        │    
                        │    ┌──────────────────┐     ┌────────────────┐
-                       └───▶│   HT Process N   │────▶│  Web Terminal  │
+                       └───▶│   PTY Process N  │────▶│  Web Terminal  │
                             │  (Terminal Emu)  │     │ localhost:999X │
                             └──────────────────┘     └────────────────┘
 ```
@@ -43,9 +43,9 @@ RuleAgents is a terminal automation tool that provides YAML-driven control of in
 ## Key Components
 
 ### 1. Agent Module (`agent/`)
-Manages the HT process and terminal interactions:
+Manages the PTY process and terminal interactions:
 - **Agent Pool**: Manages multiple parallel agents for improved throughput
-- **HT Process Management**: Spawns and controls HyperTerminal subprocesses
+- **PTY Process Management**: Spawns and controls Pseudo Terminal processes
 - **Terminal Monitor**: Detects changes in terminal output using differential buffer analysis
 - **Key Sender**: Sends keyboard input to the terminal session
 - **State Detection**: Monitors if scripts are running or idle
@@ -73,20 +73,28 @@ Manages complex multi-step operations:
 - **Recovery**: Handles interruptions and resumption
 - **Hot Reload**: Supports dynamic workflow updates
 
-### 5. HT Integration
-RuleAgents depends on HyperTerminal (HT) for:
-- Terminal emulation
-- Web-based terminal access
-- Terminal output capture
-- Keyboard input injection
+### 5. Web UI Integration
+RuleAgents provides integrated web-based terminal interface:
+- Built-in terminal emulation using PTY
+- Real-time WebSocket streaming
+- Embedded web assets (no external dependencies)
+- HTTP API for command input
 
 ## Configuration Structure
 
-### Monitor Configuration
+### Configuration Structure
 ```yaml
-monitor:
+# Web UI configuration
+web_ui:
+  enabled: true          # Enable/disable web interface
+  host: "localhost"      # Bind address (use "0.0.0.0" for external access)
   base_port: 9990        # First agent port (default: 9990)
-  agent_pool_size: 1     # Number of parallel agents (default: 1)
+
+# Agent configuration
+agents:
+  concurrency: 1         # Number of parallel agents (default: 1)
+  cols: 80               # Terminal width
+  rows: 24               # Terminal height
 ```
 
 ### Entries - Event Triggers
@@ -123,8 +131,8 @@ rules:
 1. **Initialization**
    - Parse command-line arguments
    - Load YAML configuration
-   - Create agent pool with specified size (default: 1)
-   - Start HT processes on sequential ports (9990, 9991, ...)
+   - Create agent pool with specified concurrency (default: 1)
+   - Start PTY processes on sequential ports (9990, 9991, ...)
    - Initialize terminal monitors for each agent
 
 2. **Startup Phase**
@@ -154,7 +162,7 @@ rules:
 
 ## Terminal Output Detection
 
-RuleAgents uses a sophisticated algorithm to detect new content in HT's fixed-width terminal buffer:
+RuleAgents uses a sophisticated algorithm to detect new content in the PTY's terminal buffer:
 
 1. **Differential Detection**: Compares snapshots to find new lines
 2. **Buffer Wrapping**: Handles terminal scrolling and line wrapping
@@ -197,18 +205,20 @@ RuleAgents includes special testing features:
 
 ## Dependencies
 
-- **HyperTerminal (HT)**: Required for terminal emulation
+- **Portable PTY**: Terminal emulation
 - **Tokio**: Async runtime
 - **Regex**: Pattern matching
 - **Serde/YAML**: Configuration parsing
 - **Clap**: Command-line interface
+- **Axum**: Web server framework
+- **Asciinema Player**: Terminal display in browser
 
 ## Limitations
 
-- Requires HT to be installed separately
 - Terminal detection relies on text patterns
 - No built-in scheduling or cron-like features
 - Limited to terminal-based automation
+- Web UI requires modern browser with WebSocket support
 
 ## Agent Pool Benefits
 
@@ -218,7 +228,7 @@ RuleAgents includes special testing features:
 - **Improved Throughput**: System can handle more concurrent operations
 
 ### Scalability
-- **Configurable Pool Size**: Easily adjust number of agents based on workload
+- **Configurable Concurrency**: Easily adjust number of agents based on workload (agents.concurrency)
 - **Round-Robin Distribution**: Automatic load balancing across agents
 - **Independent Operation**: Agents don't interfere with each other
 

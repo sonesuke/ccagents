@@ -4,7 +4,7 @@ This directory demonstrates queue processing with automatic deduplication to pre
 
 ## Files
 
-### dedupe_example.yaml
+### config.yaml
 Comprehensive deduplication demonstration:
 - **Periodic triggers with duplicates**: Script outputs include duplicate items
 - **Enqueue dedupe actions**: Only unique items are added to queues
@@ -38,10 +38,7 @@ echo "Result: success"
 
 ```bash
 # Run dedupe queue example
-cargo run -- --config examples/dedupe_queue/dedupe_example.yaml
-
-# Compare with normal queue behavior
-cargo run -- --config examples/simple_queue/simple_queue.yaml
+cargo run -- --config examples/dedupe_queue/config.yaml
 ```
 
 ## How It Works

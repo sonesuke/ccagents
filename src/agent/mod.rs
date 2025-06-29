@@ -127,20 +127,25 @@ impl Agent {
         self.send_keys(input).await
     }
 
-    /// Get current terminal output (for WebSocket)
-    pub async fn get_terminal_output(&self) -> Result<String> {
-        // Use AVT terminal dump for properly processed output with colors
-        let content = self.ht_process.get_avt_terminal_output().await;
-        if content.trim().is_empty() {
-            Ok("Terminal ready\r\n$ ".to_string())
-        } else {
-            Ok(content)
-        }
+    /// Get accumulated terminal output for initial WebSocket state
+    pub async fn get_accumulated_output(&self) -> Result<String> {
+        let bytes = self.ht_process.get_accumulated_output().await;
+        Ok(String::from_utf8_lossy(&bytes).to_string())
     }
 
     /// Get terminal dimensions for asciinema integration
     pub fn get_terminal_size(&self) -> (u16, u16) {
         (self.cols, self.rows)
+    }
+
+    /// Get direct access to PTY output broadcast receiver for WebSocket streaming
+    pub async fn get_pty_output_receiver(
+        &self,
+    ) -> Result<tokio::sync::broadcast::Receiver<String>> {
+        self.ht_process
+            .get_pty_output_receiver()
+            .await
+            .map_err(|e| anyhow::anyhow!(e))
     }
 }
 

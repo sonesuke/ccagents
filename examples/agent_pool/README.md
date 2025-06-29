@@ -6,14 +6,14 @@ This directory demonstrates agent pool functionality with a simple example.
 
 **Agent pool creates multiple terminal agents that can run tasks simultaneously.**
 
-- `agent_pool_size: 1` (default) = Single agent like before
-- `agent_pool_size: 2` = 2 agents on ports 9990, 9991
+- `agents.concurrency: 1` (default) = Single agent like before
+- `agents.concurrency: 2` = 2 agents on ports 9990, 9991
 
 **Key benefit**: Tasks can run in parallel without waiting for each other.
 
 ## Files
 
-### concurrency_demo.yaml
+### config.yaml
 Simple configuration with:
 - **Agent pool**: 2 agents on ports 9990, 9991
 - **2 tasks**: Task A (every 3s) and Task B (every 4s)
@@ -26,7 +26,7 @@ Basic demo script that takes 2 seconds and shows which task is running.
 
 ```bash
 # Run the agent pool demo
-cargo run -- --config examples/agent_pool/concurrency_demo.yaml
+cargo run -- --config examples/agent_pool/config.yaml
 
 # Watch terminals at:
 # - http://localhost:9990 (Agent 1)
@@ -52,8 +52,15 @@ Time 4s:  ✅ task_b → Agent 2 (9991) [previous finished]
 ## Configuration
 
 ```yaml
-monitor:
-  agent_pool_size: 2  # 2 agents in parallel
+web_ui:
+  enabled: true
+  host: "localhost"
+  base_port: 9990
+
+agents:
+  concurrency: 2  # 2 agents in parallel
+  cols: 80
+  rows: 24
 
 entries:
   - name: "task_a"

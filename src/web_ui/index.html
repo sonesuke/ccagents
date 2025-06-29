@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rule Agents Terminal</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.7.0/dist/bundle/asciinema-player.css" />
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: #282a36;
+            overflow: hidden;
+        }
+        
+        body {
+            box-sizing: border-box;
+            padding: 40px;
+        }
+        
+        .header {
+            margin-bottom: 20px;
+            text-align: center;
+            color: #f8f8f2;
+            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
+        }
+        
+        #terminal {
+            width: 100%;
+            display: block;
+            background-color: #1a1a1a;
+            border: none;
+            border-radius: 0;
+            position: relative;
+        }
+        
+        .ap-wrapper {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        .ap-player {
+            width: 100%;
+            height: auto;
+            display: block;
+            box-shadow: #141518 0px 0px 60px 5px;
+            margin: 0;
+        }
+        
+        .ap-terminal {
+            width: 100%;
+            height: auto;
+            display: block;
+            line-height: 1.2;
+            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
+            font-size: 14px;
+        }
+        
+        .input-area {
+            margin-top: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #f8f8f2;
+            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
+        }
+        
+        #input {
+            flex: 1;
+            padding: 10px;
+            background-color: #44475a;
+            border: 1px solid #6272a4;
+            border-radius: 4px;
+            color: #f8f8f2;
+            font-family: inherit;
+        }
+        
+        .status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
+            z-index: 1000;
+        }
+        
+        .connected { background-color: #50fa7b; color: #282a36; }
+        .disconnected { background-color: #ff5555; color: #f8f8f2; }
+        .reconnecting { background-color: #ffb86c; color: #282a36; }
+    </style>
+</head>
+<body>
+    <div class="header">
+    </div>
+    
+    <div id="terminal">
+        <div id="status" class="status disconnected">Disconnected</div>
+    </div>
+    
+    <div class="input-area">
+        <span>$</span>
+        <input id="input" type="text" placeholder="Type commands and press Enter...">
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/asciinema-player@3.7.0/dist/bundle/asciinema-player.min.js"></script>
+    <script>
+        // Simple implementation like ht project
+        const loc = window.location;
+        const src = loc.protocol.replace("http", "ws") + '//' + loc.host + '/ws';
+        
+        console.log('Connecting to WebSocket:', src);
+        
+        // Fetch terminal dimensions from config
+        async function getTerminalSize() {
+            try {
+                const response = await fetch('/api/terminal-size');
+                const terminalSize = await response.json();
+                console.log('Fetched terminal size from config:', terminalSize);
+                return terminalSize;
+            } catch (error) {
+                console.warn('Failed to fetch terminal size, using defaults:', error);
+                return { cols: 80, rows: 24 };
+            }
+        }
+        
+        // Wait for DOM to be ready and container to have proper size
+        async function initializePlayer() {
+            // Get terminal dimensions from server config
+            const terminalSize = await getTerminalSize();
+            
+            const opts = {
+                logger: console,
+                fit: false,
+                theme: 'dracula', 
+                controls: false,
+                autoPlay: true,
+                cols: terminalSize.cols,
+                rows: terminalSize.rows,
+                terminalFontSize: '14px'
+            };
+            
+            console.log('Using terminal dimensions:', terminalSize);
+            const terminal = document.getElementById('terminal');
+            console.log('Terminal container rect:', terminal.getBoundingClientRect());
+            
+            console.log('Creating asciinema player with container size:', terminal.getBoundingClientRect());
+            
+            // Let asciinema player handle WebSocket connection directly
+            // CSS already handles all styling with !important, no need for JS style manipulation
+            window.player = AsciinemaPlayer.create(src, terminal, opts);
+            
+            // Optional: Trigger resize if player has the method
+            setTimeout(() => {
+                if (window.player && window.player.resize) {
+                    window.player.resize();
+                    console.log('Player resize triggered');
+                }
+            }, 100);
+        }
+        
+        // Initialize after a short delay to ensure DOM is ready
+        setTimeout(initializePlayer, 100);
+        
+        // Simple input handling using HTTP API
+        const input = document.getElementById('input');
+        const status = document.getElementById('status');
+        
+        // Set initial status to connected (since WebSocket is handled by asciinema player)
+        status.className = 'status connected';
+        status.textContent = 'Connected';
+        
+        // Function to send command via HTTP API
+        async function sendCommand(command) {
+            try {
+                const response = await fetch('/api/command', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ command: command + '\r' }),
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    console.log('Command sent successfully:', command);
+                } else {
+                    console.error('Failed to send command:', result.message);
+                    status.className = 'status disconnected';
+                    status.textContent = 'Error';
+                    setTimeout(() => {
+                        status.className = 'status connected';
+                        status.textContent = 'Connected';
+                    }, 2000);
+                }
+            } catch (error) {
+                console.error('Error sending command:', error);
+                status.className = 'status disconnected';
+                status.textContent = 'Error';
+                setTimeout(() => {
+                    status.className = 'status connected';
+                    status.textContent = 'Connected';
+                }, 2000);
+            }
+        }
+        
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const command = input.value;
+                if (command.trim()) {
+                    console.log('Sending command:', command);
+                    sendCommand(command);
+                    input.value = '';
+                }
+            }
+        });
+        
+        input.focus();
+    </script>
+</body>
+</html>
