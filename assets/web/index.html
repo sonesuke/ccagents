@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rule Agents Terminal</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.7.0/dist/bundle/asciinema-player.css" />
     <style>
         html, body {
@@ -26,31 +27,34 @@
         }
         
         #terminal {
-            border: none !important;
-            border-radius: 0 !important;
+            width: 100%;
+            display: block;
+            background-color: #1a1a1a;
+            border: none;
+            border-radius: 0;
         }
         
         .ap-wrapper {
-            width: 100% !important;
-            height: auto !important;
-            display: block !important;
+            width: 100%;
+            height: auto;
+            display: block;
         }
         
         .ap-player {
-            width: 100% !important;
-            height: auto !important;
-            display: block !important;
+            width: 100%;
+            height: auto;
+            display: block;
             box-shadow: #141518 0px 0px 60px 5px;
             margin: 0;
         }
         
         .ap-terminal {
-            width: 100% !important;
-            height: auto !important;
-            display: block !important;
-            line-height: 1.2 !important;
-            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace !important;
-            font-size: 14px !important;
+            width: 100%;
+            height: auto;
+            display: block;
+            line-height: 1.2;
+            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
+            font-size: 14px;
         }
         
         .input-area {
@@ -89,10 +93,9 @@
 </head>
 <body>
     <div class="header">
-        <h1>Rule Agents Terminal</h1>
     </div>
     
-    <div id="terminal" style="width: 100%; background-color: #1a1a1a; border: none; border-radius: 0;"></div>
+    <div id="terminal"></div>
     
     <div class="input-area">
         <span>$</span>
@@ -142,46 +145,17 @@
             const terminal = document.getElementById('terminal');
             console.log('Terminal container rect:', terminal.getBoundingClientRect());
             
-            // Force container to have proper size
-            terminal.style.width = '100%';
-            terminal.style.display = 'block';
-            
             console.log('Creating asciinema player with container size:', terminal.getBoundingClientRect());
             
             // Let asciinema player handle WebSocket connection directly
+            // CSS already handles all styling with !important, no need for JS style manipulation
             window.player = AsciinemaPlayer.create(src, terminal, opts);
             
-            // Simple approach - let asciinema player use full container width
+            // Optional: Trigger resize if player has the method
             setTimeout(() => {
-                const wrapperElement = document.querySelector('.ap-wrapper');
-                if (wrapperElement) {
-                    wrapperElement.style.width = '100%';
-                    wrapperElement.style.height = 'auto';
-                    wrapperElement.style.display = 'block';
-                    console.log('Set wrapper to full width, current size:', wrapperElement.getBoundingClientRect());
-                }
-                
-                const playerElement = document.querySelector('.ap-player');
-                if (playerElement) {
-                    playerElement.style.width = '100%';
-                    playerElement.style.height = 'auto';
-                    playerElement.style.display = 'block';
-                    console.log('Set player to full width, current size:', playerElement.getBoundingClientRect());
-                }
-                
-                const terminalElement = document.querySelector('.ap-terminal');
-                if (terminalElement) {
-                    terminalElement.style.width = '100%';
-                    terminalElement.style.height = 'auto';
-                    terminalElement.style.display = 'block';
-                    terminalElement.style.lineHeight = '1.2';
-                    terminalElement.style.fontFamily = "'SF Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace";
-                    terminalElement.style.fontSize = '14px';
-                    console.log('Set terminal to full width with font adjustments, current size:', terminalElement.getBoundingClientRect());
-                }
-                
                 if (window.player && window.player.resize) {
                     window.player.resize();
+                    console.log('Player resize triggered');
                 }
             }, 100);
         }

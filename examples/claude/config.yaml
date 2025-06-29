@@ -12,7 +12,7 @@ monitor:
   agents:
     - name: "default"
       cols: 120
-      rows: 80
+      rows: 40
 
 # External triggers - initiated by user commands
 entries:
