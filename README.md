@@ -1,4 +1,4 @@
-# RuleAgents
+# ccauto
 
 A command-line tool for YAML-driven agent auto-control system with automatic terminal interaction.
 
@@ -6,7 +6,7 @@ A command-line tool for YAML-driven agent auto-control system with automatic ter
 
 ### HT (Headless Terminal)
 
-RuleAgents requires HT (Headless Terminal) to be installed on your system. HT provides the terminal emulation and web interface that RuleAgents uses for automation.
+ccauto requires HT (Headless Terminal) to be installed on your system. HT provides the terminal emulation and web interface that ccauto uses for automation.
 
 #### Install HT
 
@@ -37,10 +37,10 @@ cargo build --release
 
 ```bash
 # Run with default configuration (starts automatically)
-./target/release/rule-agents
+./target/release/ccauto
 
 # Run with specific config file
-./target/release/rule-agents --config custom-config.yaml
+./target/release/ccauto --config custom-config.yaml
 
 # View terminal automation at http://localhost:9990
 ```
@@ -130,7 +130,7 @@ The system distinguishes between two types of automation:
 ### Trigger Types
 
 **Entry Triggers:**
-- `on_start`: Executes when RuleAgents starts
+- `on_start`: Executes when ccauto starts
 - `periodic`: Executes at regular intervals (e.g., "15s", "5m", "2h")
 - `enqueue:queue_name`: Executes when items are added to specified queue
 
@@ -216,7 +216,7 @@ The HT terminal process automatically starts with a web interface for real-time 
 
 #### Access URLs
 
-After starting rule-agents, the terminal web interface is available at:
+After starting ccauto, the terminal web interface is available at:
 - **Single Agent**: http://localhost:9990
 - **Agent Pool**: Multiple tabs (e.g., http://localhost:9990, http://localhost:9991, etc.)
 - **Network**: http://[machine-ip]:9990+
@@ -227,22 +227,22 @@ The web interface URLs are automatically displayed when the HT processes start.
 
 ```bash
 # Start automation with basic example
-./target/release/rule-agents --config examples/basic/config.yaml
+./target/release/ccauto --config examples/basic/config.yaml
 
 # Start with queue system example
-./target/release/rule-agents --config examples/simple_queue/config.yaml
+./target/release/ccauto --config examples/simple_queue/config.yaml
 
 # Start with dedupe queue example
-./target/release/rule-agents --config examples/dedupe_queue/config.yaml
+./target/release/ccauto --config examples/dedupe_queue/config.yaml
 
 # Start with agent pool example
-./target/release/rule-agents --config examples/agent_pool/config.yaml
+./target/release/ccauto --config examples/agent_pool/config.yaml
 
 # Test rule matching
-./target/release/rule-agents test --config examples/basic/config.yaml --capture "Do you want to proceed"
+./target/release/ccauto test --config examples/basic/config.yaml --capture "Do you want to proceed"
 
 # View loaded configuration
-./target/release/rule-agents show --config examples/basic/config.yaml
+./target/release/ccauto show --config examples/basic/config.yaml
 ```
 
 ## Examples
@@ -251,7 +251,7 @@ Multiple example configurations are provided to demonstrate different features:
 
 ### 1. Basic Automation (`examples/basic/`)
 ```bash
-./target/release/rule-agents --config examples/basic/config.yaml
+./target/release/ccauto --config examples/basic/config.yaml
 ```
 - Demonstrates on_start triggers and pattern-based rules
 - Automatically executes mock.sh and responds to prompts
@@ -259,7 +259,7 @@ Multiple example configurations are provided to demonstrate different features:
 
 ### 2. Queue System (`examples/simple_queue/`)
 ```bash
-./target/release/rule-agents --config examples/simple_queue/config.yaml
+./target/release/ccauto --config examples/simple_queue/config.yaml
 ```
 - Shows periodic task generation and automatic processing
 - Demonstrates queue-based workflows with `<task>` variable expansion
@@ -267,7 +267,7 @@ Multiple example configurations are provided to demonstrate different features:
 
 ### 3. Dedupe Queue (`examples/dedupe_queue/`)
 ```bash
-./target/release/rule-agents --config examples/dedupe_queue/config.yaml
+./target/release/ccauto --config examples/dedupe_queue/config.yaml
 ```
 - Demonstrates automatic duplicate detection and filtering
 - Prevents reprocessing of identical items
@@ -275,7 +275,7 @@ Multiple example configurations are provided to demonstrate different features:
 
 ### 4. Agent Pool (`examples/agent_pool/`)
 ```bash
-./target/release/rule-agents --config examples/agent_pool/config.yaml
+./target/release/ccauto --config examples/agent_pool/config.yaml
 ```
 - Demonstrates multiple agents running in parallel
 - Shows round-robin task distribution across agents
@@ -284,4 +284,4 @@ Multiple example configurations are provided to demonstrate different features:
 
 **Web Interface**: Examples 1-3 provide monitoring at http://localhost:9990, Example 4 uses multiple tabs starting from http://localhost:9990
 
-See [docs/tutorial.md](docs/tutorial.md) for a comprehensive tutorial on configuring and using RuleAgents.
+See [docs/tutorial.md](docs/tutorial.md) for a comprehensive tutorial on configuring and using ccauto.

@@ -1,6 +1,6 @@
-# RuleAgents Examples
+# ccauto Examples
 
-This directory contains example configurations and scripts demonstrating various RuleAgents features.
+This directory contains example configurations and scripts demonstrating various ccauto features.
 
 ## Available Examples
 

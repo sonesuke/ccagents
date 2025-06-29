@@ -1,8 +1,8 @@
-# RuleAgents Architecture
+# ccauto Architecture
 
 ## Overview
 
-RuleAgents is a terminal automation tool that provides YAML-driven control of interactive terminal sessions. It uses built-in PTY (Pseudo Terminal) processes to monitor terminal output and automatically respond based on configured rules.
+ccauto is a terminal automation tool that provides YAML-driven control of interactive terminal sessions. It uses built-in PTY (Pseudo Terminal) processes to monitor terminal output and automatically respond based on configured rules.
 
 ## Core Architecture
 
@@ -74,7 +74,7 @@ Manages complex multi-step operations:
 - **Hot Reload**: Supports dynamic workflow updates
 
 ### 5. Web UI Integration
-RuleAgents provides integrated web-based terminal interface:
+ccauto provides integrated web-based terminal interface:
 - Built-in terminal emulation using PTY
 - Real-time WebSocket streaming
 - Embedded web assets (no external dependencies)
@@ -162,7 +162,7 @@ rules:
 
 ## Terminal Output Detection
 
-RuleAgents uses a sophisticated algorithm to detect new content in the PTY's terminal buffer:
+ccauto uses a sophisticated algorithm to detect new content in the PTY's terminal buffer:
 
 1. **Differential Detection**: Compares snapshots to find new lines
 2. **Buffer Wrapping**: Handles terminal scrolling and line wrapping
@@ -197,7 +197,7 @@ RuleAgents uses a sophisticated algorithm to detect new content in the PTY's ter
 
 ## Testing Support
 
-RuleAgents includes special testing features:
+ccauto includes special testing features:
 - `test` command for rule validation
 - `show` command for configuration inspection
 - Mock backend support for unit tests
