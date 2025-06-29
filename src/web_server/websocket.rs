@@ -45,9 +45,12 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
 
             match agent_output.get_raw_ansi_output().await {
                 Ok(Some(output)) => {
-                    if !output.is_empty() && sender.send(Message::Text(output)).await.is_err() {
-                        debug!("WebSocket sender closed");
-                        break;
+                    if !output.is_empty() {
+                        info!("📤 Sending WebSocket data: {} bytes", output.len());
+                        if sender.send(Message::Text(output)).await.is_err() {
+                            debug!("WebSocket sender closed");
+                            break;
+                        }
                     }
                 }
                 Ok(None) => {

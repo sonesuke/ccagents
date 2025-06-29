@@ -103,7 +103,9 @@
                 };
                 
                 this.ws.onmessage = (event) => {
-                    console.log('Received WebSocket data:', event.data);
+                    console.log('📨 Received WebSocket data:', event.data);
+                    console.log('📨 Data length:', event.data.length);
+                    console.log('📨 Data type:', typeof event.data);
                     this.handleTerminalData(event.data);
                 };
                 
@@ -163,12 +165,16 @@
             }
             
             handleTerminalData(data) {
-                if (!this.startTime || !data) return;
+                if (!this.startTime || !data) {
+                    console.log('⚠️ Skipping terminal data - no startTime or empty data');
+                    return;
+                }
                 
                 const timestamp = (Date.now() - this.startTime) / 1000;
                 this.eventLog.push([timestamp, "o", data]);
                 
-                console.log('Adding event:', [timestamp, "o", data]);
+                console.log('📝 Adding event:', [timestamp, "o", data]);
+                console.log('📊 Total events now:', this.eventLog.length);
                 
                 // Try to feed data to existing player or recreate
                 this.updatePlayerWithNewData();
