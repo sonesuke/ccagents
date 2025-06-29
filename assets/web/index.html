@@ -80,8 +80,8 @@
                 this.input = document.getElementById('input');
                 this.status = document.getElementById('status');
                 this.ws = null;
-                this.events = [];
-                this.startTime = Date.now();
+                this.eventLog = [];
+                this.startTime = null;
                 this.setupEventListeners();
                 this.connect();
             }
@@ -98,16 +98,13 @@
                 this.ws.onopen = () => {
                     console.log('WebSocket connected');
                     this.updateStatus('connected', 'Connected');
-                    this.createPlayer();
+                    this.startTime = Date.now();
+                    this.initializePlayer();
                 };
                 
                 this.ws.onmessage = (event) => {
-                    // Add raw ANSI data as asciinema event
-                    const timestamp = (Date.now() - this.startTime) / 1000;
-                    this.events.push([timestamp, 'o', event.data]);
-                    
-                    // Update player with new events
-                    this.updatePlayer();
+                    console.log('Received WebSocket data:', event.data);
+                    this.handleTerminalData(event.data);
                 };
                 
                 this.ws.onclose = () => {
@@ -122,52 +119,90 @@
                 };
             }
             
-            createPlayer() {
-                // Create asciinema recording format
-                const recording = {
+            initializePlayer() {
+                // Create initial asciinema recording with a welcome message
+                const initialCast = {
                     version: 2,
                     width: 80,
                     height: 24,
                     timestamp: Math.floor(this.startTime / 1000),
-                    env: { TERM: "xterm-256color", SHELL: "/bin/bash" },
-                    events: this.events
+                    env: {
+                        TERM: "xterm-256color",
+                        SHELL: "/bin/bash"
+                    }
                 };
                 
-                // Use asciinema player with recording
-                this.player = AsciinemaPlayer.create(recording, this.terminal, {
+                // Create initial cast string with welcome message
+                const welcomeEvent = [0, "o", "Terminal ready. Type commands below.\r\n$ "];
+                const initialCastString = JSON.stringify(initialCast) + '\n' + JSON.stringify(welcomeEvent);
+                
+                console.log('Creating asciinema player with initial cast');
+                
+                // Initialize player with initial data
+                this.player = AsciinemaPlayer.create(initialCastString, this.terminal, {
+                    cols: 80,
+                    rows: 24,
                     autoPlay: true,
+                    preload: true,
                     loop: false,
-                    controls: false,
-                    fit: 'width',
-                    terminalFontSize: '14px',
-                    theme: 'dracula'
+                    startAt: 0,
+                    speed: 1,
+                    idleTimeLimit: 2,
+                    theme: {
+                        background: "transparent",
+                        foreground: "#f8f8f2"
+                    }
                 });
+                
+                console.log('Asciinema player created successfully');
             }
             
-            updatePlayer() {
-                if (this.player && this.events.length > 0) {
-                    // Recreate player with updated events
-                    const recording = {
-                        version: 2,
-                        width: 80,
-                        height: 24,
-                        timestamp: Math.floor(this.startTime / 1000),
-                        env: { TERM: "xterm-256color", SHELL: "/bin/bash" },
-                        events: [...this.events]
-                    };
-                    
-                    // Clear and recreate player
-                    this.terminal.innerHTML = '';
-                    this.player = AsciinemaPlayer.create(recording, this.terminal, {
-                        autoPlay: true,
-                        loop: false,
-                        controls: false,
-                        fit: 'width',
-                        terminalFontSize: '14px',
-                        theme: 'dracula',
-                        startAt: this.events.length > 0 ? this.events[this.events.length - 1][0] : 0
-                    });
-                }
+            handleTerminalData(data) {
+                if (!this.startTime || !data) return;
+                
+                const timestamp = (Date.now() - this.startTime) / 1000;
+                this.eventLog.push([timestamp, "o", data]);
+                
+                console.log('Adding event:', [timestamp, "o", data]);
+                
+                // Try to feed data to existing player or recreate
+                this.updatePlayerWithNewData();
+            }
+            
+            updatePlayerWithNewData() {
+                if (this.eventLog.length === 0) return;
+                
+                // Create new cast with accumulated events
+                const cast = {
+                    version: 2,
+                    width: 80,
+                    height: 24,
+                    timestamp: Math.floor(this.startTime / 1000),
+                    env: {
+                        TERM: "xterm-256color",
+                        SHELL: "/bin/bash"
+                    }
+                };
+                
+                // Add events inline (asciinema v2 format)
+                const castWithEvents = JSON.stringify(cast) + '\n' + 
+                    this.eventLog.map(event => JSON.stringify(event)).join('\n');
+                
+                // Clear and recreate player with updated events
+                this.terminal.innerHTML = '';
+                this.player = AsciinemaPlayer.create(castWithEvents, this.terminal, {
+                    cols: 80,
+                    rows: 24,
+                    autoPlay: true,
+                    preload: true,
+                    loop: false,
+                    startAt: "last",
+                    speed: 1,
+                    theme: {
+                        background: "transparent",
+                        foreground: "#f8f8f2"
+                    }
+                });
             }
 
             setupEventListeners() {
