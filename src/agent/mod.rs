@@ -151,8 +151,12 @@ impl Agent {
     }
 
     /// Get direct access to PTY output broadcast receiver for WebSocket streaming
-    pub async fn get_pty_output_receiver(&self) -> Result<tokio::sync::broadcast::Receiver<String>> {
-        self.ht_process.get_pty_output_receiver().await
+    pub async fn get_pty_output_receiver(
+        &self,
+    ) -> Result<tokio::sync::broadcast::Receiver<String>> {
+        self.ht_process
+            .get_pty_output_receiver()
+            .await
             .map_err(|e| anyhow::anyhow!(e))
     }
 }

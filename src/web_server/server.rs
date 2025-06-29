@@ -5,15 +5,15 @@ use anyhow::Result;
 use axum::{
     extract::{State, WebSocketUpgrade},
     http::StatusCode,
-    response::{Html, Response, Json},
+    response::{Html, Json, Response},
     routing::{get, post},
     Router,
 };
+use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
 use tracing::info;
-use serde::{Deserialize, Serialize};
 
 use super::websocket::handle_websocket;
 use crate::agent::Agent;
@@ -116,7 +116,7 @@ async fn send_command(
     Json(request): Json<CommandRequest>,
 ) -> Json<CommandResponse> {
     info!("📨 Command API request: {}", request.command);
-    
+
     match agent.send_input(&request.command).await {
         Ok(_) => {
             info!("✅ Command sent successfully: {}", request.command);

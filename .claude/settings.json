@@ -29,6 +29,8 @@
       "Bash(nohup:*)",
       "Bash(grep:*)",
       "Bash(pkill:*)",
+      "Bash(kill:*)",
+      "Bash(rg:*)",
       "mcp__playwright__browser_navigate",
       "mcp__playwright__browser_take_screenshot",
       "mcp__playwright__browser_type",

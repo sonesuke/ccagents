@@ -65,7 +65,9 @@ impl PtySession {
     pub async fn new(command: String, cols: usize, rows: usize) -> Result<Self> {
         let (event_tx, _) = broadcast::channel(1024);
         let now = Instant::now();
-        let terminal = Arc::new(PtyTerminal::new(command, cols as u16, rows as u16, event_tx.clone(), now).await?);
+        let terminal = Arc::new(
+            PtyTerminal::new(command, cols as u16, rows as u16, event_tx.clone(), now).await?,
+        );
 
         let session = Self {
             terminal: terminal.clone(),
@@ -169,21 +171,27 @@ impl PtySession {
     }
 
     /// Get direct access to PTY output broadcast receiver for WebSocket streaming
-    pub async fn get_pty_output_receiver(&self) -> Result<tokio::sync::broadcast::Receiver<String>> {
+    pub async fn get_pty_output_receiver(
+        &self,
+    ) -> Result<tokio::sync::broadcast::Receiver<String>> {
         // Get a receiver for the terminal's output channel
         let mut bytes_rx = self.terminal.get_output_receiver().await?;
         let (string_tx, string_rx) = tokio::sync::broadcast::channel(1024);
-        
+
         // Spawn a converter task that converts Bytes to String
         tokio::spawn(async move {
             use tracing::info;
             info!("🔄 PTY session converter task started");
-            
+
             while let Ok(bytes) = bytes_rx.recv().await {
                 let string_data = String::from_utf8_lossy(&bytes).to_string();
-                info!("🔄 Converting {} bytes to string: {:?}", bytes.len(), &string_data[..std::cmp::min(100, string_data.len())]);
-                
-                if let Err(_) = string_tx.send(string_data.clone()) {
+                info!(
+                    "🔄 Converting {} bytes to string: {:?}",
+                    bytes.len(),
+                    &string_data[..std::cmp::min(100, string_data.len())]
+                );
+
+                if string_tx.send(string_data.clone()).is_err() {
                     info!("❌ Converter task: No more string receivers, stopping");
                     break;
                 }
@@ -191,37 +199,9 @@ impl PtySession {
             }
             info!("🔚 PTY session converter task terminated");
         });
-        
+
         Ok(string_rx)
     }
-}
-
-async fn output_handler(
-    terminal: Arc<PtyTerminal>,
-    event_tx: broadcast::Sender<PtyEvent>,
-    start_time: Instant,
-) {
-    use tracing::{debug, info};
-    info!("🚀 Output handler started");
-
-    while let Ok(Some(data)) = terminal.read_output().await {
-        let output = String::from_utf8_lossy(&data).to_string();
-        info!("📄 PTY output received: {} bytes: {:?}", data.len(), output);
-
-        let event = PtyEvent {
-            event_type: "output".to_string(),
-            time: start_time.elapsed().as_secs_f64(),
-            data: PtyEventData::Output { data: output },
-        };
-
-        if event_tx.send(event).is_err() {
-            info!("❌ Failed to send output event");
-            break;
-        } else {
-            info!("✅ Output event sent successfully");
-        }
-    }
-    info!("⚠️ Output handler terminated");
 }
 
 fn parse_key(key: &str) -> Vec<u8> {

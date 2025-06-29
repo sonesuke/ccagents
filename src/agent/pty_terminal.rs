@@ -28,8 +28,8 @@ pub struct PtyTerminal {
 
 impl PtyTerminal {
     pub async fn new(
-        command: String, 
-        cols: u16, 
+        command: String,
+        cols: u16,
         rows: u16,
         event_tx: broadcast::Sender<PtyEvent>,
         start_time: Instant,
@@ -81,7 +81,7 @@ impl PtyTerminal {
 
         let (input_tx, mut input_rx) = mpsc::unbounded_channel::<Bytes>();
         let (output_tx, _rx) = broadcast::channel(1024);
-        
+
         // Keep a persistent receiver alive to prevent broadcast channel from failing
         let persistent_rx = output_tx.subscribe();
 
@@ -124,7 +124,11 @@ impl PtyTerminal {
                     }
                     Ok(n) => {
                         let data = &buf[..n];
-                        info!("📥 PTY reader: read {} bytes from PTY: {:?}", n, String::from_utf8_lossy(data));
+                        info!(
+                            "📥 PTY reader: read {} bytes from PTY: {:?}",
+                            n,
+                            String::from_utf8_lossy(data)
+                        );
 
                         // Store raw output with ANSI sequences
                         let raw_str = String::from_utf8_lossy(data);
@@ -152,9 +156,14 @@ impl PtyTerminal {
                         avt_term.feed_str(&raw_str);
                         drop(avt_term);
 
-                        info!("📤 PTY reader: broadcasting {} bytes to output channel", data.len());
+                        info!(
+                            "📤 PTY reader: broadcasting {} bytes to output channel",
+                            data.len()
+                        );
                         if output_tx_clone.send(Bytes::from(data.to_vec())).is_err() {
-                            error!("❌ PTY reader: failed to broadcast to output channel, breaking");
+                            error!(
+                                "❌ PTY reader: failed to broadcast to output channel, breaking"
+                            );
                             break;
                         }
                         info!("✅ PTY reader: successfully broadcast to output channel");
@@ -163,12 +172,15 @@ impl PtyTerminal {
                         let output_event = PtyEvent {
                             event_type: "output".to_string(),
                             time: start_time.elapsed().as_secs_f64(),
-                            data: PtyEventData::Output { 
+                            data: PtyEventData::Output {
                                 data: raw_str.to_string(),
                             },
                         };
-                        
-                        info!("📡 PTY reader: emitting output event with {} bytes", raw_str.len());
+
+                        info!(
+                            "📡 PTY reader: emitting output event with {} bytes",
+                            raw_str.len()
+                        );
                         if event_tx_clone.send(output_event).is_err() {
                             error!("❌ PTY reader: failed to send output event, breaking");
                             break;

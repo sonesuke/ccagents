@@ -530,26 +530,14 @@ impl PtyProcess {
     }
 
     /// Get direct access to PTY output broadcast receiver for WebSocket streaming
-    pub async fn get_pty_output_receiver(&self) -> Result<tokio::sync::broadcast::Receiver<String>, PtyProcessError> {
+    pub async fn get_pty_output_receiver(
+        &self,
+    ) -> Result<tokio::sync::broadcast::Receiver<String>, PtyProcessError> {
         let session_lock = self.session.lock().await;
 
         if let Some(session) = session_lock.as_ref() {
             session
                 .get_pty_output_receiver()
-                .await
-                .map_err(|e| PtyProcessError::CommunicationError(e.to_string()))
-        } else {
-            Err(PtyProcessError::NotRunning)
-        }
-    }
-
-    /// Send output data to terminal's output channel
-    async fn send_output_to_terminal(&self, data: &str) -> Result<(), PtyProcessError> {
-        let session_lock = self.session.lock().await;
-
-        if let Some(session) = session_lock.as_ref() {
-            session
-                .send_output_data(data)
                 .await
                 .map_err(|e| PtyProcessError::CommunicationError(e.to_string()))
         } else {

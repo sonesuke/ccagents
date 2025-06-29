@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::extract::ws::{Message, WebSocket};
 use futures_util::{SinkExt, StreamExt};
@@ -18,7 +18,7 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    
+
     let header = json!({
         "version": 2,
         "width": 80,
@@ -30,11 +30,15 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
         }
     });
 
-    if sender.send(Message::Text(header.to_string())).await.is_err() {
+    if sender
+        .send(Message::Text(header.to_string()))
+        .await
+        .is_err()
+    {
         error!("Failed to send asciinema header");
         return;
     }
-    
+
     info!("✅ Asciinema header sent successfully");
 
     // Send current terminal state to new client
@@ -43,8 +47,11 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
             let time = 0.0; // Initial state at time 0
             let initial_event = json!([time, "o", current_screen]);
             let event_str = initial_event.to_string();
-            
-            info!("📤 Sending initial terminal state: {} bytes", event_str.len());
+
+            info!(
+                "📤 Sending initial terminal state: {} bytes",
+                event_str.len()
+            );
             if sender.send(Message::Text(event_str)).await.is_err() {
                 error!("Failed to send initial terminal state");
                 return;
@@ -73,27 +80,35 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
     // Event-driven output handling using direct broadcast channel access
     let agent_output = agent.clone();
     let start_time = std::time::Instant::now();
-    
+
     let output_task = tokio::spawn(async move {
         info!("🔄 WebSocket event-driven output task started");
-        
+
         // Get direct access to PTY output broadcast channel
         if let Ok(mut pty_output_rx) = agent_output.get_pty_output_receiver().await {
             info!("✅ Connected to PTY output broadcast channel");
-            
+
             info!("🔄 WebSocket: Starting recv loop for PTY output");
             while let Ok(data) = pty_output_rx.recv().await {
                 let time = start_time.elapsed().as_secs_f64();
-                
-                info!("🔍 WebSocket: Received {} bytes from PTY channel: {:?}", data.len(), &data[..std::cmp::min(50, data.len())]);
-                
+
+                info!(
+                    "🔍 WebSocket: Received {} bytes from PTY channel: {:?}",
+                    data.len(),
+                    &data[..std::cmp::min(50, data.len())]
+                );
+
                 // Format as asciinema event: [timestamp, "o", data]
                 let asciinema_event = json!([time, "o", data]);
                 let event_str = asciinema_event.to_string();
-                
-                info!("📤 Sending asciinema event: {} bytes at {:.3}s", event_str.len(), time);
+
+                info!(
+                    "📤 Sending asciinema event: {} bytes at {:.3}s",
+                    event_str.len(),
+                    time
+                );
                 debug!("📤 Event content: {}", event_str);
-                
+
                 if sender.send(Message::Text(event_str)).await.is_err() {
                     info!("WebSocket sender closed, stopping output task");
                     break;
@@ -104,7 +119,7 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
         } else {
             error!("❌ Failed to get PTY output receiver from agent");
         }
-        
+
         info!("🔚 WebSocket output task terminated");
     });
 

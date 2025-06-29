@@ -14,7 +14,7 @@ entries:
   - name: "compound_command_test"
     trigger: "on_start"
     action: "send_keys"
-    keys: ["echo 'First message'; echo 'Second message'; pwd; ls -la; echo 'Final message'", "\r"]
+    keys: ["ls --color=always", "\r"]
 
 # Example rules for pattern matching
 rules:
