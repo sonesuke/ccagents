@@ -1,6 +1,6 @@
 # Basic Examples
 
-This directory contains basic examples demonstrating fundamental RuleAgents features.
+This directory contains basic examples demonstrating fundamental ccauto features.
 
 ## Files
 

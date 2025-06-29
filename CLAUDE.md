@@ -1,6 +1,6 @@
-# Development Guidelines for RuleAgents
+# Development Guidelines for ccauto
 
-This document contains important development rules and conventions for the RuleAgents project.
+This document contains important development rules and conventions for the ccauto project.
 
 ## Pre-commit Hooks
 

@@ -1,10 +1,10 @@
-# RuleAgents Tutorial
+# ccauto Tutorial
 
-This tutorial walks you through configuring and using RuleAgents with a practical example. You'll learn how to create automation rules and understand the core concepts through hands-on experience.
+This tutorial walks you through configuring and using ccauto with a practical example. You'll learn how to create automation rules and understand the core concepts through hands-on experience.
 
 ## Overview
 
-RuleAgents automates terminal interactions using YAML configuration files. This tutorial uses a mock interactive script to demonstrate:
+ccauto automates terminal interactions using YAML configuration files. This tutorial uses a mock interactive script to demonstrate:
 - How to write configuration rules
 - Different types of automation triggers
 - Pattern matching and automated responses
@@ -14,7 +14,7 @@ RuleAgents automates terminal interactions using YAML configuration files. This 
 
 ### Configuration Structure
 
-A RuleAgents configuration file (`config.yaml`) contains two main sections:
+A ccauto configuration file (`config.yaml`) contains two main sections:
 
 #### 1. Entries - Event-Driven Triggers
 ```yaml
@@ -26,7 +26,7 @@ entries:
 ```
 
 **Available triggers:**
-- `on_start`: Executes automatically when RuleAgents starts
+- `on_start`: Executes automatically when ccauto starts
 - `periodic`: Executes at regular intervals (e.g., "15s", "5m", "2h")
 - `enqueue:queue_name`: Executes when items are added to specified queue
 
@@ -90,9 +90,9 @@ rules:
 
 ### Step 3: Running the Tutorial
 
-1. **Start RuleAgents:**
+1. **Start ccauto:**
    ```bash
-   ./target/release/rule-agents --config config.yaml
+   ./target/release/ccauto --config config.yaml
    ```
 
 2. **Watch the automation:**
@@ -105,11 +105,11 @@ rules:
 
 ### Step 4: Testing Your Configuration
 
-RuleAgents provides a test command to verify rule matching:
+ccauto provides a test command to verify rule matching:
 
 ```bash
 # Test if a pattern matches correctly
-./target/release/rule-agents test --config config.yaml --capture "Do you want to proceed"
+./target/release/ccauto test --config config.yaml --capture "Do you want to proceed"
 
 # Output shows which rule would trigger:
 # Match found: rule at index 0
@@ -358,17 +358,17 @@ rules:
 
 1. **Enable verbose logging:**
    ```bash
-   RUST_LOG=debug ./target/release/rule-agents --config config.yaml
+   RUST_LOG=debug ./target/release/ccauto --config config.yaml
    ```
 
 2. **Test patterns individually:**
    ```bash
-   ./target/release/rule-agents test --config config.yaml --capture "your text here"
+   ./target/release/ccauto test --config config.yaml --capture "your text here"
    ```
 
 3. **View the configuration:**
    ```bash
-   ./target/release/rule-agents show --config config.yaml
+   ./target/release/ccauto show --config config.yaml
    ```
 
 ## Common Issues and Solutions
@@ -395,4 +395,4 @@ rules:
 3. Build a library of common patterns for your workflows
 4. Share useful configurations with your team
 
-Remember: RuleAgents is powerful but requires careful configuration. Always test in a safe environment before using in production workflows!
+Remember: ccauto is powerful but requires careful configuration. Always test in a safe environment before using in production workflows!
