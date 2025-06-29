@@ -32,6 +32,7 @@
             background-color: #1a1a1a;
             border: none;
             border-radius: 0;
+            position: relative;
         }
         
         .ap-wrapper {
@@ -77,13 +78,14 @@
         }
         
         .status {
-            position: fixed;
+            position: absolute;
             top: 10px;
             right: 10px;
             padding: 5px 10px;
             border-radius: 4px;
             font-size: 12px;
             font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
+            z-index: 1000;
         }
         
         .connected { background-color: #50fa7b; color: #282a36; }
@@ -95,14 +97,14 @@
     <div class="header">
     </div>
     
-    <div id="terminal"></div>
+    <div id="terminal">
+        <div id="status" class="status disconnected">Disconnected</div>
+    </div>
     
     <div class="input-area">
         <span>$</span>
         <input id="input" type="text" placeholder="Type commands and press Enter...">
     </div>
-    
-    <div id="status" class="status disconnected">Disconnected</div>
     
     <script src="https://cdn.jsdelivr.net/npm/asciinema-player@3.7.0/dist/bundle/asciinema-player.min.js"></script>
     <script>
