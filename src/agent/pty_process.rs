@@ -487,6 +487,7 @@ impl PtyProcess {
     }
 
     /// Get properly processed screen dump from AVT terminal
+    #[allow(dead_code)]
     pub async fn get_avt_terminal_output(&self) -> String {
         let session_lock = self.session.lock().await;
 
@@ -494,6 +495,21 @@ impl PtyProcess {
             session.get_avt_terminal_output().await
         } else {
             String::new()
+        }
+    }
+
+    /// Get raw ANSI output from terminal
+    #[allow(dead_code)]
+    pub async fn get_raw_ansi_output(&self) -> Result<Option<String>, PtyProcessError> {
+        let session_lock = self.session.lock().await;
+
+        if let Some(session) = session_lock.as_ref() {
+            session
+                .get_raw_ansi_output()
+                .await
+                .map_err(|e| PtyProcessError::CommunicationError(e.to_string()))
+        } else {
+            Err(PtyProcessError::NotRunning)
         }
     }
 

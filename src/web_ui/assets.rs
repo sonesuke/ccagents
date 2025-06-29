@@ -46,14 +46,6 @@ impl AssetCache {
         self.get_asset("index.html").await
     }
 
-    pub async fn get_main_css(&self) -> Result<String> {
-        self.get_asset("styles/main.css").await
-    }
-
-    pub async fn get_terminal_client_js(&self) -> Result<String> {
-        self.get_asset("scripts/terminal-client.js").await
-    }
-
     #[allow(dead_code)]
     pub fn clear_cache(&self) {
         let mut cache = self.cache.write().unwrap();

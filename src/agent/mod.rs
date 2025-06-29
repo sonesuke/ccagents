@@ -59,7 +59,9 @@ impl AgentPool {
 
 pub struct Agent {
     ht_process: PtyProcess,
+    #[allow(dead_code)]
     cols: u16,
+    #[allow(dead_code)]
     rows: u16,
 }
 
@@ -127,18 +129,23 @@ impl Agent {
         self.send_keys(input).await
     }
 
-    /// Get current terminal output (for WebSocket)
+    /// Get raw ANSI output for asciinema player integration
+    #[allow(dead_code)]
+    pub async fn get_raw_ansi_output(&self) -> Result<Option<String>> {
+        self.ht_process
+            .get_raw_ansi_output()
+            .await
+            .map_err(|e| anyhow::anyhow!(e))
+    }
+
+    /// Get terminal output for WebSocket integration
+    #[allow(dead_code)]
     pub async fn get_terminal_output(&self) -> Result<String> {
-        // Use AVT terminal dump for properly processed output with colors
-        let content = self.ht_process.get_avt_terminal_output().await;
-        if content.trim().is_empty() {
-            Ok("Terminal ready\r\n$ ".to_string())
-        } else {
-            Ok(content)
-        }
+        Ok(self.ht_process.get_avt_terminal_output().await)
     }
 
     /// Get terminal dimensions for asciinema integration
+    #[allow(dead_code)]
     pub fn get_terminal_size(&self) -> (u16, u16) {
         (self.cols, self.rows)
     }

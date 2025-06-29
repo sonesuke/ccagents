@@ -3,32 +3,167 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rule Agents Terminal v2</title>
-    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.7.0/dist/bundle/asciinema-player.css" />
-    <link rel="stylesheet" type="text/css" href="styles/main.css" />
+    <title>Rule Agents Terminal</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.7.0/dist/bundle/asciinema-player.css" />
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #1e1e1e;
+            color: #ffffff;
+            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
+        }
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+        }
+        .header {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        #terminal {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #333;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .input-area {
+            margin-top: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        #input {
+            flex: 1;
+            padding: 10px;
+            background-color: #2d2d2d;
+            border: 1px solid #444;
+            border-radius: 4px;
+            color: #ffffff;
+            font-family: inherit;
+        }
+        .status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .connected { background-color: #28a745; }
+        .disconnected { background-color: #dc3545; }
+        .reconnecting { background-color: #ffc107; color: #000; }
+    </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <span class="title">Rule Agents Terminal</span>
-            <span class="status">Connected to Agent</span>
+            <h1>Rule Agents Terminal</h1>
         </div>
         
-        <div class="terminal">
-            <div id="terminal-container" class="terminal-container">
-                <div id="asciinema-player"></div>
-            </div>
-        </div>
+        <div id="terminal"></div>
         
         <div class="input-area">
-            <span class="prompt">$</span>
-            <input type="text" id="commandInput" placeholder="Type commands here...">
+            <span>$</span>
+            <input id="input" type="text" placeholder="Type commands and press Enter...">
         </div>
     </div>
     
-    <div id="connectionStatus" class="connection-status disconnected">Disconnected</div>
+    <div id="status" class="status disconnected">Disconnected</div>
     
     <script src="https://cdn.jsdelivr.net/npm/asciinema-player@3.7.0/dist/bundle/asciinema-player.min.js"></script>
-    <script src="scripts/terminal-client.js"></script>
+    <script>
+        class TerminalClient {
+            constructor() {
+                this.terminal = document.getElementById('terminal');
+                this.input = document.getElementById('input');
+                this.status = document.getElementById('status');
+                this.ws = null;
+                this.setupEventListeners();
+                this.connect();
+            }
+
+            connect() {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/ws`;
+                
+                console.log('Connecting to WebSocket:', wsUrl);
+                this.updateStatus('reconnecting', 'Connecting...');
+                
+                this.ws = new WebSocket(wsUrl);
+                
+                this.ws.onopen = () => {
+                    console.log('WebSocket connected');
+                    this.updateStatus('connected', 'Connected');
+                    this.createPlayer();
+                };
+                
+                this.ws.onmessage = (event) => {
+                    // Raw ANSI data is fed directly to the player via our custom stream
+                    if (this.streamController) {
+                        this.streamController.enqueue(event.data);
+                    }
+                };
+                
+                this.ws.onclose = () => {
+                    console.log('WebSocket disconnected');
+                    this.updateStatus('disconnected', 'Disconnected');
+                    setTimeout(() => this.connect(), 3000);
+                };
+                
+                this.ws.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                    this.updateStatus('reconnecting', 'Reconnecting...');
+                };
+            }
+            
+            createPlayer() {
+                // Create a readable stream that feeds ANSI data to asciinema player
+                const stream = new ReadableStream({
+                    start: (controller) => {
+                        this.streamController = controller;
+                    }
+                });
+                
+                // Use asciinema player with live stream
+                AsciinemaPlayer.create(stream, this.terminal, {
+                    autoPlay: true,
+                    controls: false,
+                    fit: 'width',
+                    terminalFontSize: '14px',
+                    theme: 'dracula'
+                });
+            }
+
+            setupEventListeners() {
+                this.input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const command = this.input.value;
+                        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                            console.log('Sending command:', command);
+                            this.ws.send(command + '\r');
+                            this.input.value = '';
+                        } else {
+                            console.error('WebSocket not connected');
+                        }
+                    }
+                });
+                
+                this.input.focus();
+            }
+
+            updateStatus(className, text) {
+                this.status.className = `status ${className}`;
+                this.status.textContent = text;
+            }
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new TerminalClient();
+        });
+    </script>
 </body>
 </html>

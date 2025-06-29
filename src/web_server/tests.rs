@@ -45,42 +45,7 @@ async fn test_asset_cache_html() {
         Ok(content) => {
             assert!(!content.is_empty());
             assert!(content.contains("Rule Agents Terminal"));
-            assert!(content.contains("terminal-client.js"));
-        }
-        Err(_) => {
-            // Asset file might not exist in test environment, which is acceptable
-            println!("Asset file not found in test environment");
-        }
-    }
-}
-
-#[tokio::test]
-async fn test_asset_cache_css() {
-    let cache = AssetCache::new();
-    let result = cache.get_main_css().await;
-
-    match result {
-        Ok(content) => {
-            assert!(!content.is_empty());
-            assert!(content.contains("body"));
-        }
-        Err(_) => {
-            // Asset file might not exist in test environment, which is acceptable
-            println!("Asset file not found in test environment");
-        }
-    }
-}
-
-#[tokio::test]
-async fn test_asset_cache_js() {
-    let cache = AssetCache::new();
-    let result = cache.get_terminal_client_js().await;
-
-    match result {
-        Ok(content) => {
-            assert!(!content.is_empty());
-            assert!(content.contains("TerminalClient"));
-            assert!(content.contains("WebSocket"));
+            assert!(content.contains("AsciinemaPlayer"));
         }
         Err(_) => {
             // Asset file might not exist in test environment, which is acceptable

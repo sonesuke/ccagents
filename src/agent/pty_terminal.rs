@@ -181,6 +181,14 @@ impl PtyTerminal {
         Ok(rx.recv().await)
     }
 
+    /// Get raw ANSI output stream for asciinema player - this is the only output method needed
+    pub async fn get_raw_ansi_output(&self) -> Result<Option<String>> {
+        match self.read_output().await? {
+            Some(bytes) => Ok(Some(String::from_utf8_lossy(&bytes).to_string())),
+            None => Ok(None),
+        }
+    }
+
     pub async fn resize(&self, cols: u16, rows: u16) -> Result<()> {
         let master = self.master_pty.lock().await;
         let pty_size = PtySize {
@@ -226,6 +234,7 @@ impl PtyTerminal {
     }
 
     /// Get properly processed screen dump using AVT terminal
+    #[allow(dead_code)]
     pub async fn get_avt_screen_dump(&self) -> String {
         let avt_terminal = self.avt_terminal.lock().await;
         avt_terminal.dump()
