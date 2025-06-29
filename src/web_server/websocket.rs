@@ -13,22 +13,30 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
 
     let (mut sender, mut receiver) = socket.split();
 
-    // Send asciinema header first
+    // Send asciinema header first with dynamic terminal size
     let start_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
 
+    // Get actual terminal dimensions from agent config
+    let (cols, rows) = agent.get_terminal_size();
+
     let header = json!({
         "version": 2,
-        "width": 80,
-        "height": 24,
+        "width": cols,
+        "height": rows,
         "timestamp": start_time,
         "env": {
             "TERM": "xterm-256color",
             "SHELL": "/bin/bash"
         }
     });
+
+    info!(
+        "📐 Using terminal dimensions: {}x{} from config",
+        cols, rows
+    );
 
     if sender
         .send(Message::Text(header.to_string()))

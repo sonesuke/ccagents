@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rule Agents Terminal</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.7.0/dist/bundle/asciinema-player.css" />
     <style>
         html, body {
@@ -110,19 +109,36 @@
         
         console.log('Connecting to WebSocket:', src);
         
-        const opts = {
-            logger: console,
-            fit: false,
-            theme: 'dracula', 
-            controls: false,
-            autoPlay: true,
-            cols: 80,
-            rows: 24,
-            terminalFontSize: '14px'
-        };
+        // Fetch terminal dimensions from config
+        async function getTerminalSize() {
+            try {
+                const response = await fetch('/api/terminal-size');
+                const terminalSize = await response.json();
+                console.log('Fetched terminal size from config:', terminalSize);
+                return terminalSize;
+            } catch (error) {
+                console.warn('Failed to fetch terminal size, using defaults:', error);
+                return { cols: 80, rows: 24 };
+            }
+        }
         
         // Wait for DOM to be ready and container to have proper size
-        function initializePlayer() {
+        async function initializePlayer() {
+            // Get terminal dimensions from server config
+            const terminalSize = await getTerminalSize();
+            
+            const opts = {
+                logger: console,
+                fit: false,
+                theme: 'dracula', 
+                controls: false,
+                autoPlay: true,
+                cols: terminalSize.cols,
+                rows: terminalSize.rows,
+                terminalFontSize: '14px'
+            };
+            
+            console.log('Using terminal dimensions:', terminalSize);
             const terminal = document.getElementById('terminal');
             console.log('Terminal container rect:', terminal.getBoundingClientRect());
             

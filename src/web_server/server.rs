@@ -30,6 +30,12 @@ struct CommandResponse {
     message: String,
 }
 
+#[derive(Serialize)]
+struct TerminalSizeResponse {
+    cols: u16,
+    rows: u16,
+}
+
 #[derive(Clone)]
 pub struct WebServer {
     pub port: u16,
@@ -82,6 +88,7 @@ impl WebServer {
             .route("/", get(serve_index))
             .route("/ws", get(websocket_handler))
             .route("/api/command", post(send_command))
+            .route("/api/terminal-size", get(get_terminal_size))
             .with_state((self.agent.clone(), self.asset_cache.clone()))
             .layer(ServiceBuilder::new().layer(CorsLayer::permissive()))
     }
@@ -133,4 +140,13 @@ async fn send_command(
             })
         }
     }
+}
+
+async fn get_terminal_size(
+    State((agent, _)): State<(Arc<Agent>, AssetCache)>,
+) -> Json<TerminalSizeResponse> {
+    let (cols, rows) = agent.get_terminal_size();
+    info!("📐 Terminal size API request: {}x{}", cols, rows);
+
+    Json(TerminalSizeResponse { cols, rows })
 }
