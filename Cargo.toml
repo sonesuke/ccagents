@@ -1,14 +1,14 @@
 [package]
-name = "rule-agents"
+name = "ccauto"
 version = "0.1.0"
 edition = "2021"
 authors = ["sonesuke <iamsonesuke@gmail.com>"]
 description = "YAML-driven agent auto-control system (command-line tool)"
 license = "MIT"
-repository = "https://github.com/sonesuke/rule-agents"
+repository = "https://github.com/sonesuke/ccauto"
 
 [[bin]]
-name = "rule-agents"
+name = "ccauto"
 path = "src/main.rs"
 
 [dependencies]

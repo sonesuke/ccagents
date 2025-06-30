@@ -1,8 +1,6 @@
 use crate::ruler::rule::CompiledRule;
 use crate::ruler::rule::{resolve_capture_groups, resolve_capture_groups_in_vec};
 use crate::ruler::types::ActionType;
-use std::fs::OpenOptions;
-use std::io::Write;
 
 /// Matches capture text against compiled rules and returns the appropriate action.
 ///
@@ -27,20 +25,10 @@ pub fn decide_action(capture: &str, rules: &[CompiledRule]) -> ActionType {
     }
 
     // Log to file for debugging
-    if let Ok(mut file) = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("pattern_match_debug.log")
-    {
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        let _ = writeln!(file, "[{}] CHECKING: {:?}", timestamp, capture);
-        let _ = writeln!(file, "  Clean content: {}", capture.trim());
-        let _ = writeln!(file, "  Length: {}", capture.len());
-        let _ = writeln!(file, "  Rules to check: {}", rules.len());
-    }
+    tracing::debug!("CHECKING: {:?}", capture);
+    tracing::debug!("  Clean content: {}", capture.trim());
+    tracing::debug!("  Length: {}", capture.len());
+    tracing::debug!("  Rules to check: {}", rules.len());
 
     for (i, rule) in rules.iter().enumerate() {
         if let Some(captures) = rule.regex.captures(capture) {
@@ -51,26 +39,15 @@ pub fn decide_action(capture: &str, rules: &[CompiledRule]) -> ActionType {
                 capture
             );
 
-            // Log to file
-            if let Ok(mut file) = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open("pattern_match_debug.log")
-            {
-                let _ = writeln!(
-                    file,
-                    "  ✅ MATCHED! Rule #{} Pattern: {:?}",
-                    i,
-                    rule.regex.as_str()
-                );
-                let _ = writeln!(file, "     Action: {:?}", rule.action);
-                let _ = writeln!(
-                    file,
-                    "     Full match: {:?}",
-                    captures.get(0).map(|m| m.as_str())
-                );
-                let _ = writeln!(file, "---");
-            }
+            // Log matched rule details
+            tracing::debug!(
+                "  ✅ MATCHED! Rule #{} Pattern: {:?}",
+                i,
+                rule.regex.as_str()
+            );
+            tracing::debug!("     Action: {:?}", rule.action);
+            tracing::debug!("     Full match: {:?}", captures.get(0).map(|m| m.as_str()));
+            tracing::debug!("---");
 
             // Extract capture groups
             let captured_groups: Vec<String> = captures
