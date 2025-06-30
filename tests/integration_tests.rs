@@ -1,10 +1,8 @@
-// Integration tests for rule-agents binary
+// Integration tests for ccauto binary
 // Since this is now a binary-only project, these tests verify the binary functionality
 // through command line interface testing
 
-use std::io::Write;
 use std::process::Command;
-use tempfile::NamedTempFile;
 
 #[test]
 fn test_binary_help_command() {
@@ -15,7 +13,7 @@ fn test_binary_help_command() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("rule-agents"));
+    assert!(stdout.contains("ccauto"));
     assert!(stdout.contains("YAML-driven agent auto-control system"));
 }
 
@@ -32,26 +30,7 @@ fn test_binary_show_command() {
     assert!(stdout.contains("rules"));
 }
 
-#[test]
-fn test_binary_test_command() {
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--",
-            "test",
-            "--config",
-            "config.yaml",
-            "--capture",
-            "Do you want to proceed",
-        ])
-        .output()
-        .expect("Failed to execute command");
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Input:"));
-    assert!(stdout.contains("Result:"));
-}
+// Test command has been removed - this test is no longer applicable
 
 #[test]
 fn test_binary_with_invalid_rules_file() {
@@ -66,37 +45,7 @@ fn test_binary_with_invalid_rules_file() {
     assert!(stderr.contains("Error:") || stderr.contains("Failed"));
 }
 
-#[test]
-fn test_binary_with_custom_rules() {
-    let yaml_content = r#"
-rules:
-  - priority: 10
-    pattern: "test pattern"
-    action: "send_keys"
-    keys: ["test", "\r"]
-"#;
-
-    let mut temp_file = NamedTempFile::new().unwrap();
-    write!(temp_file, "{}", yaml_content).unwrap();
-
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--",
-            "test",
-            "--config",
-            temp_file.path().to_str().unwrap(),
-            "--capture",
-            "test pattern",
-        ])
-        .output()
-        .expect("Failed to execute command");
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Input:"));
-    assert!(stdout.contains("test pattern"));
-}
+// Test command has been removed - this test is no longer applicable
 
 #[test]
 fn test_binary_version() {
@@ -107,5 +56,5 @@ fn test_binary_version() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("rule-agents"));
+    assert!(stdout.contains("ccauto"));
 }

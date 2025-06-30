@@ -20,8 +20,6 @@ pub struct Cli {
 pub enum Commands {
     /// Load and display rules
     Show(ShowArgs),
-    /// Test rule matching against capture text
-    Test(TestArgs),
 }
 
 #[derive(Args, Debug)]
@@ -29,14 +27,4 @@ pub struct ShowArgs {
     /// Path to config YAML file
     #[arg(long, default_value = "config.yaml")]
     pub config: PathBuf,
-}
-
-#[derive(Args, Debug)]
-pub struct TestArgs {
-    /// Path to config YAML file
-    #[arg(long, default_value = "config.yaml")]
-    pub config: PathBuf,
-    /// Capture text to test against rules
-    #[arg(short, long)]
-    pub capture: String,
 }

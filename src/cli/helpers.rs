@@ -2,8 +2,6 @@ use crate::agent;
 use crate::queue::{QueueExecutor, SharedQueueManager};
 use crate::ruler;
 use anyhow::Result;
-use std::fs::OpenOptions;
-use std::io::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Execute a periodic entry action (with agent context)
@@ -68,44 +66,21 @@ pub async fn execute_entry_action(
     queue_manager: &SharedQueueManager,
 ) -> Result<()> {
     // DETAILED DEBUG LOGGING FOR ENTRY EXECUTION
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-
-    if let Ok(mut file) = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("pty_debug.log")
-    {
-        let _ = writeln!(file, "[{}] === EXECUTING ENTRY ACTION ===", timestamp);
-        let _ = writeln!(file, "Entry name: {}", entry.name);
-        let _ = writeln!(file, "Action type: {:?}", entry.action);
-        let _ = writeln!(file, "---");
-    }
+    tracing::debug!("=== EXECUTING ENTRY ACTION ===");
+    tracing::debug!("Entry name: {}", entry.name);
+    tracing::debug!("Action type: {:?}", entry.action);
 
     match &entry.action {
         ruler::types::ActionType::SendKeys(keys) => {
             println!("🤖 Executing entry '{}' → Sending: {:?}", entry.name, keys);
 
-            if let Ok(mut file) = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open("pty_debug.log")
-            {
-                let _ = writeln!(
-                    file,
-                    "[{}] SendKeys action with {} keys:",
-                    timestamp,
-                    keys.len()
-                );
-                for (i, key) in keys.iter().enumerate() {
-                    let _ = writeln!(file, "  Key {}: {:?}", i, key);
-                }
+            tracing::debug!("SendKeys action with {} keys:", keys.len());
+            for (i, key) in keys.iter().enumerate() {
+                tracing::debug!("  Key {}: {:?}", i, key);
             }
 
             for key in keys {
-                crate::debug_print!("📤 Sending individual key: {:?}", key);
+                tracing::debug!("📤 Sending individual key: {:?}", key);
 
                 if key == "\\r" || key == "\r" {
                     if let Err(e) = agent.send_keys("\r").await {
@@ -259,7 +234,7 @@ pub async fn execute_rule_action(
     Ok(())
 }
 
-/// Process direct command output (supports any command, not just Claude)
+/// Process direct command output (stdout/stderr)
 pub async fn process_direct_output(
     agent: &agent::Agent,
     ruler: &ruler::Ruler,
@@ -267,28 +242,17 @@ pub async fn process_direct_output(
 ) -> Result<()> {
     // Check for direct command output and process
     while let Some(command_output) = agent.get_command_output().await {
-        if let Ok(mut file) = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("pattern_match_debug.log")
-        {
-            let timestamp = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs();
-            let _ = writeln!(file, "\n[{}] === DIRECT COMMAND OUTPUT ===", timestamp);
-            let _ = writeln!(
-                file,
-                "Source: {}",
-                if command_output.is_stdout {
-                    "stdout"
-                } else {
-                    "stderr"
-                }
-            );
-            let _ = writeln!(file, "Content: {:?}", command_output.content);
-            let _ = writeln!(file, "==> Will check rules for command output");
-        }
+        tracing::debug!("=== DIRECT COMMAND OUTPUT ===");
+        tracing::debug!(
+            "Source: {}",
+            if command_output.is_stdout {
+                "stdout"
+            } else {
+                "stderr"
+            }
+        );
+        tracing::debug!("Content: {:?}", command_output.content);
+        tracing::debug!("==> Will check rules for command output");
 
         println!("📤 Command output: {}", command_output.content);
 
@@ -298,6 +262,42 @@ pub async fn process_direct_output(
         execute_rule_action(&action, agent, queue_manager).await?;
     }
 
-    // Terminal diff detection removed - only direct command output monitoring remains
     Ok(())
+}
+
+/// Process PTY output for pattern matching
+pub async fn process_pty_output(
+    pty_output: &str,
+    agent: &agent::Agent,
+    ruler: &ruler::Ruler,
+    queue_manager: &SharedQueueManager,
+) -> Result<()> {
+    // Remove ANSI escape sequences for cleaner pattern matching
+    let clean_output = strip_ansi_escapes(pty_output);
+
+    tracing::debug!("=== PTY OUTPUT ===");
+    tracing::debug!("Raw output: {:?}", pty_output);
+    tracing::debug!("Clean output: {:?}", clean_output);
+    tracing::debug!("==> Will check rules for PTY output");
+
+    // Split output by lines and check each line
+    for line in clean_output.lines() {
+        if !line.trim().is_empty() {
+            tracing::debug!("Checking line: {:?}", line);
+
+            let action = ruler.decide_action_for_capture(line).await;
+
+            tracing::debug!("Action decided: {:?}", action);
+
+            execute_rule_action(&action, agent, queue_manager).await?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Strip ANSI escape sequences from text
+fn strip_ansi_escapes(text: &str) -> String {
+    let ansi_regex = regex::Regex::new(r"\x1b\[[0-9;]*[mGKHF]").unwrap();
+    ansi_regex.replace_all(text, "").to_string()
 }

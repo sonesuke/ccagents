@@ -93,23 +93,11 @@ impl Agent {
 
     pub async fn send_keys(&self, keys: &str) -> Result<()> {
         // AGENT SEND_KEYS DEBUG
-        crate::debug_print!("🔄 Agent::send_keys called with: {:?}", keys);
+        tracing::debug!("🔄 Agent::send_keys called with: {:?}", keys);
 
-        if let Ok(mut file) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("pty_debug.log")
-        {
-            use std::io::Write;
-            let timestamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs();
-            let _ = writeln!(file, "[{}] === AGENT SEND_KEYS ===", timestamp);
-            let _ = writeln!(file, "Keys: {:?}", keys);
-            let _ = writeln!(file, "About to call ht_process.send_input");
-            let _ = writeln!(file, "---");
-        }
+        tracing::debug!("=== AGENT SEND_KEYS ===");
+        tracing::debug!("Keys: {:?}", keys);
+        tracing::debug!("About to call ht_process.send_input");
 
         self.ht_process
             .send_input(keys.to_string())

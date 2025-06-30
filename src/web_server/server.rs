@@ -114,7 +114,7 @@ async fn websocket_handler(
     State((agent, _)): State<(Arc<Agent>, AssetCache)>,
 ) -> Response {
     info!("🔌 WebSocket upgrade request received");
-    crate::debug_print!("🔌 WebSocket connection attempt");
+    tracing::debug!("🔌 WebSocket connection attempt");
     ws.on_upgrade(move |socket| handle_websocket(socket, agent))
 }
 

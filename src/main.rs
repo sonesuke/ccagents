@@ -8,50 +8,30 @@ mod web_ui;
 use anyhow::{Context, Result};
 use clap::Parser;
 use cli::{
-    execute_entry_action, execute_periodic_entry, process_direct_output,
+    execute_entry_action, execute_periodic_entry, process_direct_output, process_pty_output,
     resolve_entry_task_placeholders, Cli, Commands,
 };
 use queue::create_shared_manager;
-use ruler::decision::decide_action;
 use ruler::entry::TriggerType;
 use ruler::Ruler;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::signal;
 use tokio::time::interval;
 use web_server::WebServer;
-
-// Global debug flag
-pub static DEBUG_MODE: AtomicBool = AtomicBool::new(false);
-
-// Debug print macro
-#[macro_export]
-macro_rules! debug_print {
-    ($($arg:tt)*) => {
-        if $crate::DEBUG_MODE.load(std::sync::atomic::Ordering::Relaxed) {
-            println!($($arg)*);
-        }
-    };
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
     // Parse command line arguments first to get debug flag
     let cli = Cli::parse();
 
-    // Set global debug mode
-    DEBUG_MODE.store(cli.debug, Ordering::Relaxed);
-
     // Initialize logging based on debug flag
-    if cli.debug {
-        tracing_subscriber::fmt::init();
+    let level = if cli.debug {
+        tracing::Level::DEBUG // --debug時はDEBUGレベル以上
     } else {
-        // Only show error logs when debug is disabled
-        tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::ERROR)
-            .init();
-    }
+        tracing::Level::WARN // 通常時はWARNレベル以上（エラーと警告のみ）
+    };
+    tracing_subscriber::fmt().with_max_level(level).init();
 
     match cli.command {
         None => {
@@ -61,7 +41,6 @@ async fn main() -> Result<()> {
         }
         Some(command) => match command {
             Commands::Show(args) => handle_show_command(&args).await?,
-            Commands::Test(args) => handle_test_command(&args).await?,
         },
     }
 
@@ -78,28 +57,10 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
 
     let base_port = ruler.get_monitor_config().get_web_ui_port();
 
-    // Clear debug log files at startup
-    if let Ok(mut file) = std::fs::File::create("pattern_match_debug.log") {
-        use std::io::Write;
-        use std::time::SystemTime;
-        let _ = writeln!(file, "=== RuleAgents Pattern Match Debug Log ===");
-        let _ = writeln!(file, "Started at: {:?}", SystemTime::now());
-        let _ = writeln!(file, "Config file: {}", rules_path.display());
-    }
-
-    if let Ok(mut file) = std::fs::File::create("pty_debug.log") {
-        use std::io::Write;
-        use std::time::SystemTime;
-        let _ = writeln!(file, "=== RuleAgents PTY Debug Log ===");
-        let _ = writeln!(file, "Started at: {:?}", SystemTime::now());
-        let _ = writeln!(file, "Config file: {}", rules_path.display());
-    }
-
     println!("🎯 RuleAgents started");
     println!("📂 Config file: {}", rules_path.display());
     println!("🌐 Terminal available at: http://localhost:{}", base_port);
     println!("🛑 Press Ctrl+C to stop");
-    println!("📝 Debug log: pattern_match_debug.log");
 
     // Create agent pool
     let monitor_config = ruler.get_monitor_config();
@@ -192,7 +153,7 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
 
     // Setup queue listeners for enqueue entries
     let enqueue_entries = ruler.get_enqueue_entries().await;
-    debug_print!("📡 Setting up {} queue listeners...", enqueue_entries.len());
+    tracing::debug!("📡 Setting up {} queue listeners...", enqueue_entries.len());
     let mut queue_handles = Vec::new();
     for entry in enqueue_entries {
         if let TriggerType::Enqueue { queue_name } = &entry.trigger {
@@ -237,6 +198,39 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
         }
     }
 
+    // Start PTY output monitoring tasks for each agent
+    let ruler = Arc::new(ruler); // Wrap ruler in Arc for sharing
+    let mut pty_monitor_handles = Vec::new();
+    for i in 0..agent_pool.size() {
+        let agent = agent_pool.get_agent_by_index(i);
+        let ruler_clone = Arc::clone(&ruler);
+        let queue_manager_clone = queue_manager.clone();
+
+        let handle = tokio::spawn(async move {
+            tracing::debug!("🔍 Starting PTY monitor task for agent {}", i);
+
+            // Get PTY output receiver
+            if let Ok(mut rx) = agent.get_pty_output_receiver().await {
+                tracing::debug!("✅ Got PTY receiver for agent {}", i);
+
+                // Continuously monitor PTY output
+                while let Ok(pty_output) = rx.recv().await {
+                    if let Err(e) =
+                        process_pty_output(&pty_output, &agent, &ruler_clone, &queue_manager_clone)
+                            .await
+                    {
+                        tracing::debug!("❌ Error processing PTY output: {}", e);
+                    }
+                }
+
+                tracing::debug!("❌ PTY monitor task ended for agent {}", i);
+            } else {
+                tracing::debug!("❌ Failed to get PTY receiver for agent {}", i);
+            }
+        });
+        pty_monitor_handles.push(handle);
+    }
+
     tokio::select! {
         _ = signal::ctrl_c() => {
             println!("\n🛑 Received Ctrl+C, shutting down...");
@@ -264,6 +258,9 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
         handle.abort();
     }
     for handle in web_server_handles {
+        handle.abort();
+    }
+    for handle in pty_monitor_handles {
         handle.abort();
     }
 
@@ -303,31 +300,6 @@ async fn handle_show_command(args: &cli::ShowArgs) -> Result<()> {
         println!("\nRules:");
         for (i, rule) in rules.iter().enumerate() {
             println!("  {}: {} -> {:?}", i + 1, rule.regex.as_str(), rule.action);
-        }
-    }
-
-    Ok(())
-}
-
-/// Handle test command
-async fn handle_test_command(args: &cli::TestArgs) -> Result<()> {
-    // Load rules and test against capture text
-    let (_, rules, _) =
-        ruler::config::load_config(&args.config).context("Failed to load config")?;
-    let action = decide_action(&args.capture, &rules);
-
-    println!("Input: \"{}\"", args.capture);
-    println!("Result: Action = {:?}", action);
-
-    // Show which rule matched (if any)
-    for (i, rule) in rules.iter().enumerate() {
-        if rule.regex.is_match(&args.capture) {
-            println!(
-                "Matched rule: #{}, Pattern: \"{}\"",
-                i + 1,
-                rule.regex.as_str()
-            );
-            break;
         }
     }
 

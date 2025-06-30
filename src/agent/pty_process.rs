@@ -149,28 +149,15 @@ impl PtyProcess {
 
     pub async fn send_input(&self, input: String) -> Result<(), PtyProcessError> {
         // DETAILED DEBUG LOGGING
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        if let Ok(mut file) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("pty_debug.log")
-        {
-            use std::io::Write;
-            let _ = writeln!(file, "[{}] === SEND_INPUT CALLED ===", timestamp);
-            let _ = writeln!(file, "Raw input: {:?}", input);
-            let _ = writeln!(file, "Trimmed input: {:?}", input.trim());
-            let _ = writeln!(file, "Input length: {}", input.len());
-            let _ = writeln!(
-                file,
-                "Starts with 'claude ': {}",
-                input.trim().starts_with("claude ")
-            );
-            let _ = writeln!(file, "---");
-        }
+        tracing::debug!("=== SEND_INPUT CALLED ===");
+        tracing::debug!("Raw input: {:?}", input);
+        tracing::debug!("Trimmed input: {:?}", input.trim());
+        tracing::debug!("Input length: {}", input.len());
+        tracing::debug!(
+            "Starts with 'claude ': {}",
+            input.trim().starts_with("claude ")
+        );
+        tracing::debug!("---");
 
         info!("🔍 send_input called with: {:?}", input);
 
@@ -184,7 +171,7 @@ impl PtyProcess {
 
             if should_monitor {
                 info!("🎯 Detected claude command, starting output monitoring");
-                crate::debug_print!("🎯 Detected claude command: {}", input.trim());
+                tracing::debug!("🎯 Detected claude command: {}", input.trim());
                 self.start_command_monitoring(&input).await?;
             } else {
                 info!("❌ Not a claude command: '{}'", input.trim());
@@ -205,41 +192,22 @@ impl PtyProcess {
 
     /// Start monitoring command process output
     async fn start_command_monitoring(&self, command: &str) -> Result<(), PtyProcessError> {
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        if let Ok(mut file) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("pty_debug.log")
-        {
-            use std::io::Write;
-            let _ = writeln!(file, "[{}] === START_COMMAND_MONITORING ===", timestamp);
-            let _ = writeln!(file, "Command: {:?}", command);
-        }
+        tracing::debug!("=== START_COMMAND_MONITORING ===");
+        tracing::debug!("Command: {:?}", command);
 
         let command_output_tx = self.command_output_tx.lock().await;
 
         if let Some(tx) = command_output_tx.as_ref() {
-            crate::debug_print!("✅ Command monitoring channel available, spawning monitor task");
+            tracing::debug!("✅ Command monitoring channel available, spawning monitor task");
 
-            if let Ok(mut file) = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open("pty_debug.log")
-            {
-                use std::io::Write;
-                let _ = writeln!(file, "✅ Channel available, spawning monitor task");
-            }
+            tracing::debug!("✅ Channel available, spawning monitor task");
 
             let tx_clone = tx.clone();
             let command_clone = command.to_string();
 
             // Spawn a background task to monitor command process
             tokio::spawn(async move {
-                crate::debug_print!("🚀 Command monitor task started");
+                tracing::debug!("🚀 Command monitor task started");
                 if let Err(e) = Self::monitor_command_process(command_clone, tx_clone).await {
                     error!("Command monitoring failed: {}", e);
                     println!("❌ Command monitoring failed: {}", e);
@@ -248,14 +216,7 @@ impl PtyProcess {
         } else {
             println!("❌ Command monitoring channel not available");
 
-            if let Ok(mut file) = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open("pty_debug.log")
-            {
-                use std::io::Write;
-                let _ = writeln!(file, "❌ Channel NOT available");
-            }
+            tracing::debug!("❌ Channel NOT available");
         }
 
         Ok(())
@@ -303,43 +264,17 @@ impl PtyProcess {
         command: String,
         output_tx: mpsc::UnboundedSender<CommandOutput>,
     ) -> Result<(), PtyProcessError> {
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        if let Ok(mut file) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("pty_debug.log")
-        {
-            use std::io::Write;
-            let _ = writeln!(file, "[{}] === MONITOR_COMMAND_PROCESS ===", timestamp);
-            let _ = writeln!(file, "Command: {:?}", command);
-        }
+        tracing::debug!("=== MONITOR_COMMAND_PROCESS ===");
+        tracing::debug!("Command: {:?}", command);
 
         // Parse command to extract arguments with proper quote handling
         let args = Self::parse_shell_command(&command);
 
-        if let Ok(mut file) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("pty_debug.log")
-        {
-            use std::io::Write;
-            let _ = writeln!(file, "Parsed args: {:?}", args);
-        }
+        tracing::debug!("Parsed args: {:?}", args);
 
         if args.is_empty() {
             println!("❌ Invalid command for monitoring: {:?}", command);
-            if let Ok(mut file) = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open("pty_debug.log")
-            {
-                use std::io::Write;
-                let _ = writeln!(file, "❌ Invalid command: args={:?}", args);
-            }
+            tracing::debug!("❌ Invalid command: args={:?}", args);
             return Ok(());
         }
 
@@ -350,21 +285,14 @@ impl PtyProcess {
             "Starting process monitoring: {} with args: {:?}",
             command_name, command_args
         );
-        crate::debug_print!(
+        tracing::debug!(
             "🔍 Starting process monitoring: {} with args: {:?}",
             command_name,
             command_args
         );
 
-        if let Ok(mut file) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("pty_debug.log")
-        {
-            use std::io::Write;
-            let _ = writeln!(file, "Command: {} args: {:?}", command_name, command_args);
-            let _ = writeln!(file, "About to spawn process");
-        }
+        tracing::debug!("Command: {} args: {:?}", command_name, command_args);
+        tracing::debug!("About to spawn process");
 
         // Start command process with separate stdout/stderr capture
         let spawn_result = Command::new(command_name)
@@ -375,27 +303,12 @@ impl PtyProcess {
 
         let mut child = match spawn_result {
             Ok(child) => {
-                crate::debug_print!("✅ Process spawned successfully: {}", command_name);
-                if let Ok(mut file) = std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open("pty_debug.log")
-                {
-                    use std::io::Write;
-                    let _ = writeln!(file, "✅ Process spawned successfully: {}", command_name);
-                }
+                tracing::debug!("✅ Process spawned successfully: {}", command_name);
                 child
             }
             Err(e) => {
                 println!("❌ Failed to spawn process {}: {}", command_name, e);
-                if let Ok(mut file) = std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open("pty_debug.log")
-                {
-                    use std::io::Write;
-                    let _ = writeln!(file, "❌ Failed to spawn {}: {}", command_name, e);
-                }
+                tracing::debug!("❌ Failed to spawn {}: {}", command_name, e);
                 return Err(PtyProcessError::IoError(e));
             }
         };
@@ -405,12 +318,12 @@ impl PtyProcess {
             let tx_stdout = output_tx.clone();
             let command_name_clone = command_name.to_string();
             tokio::spawn(async move {
-                crate::debug_print!("📡 Starting stdout monitoring for {}", command_name_clone);
+                tracing::debug!("📡 Starting stdout monitoring for {}", command_name_clone);
                 let reader = BufReader::new(stdout);
                 let mut lines = reader.lines();
 
                 while let Ok(Some(line)) = lines.next_line().await {
-                    crate::debug_print!("📤 {} stdout: {:?}", command_name_clone, line);
+                    tracing::debug!("📤 {} stdout: {:?}", command_name_clone, line);
                     if !line.trim().is_empty() {
                         let output = CommandOutput {
                             content: line.clone(),
@@ -420,11 +333,11 @@ impl PtyProcess {
                             println!("❌ Failed to send stdout: {}", e);
                             break;
                         } else {
-                            crate::debug_print!("✅ Sent stdout to channel: {:?}", line);
+                            tracing::debug!("✅ Sent stdout to channel: {:?}", line);
                         }
                     }
                 }
-                crate::debug_print!("📡 Stdout monitoring ended for {}", command_name_clone);
+                tracing::debug!("📡 Stdout monitoring ended for {}", command_name_clone);
             });
         } else {
             println!("❌ No stdout pipe available");
@@ -435,12 +348,12 @@ impl PtyProcess {
             let tx_stderr = output_tx.clone();
             let command_name_clone = command_name.to_string();
             tokio::spawn(async move {
-                crate::debug_print!("📡 Starting stderr monitoring for {}", command_name_clone);
+                tracing::debug!("📡 Starting stderr monitoring for {}", command_name_clone);
                 let reader = BufReader::new(stderr);
                 let mut lines = reader.lines();
 
                 while let Ok(Some(line)) = lines.next_line().await {
-                    crate::debug_print!("📤 {} stderr: {:?}", command_name_clone, line);
+                    tracing::debug!("📤 {} stderr: {:?}", command_name_clone, line);
                     if !line.trim().is_empty() {
                         let output = CommandOutput {
                             content: line.clone(),
@@ -450,11 +363,11 @@ impl PtyProcess {
                             println!("❌ Failed to send stderr: {}", e);
                             break;
                         } else {
-                            crate::debug_print!("✅ Sent stderr to channel: {:?}", line);
+                            tracing::debug!("✅ Sent stderr to channel: {:?}", line);
                         }
                     }
                 }
-                crate::debug_print!("📡 Stderr monitoring ended for {}", command_name_clone);
+                tracing::debug!("📡 Stderr monitoring ended for {}", command_name_clone);
             });
         } else {
             println!("❌ No stderr pipe available");
@@ -463,24 +376,11 @@ impl PtyProcess {
         // Wait for process to complete
         let exit_status = child.wait().await;
         info!("Process monitoring completed: {}", command_name);
-        crate::debug_print!(
+        tracing::debug!(
             "🏁 Process {} completed with status: {:?}",
             command_name,
             exit_status
         );
-
-        if let Ok(mut file) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("pty_debug.log")
-        {
-            use std::io::Write;
-            let _ = writeln!(
-                file,
-                "🏁 Process {} completed: {:?}",
-                command_name, exit_status
-            );
-        }
 
         Ok(())
     }
