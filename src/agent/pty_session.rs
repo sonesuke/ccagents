@@ -14,8 +14,6 @@ pub enum PtyCommand {
     SendKeys { keys: Vec<String> },
     #[serde(rename = "resize")]
     Resize { cols: usize, rows: usize },
-    #[serde(rename = "takeSnapshot")]
-    TakeSnapshot,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,20 +43,12 @@ pub enum PtyEventData {
         cols: usize,
         rows: usize,
     },
-    Snapshot {
-        cols: usize,
-        rows: usize,
-        seq: String,
-        data: String,
-    },
 }
 
 pub struct PtySession {
     terminal: Arc<PtyTerminal>,
     event_tx: broadcast::Sender<PtyEvent>,
     start_time: Instant,
-    cols: usize,
-    rows: usize,
 }
 
 impl PtySession {
@@ -73,8 +63,6 @@ impl PtySession {
             terminal: terminal.clone(),
             event_tx: event_tx.clone(),
             start_time: now,
-            cols,
-            rows,
         };
 
         // No need for separate output_handler since PTY terminal emits events directly
@@ -106,9 +94,6 @@ impl PtySession {
                 self.terminal.resize(cols as u16, rows as u16).await?;
                 self.emit_resize_event(cols, rows).await;
             }
-            PtyCommand::TakeSnapshot => {
-                self.emit_snapshot_event().await?;
-            }
         }
         Ok(())
     }
@@ -124,25 +109,6 @@ impl PtySession {
             data: PtyEventData::Resize { cols, rows },
         };
         let _ = self.event_tx.send(event);
-    }
-
-    async fn emit_snapshot_event(&self) -> Result<()> {
-        // Use vt100 screen dump
-        let content = self.terminal.get_screen_dump().await;
-        let (_cursor_x, _cursor_y) = self.terminal.get_cursor_position().await;
-
-        let event = PtyEvent {
-            event_type: "snapshot".to_string(),
-            time: self.get_elapsed_time().await,
-            data: PtyEventData::Snapshot {
-                cols: self.cols,
-                rows: self.rows,
-                seq: content.clone(),
-                data: content, // Return the actual screen content, not cursor info
-            },
-        };
-        let _ = self.event_tx.send(event);
-        Ok(())
     }
 
     async fn get_elapsed_time(&self) -> f64 {

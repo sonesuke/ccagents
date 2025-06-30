@@ -265,18 +265,6 @@ impl PtyTerminal {
         Ok(())
     }
 
-    pub async fn get_cursor_position(&self) -> (u16, u16) {
-        let terminal = self.terminal.lock().await;
-        terminal.screen().cursor_position()
-    }
-
-    /// Get properly processed screen dump using vt100 terminal
-    pub async fn get_screen_dump(&self) -> String {
-        let terminal = self.terminal.lock().await;
-        let screen = terminal.screen();
-        screen.contents()
-    }
-
     /// Get accumulated terminal output for initial WebSocket state
     pub async fn get_accumulated_output(&self) -> Vec<u8> {
         let accumulated = self.accumulated_output.lock().await;
