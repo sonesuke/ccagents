@@ -27,9 +27,9 @@ async fn main() -> Result<()> {
 
     // Initialize logging based on debug flag
     let level = if cli.debug {
-        tracing::Level::DEBUG // --debug時はDEBUGレベル以上
+        tracing::Level::DEBUG // DEBUG level or higher when --debug
     } else {
-        tracing::Level::WARN // 通常時はWARNレベル以上（エラーと警告のみ）
+        tracing::Level::WARN // WARN level or higher in normal operation (errors and warnings only)
     };
     tracing_subscriber::fmt().with_max_level(level).init();
 
