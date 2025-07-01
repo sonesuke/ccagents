@@ -196,12 +196,9 @@ impl PtyProcess {
                 tracing::debug!("🚀 Command monitor task started");
                 if let Err(e) = Self::monitor_command_process(command_clone, tx_clone).await {
                     error!("Command monitoring failed: {}", e);
-                    println!("❌ Command monitoring failed: {}", e);
                 }
             });
         } else {
-            println!("❌ Command monitoring channel not available");
-
             tracing::debug!("❌ Channel NOT available");
         }
 
@@ -259,8 +256,11 @@ impl PtyProcess {
         tracing::debug!("Parsed args: {:?}", args);
 
         if args.is_empty() {
-            println!("❌ Invalid command for monitoring: {:?}", command);
-            tracing::debug!("❌ Invalid command: args={:?}", args);
+            tracing::debug!(
+                "❌ Invalid command for monitoring: {:?}, args={:?}",
+                command,
+                args
+            );
             return Ok(());
         }
 
@@ -293,8 +293,7 @@ impl PtyProcess {
                 child
             }
             Err(e) => {
-                println!("❌ Failed to spawn process {}: {}", command_name, e);
-                tracing::debug!("❌ Failed to spawn {}: {}", command_name, e);
+                error!("Failed to spawn process {}: {}", command_name, e);
                 return Err(PtyProcessError::IoError(e));
             }
         };
@@ -316,7 +315,7 @@ impl PtyProcess {
                             is_stdout: true,
                         };
                         if let Err(e) = tx_stdout.send(output) {
-                            println!("❌ Failed to send stdout: {}", e);
+                            error!("Failed to send stdout: {}", e);
                             break;
                         } else {
                             tracing::debug!("✅ Sent stdout to channel: {:?}", line);
@@ -326,7 +325,7 @@ impl PtyProcess {
                 tracing::debug!("📡 Stdout monitoring ended for {}", command_name_clone);
             });
         } else {
-            println!("❌ No stdout pipe available");
+            error!("No stdout pipe available");
         }
 
         // Capture stderr
@@ -346,7 +345,7 @@ impl PtyProcess {
                             is_stdout: false,
                         };
                         if let Err(e) = tx_stderr.send(output) {
-                            println!("❌ Failed to send stderr: {}", e);
+                            error!("Failed to send stderr: {}", e);
                             break;
                         } else {
                             tracing::debug!("✅ Sent stderr to channel: {:?}", line);
@@ -356,7 +355,7 @@ impl PtyProcess {
                 tracing::debug!("📡 Stderr monitoring ended for {}", command_name_clone);
             });
         } else {
-            println!("❌ No stderr pipe available");
+            error!("No stderr pipe available");
         }
 
         // Wait for process to complete
