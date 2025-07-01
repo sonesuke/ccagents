@@ -26,8 +26,6 @@ pub enum PtyProcessError {
 pub enum PtyMessage {
     #[serde(rename = "input")]
     Input { payload: String },
-    #[serde(rename = "takeSnapshot")]
-    TakeSnapshot,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,23 +35,11 @@ pub enum PtyResponse {
         view: Option<String>,
         status: String,
     },
-    Snapshot {
-        #[serde(rename = "type")]
-        response_type: String,
-        data: SnapshotData,
-    },
     Output {
         #[serde(rename = "type")]
         response_type: String,
         data: String,
     },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SnapshotData {
-    pub seq: String,
-    pub cols: u32,
-    pub rows: u32,
 }
 
 /// Command process output monitor
@@ -439,25 +425,6 @@ async fn event_processor(
 
     while let Ok(event) = rx.recv().await {
         match event.event_type.as_str() {
-            "snapshot" => {
-                if let PtyEventData::Snapshot {
-                    seq, cols, rows, ..
-                } = event.data
-                {
-                    let response = PtyResponse::Snapshot {
-                        response_type: "snapshot".to_string(),
-                        data: SnapshotData {
-                            seq,
-                            cols: cols as u32,
-                            rows: rows as u32,
-                        },
-                    };
-
-                    if response_tx.send(response).is_err() {
-                        break;
-                    }
-                }
-            }
             "output" => {
                 if let PtyEventData::Output { data } = event.data {
                     info!(
