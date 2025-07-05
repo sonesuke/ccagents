@@ -1,46 +1,42 @@
 # ccauto
 
-A command-line tool for YAML-driven agent auto-control system with automatic terminal interaction.
+A command-line tool for YAML-driven agent auto-control system with automatic terminal interaction and Claude AI integration.
 
-## Prerequisites
+## Features
 
-### HT (Headless Terminal)
-
-ccauto requires HT (Headless Terminal) to be installed on your system. HT provides the terminal emulation and web interface that ccauto uses for automation.
-
-#### Install HT
-
-```bash
-# Clone and install HT
-git clone https://github.com/andyk/ht.git
-cd ht
-cargo install --path .
-```
-
-Alternatively, if you have cargo installed:
-```bash
-cargo install ht
-```
-
-Verify HT is installed and accessible:
-```bash
-ht --version
-```
+- **Claude AI Integration**: Automatically captures and monitors output from `claude` commands
+- **Terminal Automation**: Pattern-based automatic responses to terminal prompts
+- **Agent Pool System**: Multiple parallel terminal agents for improved performance
+- **Queue System**: Advanced task processing with FIFO queues and deduplication
+- **Web UI**: Real-time terminal monitoring via built-in web interface
+- **PTY Support**: Native pseudo-terminal support for full terminal emulation
 
 ## Installation
 
 ```bash
+# Clone the repository
+git clone https://github.com/sonesuke/ccauto.git
+cd ccauto
+
+# Build and install
 cargo build --release
+cargo install --path .
+
+# Or install directly from git
+cargo install --git https://github.com/sonesuke/ccauto.git
 ```
 
 ## Quick Start
 
 ```bash
-# Run with default configuration (starts automatically)
-./target/release/ccauto
+# Run with default configuration
+ccauto
 
 # Run with specific config file
-./target/release/ccauto --config custom-config.yaml
+ccauto --config custom-config.yaml
+
+# Enable debug logging
+ccauto --debug
 
 # View terminal automation at http://localhost:9990
 ```
@@ -70,23 +66,17 @@ rules:
     keys: ["/exit", "\r"]
 ```
 
-### Queue System Configuration
-```yaml
-# Queue-based task processing with periodic triggers
-entries:
-  # Generate tasks every 15 seconds
-  - name: "generate_tasks"
-    trigger: "periodic"
-    interval: "15s"
-    action: "enqueue"
-    queue: "tasks"
-    command: "bash examples/simple_queue/list_tasks.sh"
+### Claude Command Monitoring
+When you run a `claude` command in the terminal, ccauto automatically:
+1. Detects the command execution
+2. Spawns a separate process to capture stdout/stderr
+3. Streams the output to the web UI in real-time
 
-  # Process each task automatically
-  - name: "process_tasks"
-    trigger: "enqueue:tasks"
-    action: "send_keys"
-    keys: ["bash examples/simple_queue/process_task.sh <task>", "\r"]
+Example:
+```bash
+# In the terminal managed by ccauto
+$ claude "explain how grep works"
+# Output is automatically captured and displayed in the web UI
 ```
 
 ### Agent Pool Configuration
@@ -102,20 +92,6 @@ agents:
   concurrency: 2       # Number of parallel agents (default: 1)
   cols: 80             # Terminal width
   rows: 24             # Terminal height
-
-# Multiple agents will run tasks in parallel
-entries:
-  - name: "task_a"
-    trigger: "periodic"
-    interval: "3s"
-    action: "send_keys"
-    keys: ["bash task_a.sh", "\r"]
-
-  - name: "task_b"
-    trigger: "periodic"
-    interval: "4s"
-    action: "send_keys"
-    keys: ["bash task_b.sh", "\r"]
 ```
 
 ## Core Concepts
@@ -141,147 +117,100 @@ The system distinguishes between two types of automation:
 - `enqueue`: Add command output to named queue
 - `enqueue_dedupe`: Add command output to queue with duplicate filtering
 
-### Configuration Structure
+## Web Interface
 
-- **entries**: Define external triggers with `trigger`, `action`, and parameters
-- **rules**: Define automatic responses with `pattern`, `action`, and `keys`
-- **Priority**: Rules are processed in order (first rule = highest priority)
-- **Variable Expansion**: Use `<task>` in actions to reference queue items
+The built-in web interface provides real-time terminal monitoring:
+
+- **Live Terminal View**: Watch agent terminal sessions via web browser
+- **Claude Output Streaming**: Real-time display of Claude command outputs
+- **Asciinema Player**: Professional terminal playback with controls
+- **Multi-Agent Support**: Separate tabs for each agent in the pool
+
+### Access URLs
+
+- **Single Agent**: http://localhost:9990
+- **Agent Pool**: Multiple ports (e.g., http://localhost:9990, http://localhost:9991, etc.)
 
 ## Development
+
+See [CLAUDE.md](CLAUDE.md) for detailed development guidelines.
 
 ### Building from Source
 
 ```bash
 cargo build          # Debug build
-cargo test           # Run tests (also sets up git hooks)
+cargo test           # Run tests (sets up git hooks)
 cargo run -- --help  # Run with help flag
 ```
 
 ### Quality Checks
 
-Git hooks are automatically set up by `cargo-husky` when you first run `cargo test`:
+Pre-commit hooks are automatically set up by `cargo-husky`:
 
 ```bash
-cargo check                    # Check compilation
-cargo test                     # Run tests
-cargo clippy -- -D warnings    # Lint checks
-cargo fmt                      # Auto-format code
+cargo test                     # All tests must pass
+cargo clippy -- -D warnings    # No clippy warnings allowed
+cargo fmt                      # Code must be properly formatted
 ```
 
-### Architecture
+**Important**: Never bypass pre-commit hooks with `--no-verify`.
 
-See [docs/architecture.md](docs/architecture.md) for system design details.
+### Working with Git Worktrees
 
-## Features
-
-### Agent Pool System
-
-Multiple terminal agents running in parallel for improved performance:
-
-- **Parallel Execution**: Multiple agents handle tasks simultaneously without blocking
-- **Round-Robin Distribution**: Tasks automatically distributed across available agents
-- **Scalable Performance**: Add more agents to handle increased workload
-- **Independent Terminals**: Each agent runs in its own terminal process
-- **Configurable Pool Size**: Set `agents.concurrency` to control number of agents
-
-### Queue System
-
-Advanced task processing with automatic queue management:
-
-- **Periodic Triggers**: Execute commands at configurable intervals
-- **Queue Processing**: FIFO queues with event-driven item processing
-- **Variable Expansion**: Dynamic task substitution using `<task>` placeholders
-- **Duplicate Filtering**: Built-in deduplication with `enqueue_dedupe` action
-- **Multi-Queue Support**: Handle multiple named queues simultaneously
-
-### Terminal Output Monitoring
-
-Real-time agent state detection based on HT (terminal) process output analysis:
-
-- **State Detection**: Automatically detects Idle, Wait, and Active agent states
-- **Shell Prompt Recognition**: Built-in regex patterns for various shell prompts
-- **Output Change Monitoring**: Compares terminal snapshots to detect activity
-- **Timeout Handling**: Detects stuck commands and provides warnings
-- **Event-Driven Architecture**: Efficient monitoring with minimal CPU overhead
-
-### Web Interface
-
-The HT terminal process automatically starts with a web interface for real-time monitoring:
-
-- **Live Terminal View**: Watch agent terminal sessions via web browser
-- **Automatic Execution**: View real-time automation triggered by entries and rules
-- **Multi-user Support**: Multiple people can observe sessions simultaneously
-- **Debug Support**: Real-time visibility into agent behavior
-
-#### Access URLs
-
-After starting ccauto, the terminal web interface is available at:
-- **Single Agent**: http://localhost:9990
-- **Agent Pool**: Multiple tabs (e.g., http://localhost:9990, http://localhost:9991, etc.)
-- **Network**: http://[machine-ip]:9990+
-
-The web interface URLs are automatically displayed when the HT processes start.
-
-## Available Commands
+For feature development, use git worktrees:
 
 ```bash
-# Start automation with basic example
-./target/release/ccauto --config examples/basic/config.yaml
-
-# Start with queue system example
-./target/release/ccauto --config examples/simple_queue/config.yaml
-
-# Start with dedupe queue example
-./target/release/ccauto --config examples/dedupe_queue/config.yaml
-
-# Start with agent pool example
-./target/release/ccauto --config examples/agent_pool/config.yaml
-
-# Test rule matching
-./target/release/ccauto test --config examples/basic/config.yaml --capture "Do you want to proceed"
-
-# View loaded configuration
-./target/release/ccauto show --config examples/basic/config.yaml
+git worktree add .worktree/issue-<number> -b issue-<number>
+cd .worktree/issue-<number>
 ```
 
 ## Examples
 
-Multiple example configurations are provided to demonstrate different features:
+Multiple example configurations demonstrate different features:
 
 ### 1. Basic Automation (`examples/basic/`)
 ```bash
-./target/release/ccauto --config examples/basic/config.yaml
+ccauto --config examples/basic/config.yaml
 ```
 - Demonstrates on_start triggers and pattern-based rules
 - Automatically executes mock.sh and responds to prompts
-- Good starting point for understanding core concepts
 
 ### 2. Queue System (`examples/simple_queue/`)
 ```bash
-./target/release/ccauto --config examples/simple_queue/config.yaml
+ccauto --config examples/simple_queue/config.yaml
 ```
 - Shows periodic task generation and automatic processing
 - Demonstrates queue-based workflows with `<task>` variable expansion
-- Useful for batch processing scenarios
 
-### 3. Dedupe Queue (`examples/dedupe_queue/`)
+### 3. Web UI Test (`examples/web-ui-test/`)
 ```bash
-./target/release/ccauto --config examples/dedupe_queue/config.yaml
+ccauto --config examples/web-ui-test/config.yaml
 ```
-- Demonstrates automatic duplicate detection and filtering
-- Prevents reprocessing of identical items
-- Ideal for idempotent operations
+- Tests the web UI functionality
+- Demonstrates Claude command monitoring
 
 ### 4. Agent Pool (`examples/agent_pool/`)
 ```bash
-./target/release/ccauto --config examples/agent_pool/config.yaml
+ccauto --config examples/agent_pool/config.yaml
 ```
-- Demonstrates multiple agents running in parallel
-- Shows round-robin task distribution across agents
-- Multiple web interface tabs (http://localhost:9990, http://localhost:9991)
-- Improved throughput with parallel task execution
+- Multiple agents running in parallel
+- Round-robin task distribution
+- Multiple web interface tabs
 
-**Web Interface**: Examples 1-3 provide monitoring at http://localhost:9990, Example 4 uses multiple tabs starting from http://localhost:9990
+## Architecture
 
-See [docs/tutorial.md](docs/tutorial.md) for a comprehensive tutorial on configuring and using ccauto.
+The system consists of several key components:
+
+- **PTY Process**: Native pseudo-terminal implementation for full terminal emulation
+- **Agent Pool**: Manages multiple terminal agents for parallel execution
+- **Rule Engine**: Pattern matching and action execution system
+- **Queue System**: Task queuing and processing with deduplication
+- **Web Server**: Built-in HTTP server with WebSocket support for real-time updates
+
+## License
+
+[Add your license information here]
+
+## Contributing
+
+[Add contribution guidelines here]

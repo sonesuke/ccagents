@@ -105,11 +105,6 @@ impl Agent {
             .map_err(|e| anyhow::anyhow!("Failed to send keys: {}", e))
     }
 
-    /// Get command's direct output (stdout/stderr)
-    pub async fn get_command_output(&self) -> Option<crate::agent::pty_process::CommandOutput> {
-        self.ht_process.get_command_output().await
-    }
-
     /// Send input to the terminal (for WebSocket)
     pub async fn send_input(&self, input: &str) -> Result<()> {
         self.send_keys(input).await
@@ -126,12 +121,22 @@ impl Agent {
         (self.cols, self.rows)
     }
 
-    /// Get direct access to PTY output broadcast receiver for WebSocket streaming
-    pub async fn get_pty_output_receiver(
+    /// Get direct access to PTY raw bytes receiver for WebSocket streaming
+    pub async fn get_pty_bytes_receiver(
+        &self,
+    ) -> Result<tokio::sync::broadcast::Receiver<bytes::Bytes>> {
+        self.ht_process
+            .get_pty_bytes_receiver()
+            .await
+            .map_err(|e| anyhow::anyhow!(e))
+    }
+
+    /// Get direct access to PTY string receiver for rule matching
+    pub async fn get_pty_string_receiver(
         &self,
     ) -> Result<tokio::sync::broadcast::Receiver<String>> {
         self.ht_process
-            .get_pty_output_receiver()
+            .get_pty_string_receiver()
             .await
             .map_err(|e| anyhow::anyhow!(e))
     }
