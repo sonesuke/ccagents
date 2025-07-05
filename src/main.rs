@@ -8,7 +8,7 @@ mod web_ui;
 use anyhow::{Context, Result};
 use clap::Parser;
 use cli::{
-    execute_entry_action, execute_periodic_entry, process_direct_output, process_pty_output,
+    execute_entry_action, execute_periodic_entry, process_pty_output,
     resolve_entry_task_placeholders, Cli, Commands,
 };
 use queue::create_shared_manager;
@@ -209,11 +209,11 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
         let handle = tokio::spawn(async move {
             tracing::debug!("🔍 Starting PTY monitor task for agent {}", i);
 
-            // Get PTY output receiver
-            if let Ok(mut rx) = agent.get_pty_output_receiver().await {
-                tracing::debug!("✅ Got PTY receiver for agent {}", i);
+            // Get PTY string receiver for rule matching
+            if let Ok(mut rx) = agent.get_pty_string_receiver().await {
+                tracing::debug!("✅ Got PTY string receiver for agent {}", i);
 
-                // Continuously monitor PTY output
+                // Continuously monitor PTY output for rule matching
                 while let Ok(pty_output) = rx.recv().await {
                     if let Err(e) =
                         process_pty_output(&pty_output, &agent, &ruler_clone, &queue_manager_clone)
@@ -231,24 +231,11 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
         pty_monitor_handles.push(handle);
     }
 
-    tokio::select! {
-        _ = signal::ctrl_c() => {
-            println!("\n🛑 Received Ctrl+C, shutting down...");
-        }
-        _ = async {
-            let mut interval_timer = tokio::time::interval(tokio::time::Duration::from_millis(500));
-            loop {
-                interval_timer.tick().await;
-                // Process only direct command output (no terminal diff detection)
-                let agent = agent_pool.get_agent();
-                if let Err(e) = process_direct_output(&agent, &ruler, &queue_manager).await {
-                    eprintln!("❌ Error processing output: {}", e);
-                }
-            }
-        } => {
-            // This branch should never be reached since the loop is infinite
-        }
-    }
+    // Wait for Ctrl+C signal
+    signal::ctrl_c()
+        .await
+        .context("Failed to listen for ctrl_c")?;
+    println!("\n🛑 Received Ctrl+C, shutting down...");
 
     // Just abort all tasks - OS will clean up child processes
     for handle in periodic_handles {

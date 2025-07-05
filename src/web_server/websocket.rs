@@ -49,29 +49,40 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
 
     info!("✅ Asciinema header sent successfully");
 
-    // Send accumulated terminal state to new client
-    if let Ok(accumulated_output) = agent.get_accumulated_output().await {
-        if !accumulated_output.is_empty() {
-            let time = 0.0; // Initial state at time 0
-            let initial_event = json!([time, "o", accumulated_output]);
-            let event_str = initial_event.to_string();
+    // Send initial state from vt100::Parser screen contents
+    match agent.get_screen_contents().await {
+        Ok(initial_content) => {
+            if !initial_content.trim().is_empty() {
+                let initial_time = 0.0;
+                let initial_event = json!([initial_time, "o", initial_content]);
 
-            info!(
-                "📤 Sending initial terminal state: {} bytes (accumulated output)",
-                event_str.len()
-            );
-            debug!(
-                "Initial state preview: {:?}",
-                &accumulated_output[..std::cmp::min(200, accumulated_output.len())]
-            );
+                info!(
+                    "📺 Sending initial terminal state from vt100: {} bytes at time {:.3}s",
+                    initial_content.len(),
+                    initial_time
+                );
+                info!(
+                    "🔍 Initial content preview (first 200 chars): {:?}",
+                    initial_content.chars().take(200).collect::<String>()
+                );
 
-            if sender.send(Message::Text(event_str)).await.is_err() {
-                error!("Failed to send initial terminal state");
-                return;
+                if sender
+                    .send(Message::Text(initial_event.to_string()))
+                    .await
+                    .is_err()
+                {
+                    error!("Failed to send initial terminal state");
+                    return;
+                }
+
+                info!("✅ Initial terminal state sent successfully");
+            } else {
+                info!("📺 No terminal content to send (empty screen)");
             }
-            info!("✅ Initial terminal state sent successfully");
-        } else {
-            info!("⚠️ No accumulated output available for initial state");
+        }
+        Err(e) => {
+            error!("❌ Failed to get screen contents: {}", e);
+            info!("📺 Proceeding without initial state");
         }
     }
 
@@ -92,45 +103,74 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
         }
     });
 
-    // Event-driven output handling using direct broadcast channel access
+    // Full-screen redraw approach instead of incremental updates
     let agent_output = agent.clone();
-    let start_time = std::time::Instant::now();
+    let session_start = std::time::Instant::now();
 
     let output_task = tokio::spawn(async move {
-        info!("🔄 WebSocket event-driven output task started");
+        info!("🔄 WebSocket full-screen output task started");
 
-        // Get direct access to PTY output broadcast channel
-        if let Ok(mut pty_output_rx) = agent_output.get_pty_output_receiver().await {
-            info!("✅ Connected to PTY output broadcast channel");
+        // Get direct access to PTY raw bytes broadcast channel
+        if let Ok(mut pty_bytes_rx) = agent_output.get_pty_bytes_receiver().await {
+            info!("✅ Connected to PTY raw bytes broadcast channel");
 
-            info!("🔄 WebSocket: Starting recv loop for PTY output");
-            while let Ok(data) = pty_output_rx.recv().await {
-                let time = start_time.elapsed().as_secs_f64();
+            info!("🔄 WebSocket: Starting recv loop for full-screen updates");
 
-                info!(
-                    "🔍 WebSocket: Received {} bytes from PTY channel: {:?}",
-                    data.len(),
-                    &data[..std::cmp::min(50, data.len())]
-                );
+            // Track last screen content to avoid redundant updates
+            let mut last_screen_content = String::new();
+            let mut last_update = std::time::Instant::now();
+            const UPDATE_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100); // ~10fps
+            const DEBOUNCE_TIME: std::time::Duration = std::time::Duration::from_millis(50); // Debounce rapid changes
 
-                // Format as asciinema event: [timestamp, "o", data]
-                let asciinema_event = json!([time, "o", data]);
-                let event_str = asciinema_event.to_string();
-
-                info!(
-                    "📤 Sending asciinema event: {} bytes at {:.3}s",
-                    event_str.len(),
-                    time
-                );
-                debug!("📤 Event content: {}", event_str);
-
-                if sender.send(Message::Text(event_str)).await.is_err() {
-                    info!("WebSocket sender closed, stopping output task");
-                    break;
+            while let Ok(_bytes_data) = pty_bytes_rx.recv().await {
+                // Wait for debounce time or update interval
+                if last_update.elapsed() < UPDATE_INTERVAL {
+                    // For rapid changes, wait a bit to accumulate
+                    if last_update.elapsed() < DEBOUNCE_TIME {
+                        tokio::time::sleep(DEBOUNCE_TIME - last_update.elapsed()).await;
+                    } else {
+                        continue;
+                    }
                 }
-                info!("✅ Asciinema event sent successfully");
+
+                // Get full screen contents from vt100 parser
+                match agent_output.get_screen_contents().await {
+                    Ok(screen_content) => {
+                        // Only send if screen content has changed
+                        if screen_content != last_screen_content {
+                            // Calculate elapsed time from session start
+                            let time = session_start.elapsed().as_secs_f64();
+
+                            // Clear screen and redraw
+                            let clear_screen = "\u{001b}[2J\u{001b}[H"; // Clear screen and move cursor to home
+                            let full_update = format!("{}{}", clear_screen, screen_content);
+
+                            // Create asciinema event with full screen content
+                            let asciinema_event = json!([time, "o", full_update]);
+                            let event_str = asciinema_event.to_string();
+
+                            info!(
+                                "📤 Sending full screen update: {} bytes at {:.3}s",
+                                event_str.len(),
+                                time
+                            );
+
+                            if sender.send(Message::Text(event_str)).await.is_err() {
+                                info!("WebSocket sender closed, stopping output task");
+                                break;
+                            }
+
+                            info!("✅ Full screen update sent successfully");
+                            last_screen_content = screen_content;
+                            last_update = std::time::Instant::now();
+                        }
+                    }
+                    Err(e) => {
+                        error!("❌ Failed to get screen contents: {}", e);
+                    }
+                }
             }
-            info!("🔚 WebSocket: PTY output recv loop ended");
+            info!("🔚 WebSocket: Full screen update loop ended");
         } else {
             error!("❌ Failed to get PTY output receiver from agent");
         }

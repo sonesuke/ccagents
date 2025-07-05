@@ -16,12 +16,14 @@ pub struct PtyTerminal {
     reader_handle: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
     writer_handle: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
     input_tx: mpsc::UnboundedSender<Bytes>,
+    // Raw bytes output for WebSocket (asciinema)
     output_tx: broadcast::Sender<Bytes>,
+    // String output for rule matching
+    string_output_tx: broadcast::Sender<String>,
 
     _persistent_rx: broadcast::Receiver<Bytes>,
+    _persistent_string_rx: broadcast::Receiver<String>,
     terminal: Arc<Mutex<vt100::Parser>>,
-    // Accumulated terminal state for initial WebSocket sync
-    accumulated_output: Arc<Mutex<Vec<u8>>>,
 }
 
 impl PtyTerminal {
@@ -82,14 +84,14 @@ impl PtyTerminal {
 
         let (input_tx, mut input_rx) = mpsc::unbounded_channel::<Bytes>();
         let (output_tx, _rx) = broadcast::channel(1024);
+        let (string_output_tx, _string_rx) = broadcast::channel(1024);
 
-        // Keep a persistent receiver alive to prevent broadcast channel from failing
+        // Keep persistent receivers alive to prevent broadcast channels from failing
         let persistent_rx = output_tx.subscribe();
+        let persistent_string_rx = string_output_tx.subscribe();
 
         let terminal = vt100::Parser::new(rows, cols, 0);
         let terminal = Arc::new(Mutex::new(terminal));
-
-        let accumulated_output = Arc::new(Mutex::new(Vec::new()));
 
         let reader = pair
             .master
@@ -99,8 +101,8 @@ impl PtyTerminal {
 
         let terminal_clone = terminal.clone();
         let output_tx_clone = output_tx.clone();
+        let string_output_tx_clone = string_output_tx.clone();
         let event_tx_clone = event_tx.clone();
-        let accumulated_output_clone = accumulated_output.clone();
         let reader_handle = tokio::spawn(async move {
             use std::io::Read;
             let mut reader = reader;
@@ -128,23 +130,13 @@ impl PtyTerminal {
                         term.process(data);
                         drop(term);
 
-                        // Accumulate output for initial state
-                        {
-                            let mut accumulated = accumulated_output_clone.lock().await;
-                            accumulated.extend_from_slice(data);
-                            // Keep reasonable size limit (100KB)
-                            if accumulated.len() > 102400 {
-                                let start = accumulated.len().saturating_sub(81920);
-                                accumulated.drain(..start);
-                            }
-                        }
-
                         let raw_str = String::from_utf8_lossy(data);
 
                         info!(
                             "📤 PTY reader: broadcasting {} bytes to output channel",
                             data.len()
                         );
+                        // Send raw bytes to WebSocket channel
                         if output_tx_clone.send(Bytes::from(data.to_vec())).is_err() {
                             error!(
                                 "❌ PTY reader: failed to broadcast to output channel, breaking"
@@ -152,6 +144,15 @@ impl PtyTerminal {
                             break;
                         }
                         info!("✅ PTY reader: successfully broadcast to output channel");
+
+                        // Send string to rule matching channel
+                        if string_output_tx_clone.send(raw_str.to_string()).is_err() {
+                            error!(
+                                "❌ PTY reader: failed to broadcast to string output channel, breaking"
+                            );
+                            break;
+                        }
+                        info!("✅ PTY reader: successfully broadcast to string output channel");
 
                         // Also emit the output event directly
                         let output_event = PtyEvent {
@@ -222,9 +223,10 @@ impl PtyTerminal {
             writer_handle: Arc::new(Mutex::new(Some(writer_handle))),
             input_tx,
             output_tx,
+            string_output_tx,
             _persistent_rx: persistent_rx,
+            _persistent_string_rx: persistent_string_rx,
             terminal,
-            accumulated_output,
         };
 
         Ok(pty_terminal)
@@ -243,9 +245,14 @@ impl PtyTerminal {
         Ok(())
     }
 
-    /// Get a new broadcast receiver for output data (blocking receive)
+    /// Get a new broadcast receiver for raw bytes output (for WebSocket/asciinema)
     pub async fn get_output_receiver(&self) -> Result<broadcast::Receiver<Bytes>> {
         Ok(self.output_tx.subscribe())
+    }
+
+    /// Get a new broadcast receiver for string output (for rule matching)
+    pub async fn get_string_output_receiver(&self) -> Result<broadcast::Receiver<String>> {
+        Ok(self.string_output_tx.subscribe())
     }
 
     /// Resize the terminal
@@ -265,10 +272,12 @@ impl PtyTerminal {
         Ok(())
     }
 
-    /// Get accumulated terminal output for initial WebSocket state
-    pub async fn get_accumulated_output(&self) -> Vec<u8> {
-        let accumulated = self.accumulated_output.lock().await;
-        accumulated.clone()
+    /// Get the current screen contents with formatting for WebSocket initial state
+    pub async fn get_screen_contents(&self) -> Result<String> {
+        let terminal = self.terminal.lock().await;
+        let screen = terminal.screen();
+        let formatted_bytes = screen.contents_formatted();
+        Ok(String::from_utf8_lossy(&formatted_bytes).to_string())
     }
 }
 

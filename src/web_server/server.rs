@@ -36,6 +36,12 @@ struct TerminalSizeResponse {
     rows: u16,
 }
 
+#[derive(Serialize)]
+struct AgentStatusResponse {
+    state: String,
+    message: String,
+}
+
 #[derive(Clone)]
 pub struct WebServer {
     pub port: u16,
@@ -89,6 +95,7 @@ impl WebServer {
             .route("/ws", get(websocket_handler))
             .route("/api/command", post(send_command))
             .route("/api/terminal-size", get(get_terminal_size))
+            .route("/api/agent-status", get(get_agent_status))
             .with_state((self.agent.clone(), self.asset_cache.clone()))
             .layer(ServiceBuilder::new().layer(CorsLayer::permissive()))
     }
@@ -149,4 +156,29 @@ async fn get_terminal_size(
     info!("📐 Terminal size API request: {}x{}", cols, rows);
 
     Json(TerminalSizeResponse { cols, rows })
+}
+
+async fn get_agent_status(
+    State((agent, _)): State<(Arc<Agent>, AssetCache)>,
+) -> Json<AgentStatusResponse> {
+    // Try to get screen contents to determine if agent is active
+    match agent.get_screen_contents().await {
+        Ok(content) => {
+            if content.trim().is_empty() {
+                Json(AgentStatusResponse {
+                    state: "Idle".to_string(),
+                    message: "Ready for commands".to_string(),
+                })
+            } else {
+                Json(AgentStatusResponse {
+                    state: "Active".to_string(),
+                    message: "Terminal session running".to_string(),
+                })
+            }
+        }
+        Err(_) => Json(AgentStatusResponse {
+            state: "Error".to_string(),
+            message: "Terminal not available".to_string(),
+        }),
+    }
 }

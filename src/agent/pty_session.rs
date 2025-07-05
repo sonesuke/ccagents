@@ -124,42 +124,23 @@ impl PtySession {
             .await
     }
 
-    /// Get direct access to PTY output broadcast receiver for WebSocket streaming
-    pub async fn get_pty_output_receiver(
+    /// Get direct access to PTY raw bytes receiver for WebSocket streaming (asciinema)
+    pub async fn get_pty_bytes_receiver(
         &self,
-    ) -> Result<tokio::sync::broadcast::Receiver<String>> {
-        // Get a receiver for the terminal's output channel
-        let mut bytes_rx = self.terminal.get_output_receiver().await?;
-        let (string_tx, string_rx) = tokio::sync::broadcast::channel(1024);
-
-        // Spawn a converter task that converts Bytes to String
-        tokio::spawn(async move {
-            use tracing::info;
-            info!("🔄 PTY session converter task started");
-
-            while let Ok(bytes) = bytes_rx.recv().await {
-                let string_data = String::from_utf8_lossy(&bytes).to_string();
-                info!(
-                    "🔄 Converting {} bytes to string: {:?}",
-                    bytes.len(),
-                    &string_data[..std::cmp::min(100, string_data.len())]
-                );
-
-                if string_tx.send(string_data.clone()).is_err() {
-                    info!("❌ Converter task: No more string receivers, stopping");
-                    break;
-                }
-                info!("✅ Converter task: String data sent to channel");
-            }
-            info!("🔚 PTY session converter task terminated");
-        });
-
-        Ok(string_rx)
+    ) -> Result<tokio::sync::broadcast::Receiver<bytes::Bytes>> {
+        self.terminal.get_output_receiver().await
     }
 
-    /// Get accumulated terminal output for initial WebSocket state
-    pub async fn get_accumulated_output(&self) -> Vec<u8> {
-        self.terminal.get_accumulated_output().await
+    /// Get direct access to PTY string receiver for rule matching
+    pub async fn get_pty_string_receiver(
+        &self,
+    ) -> Result<tokio::sync::broadcast::Receiver<String>> {
+        self.terminal.get_string_output_receiver().await
+    }
+
+    /// Get current screen contents for WebSocket initial state
+    pub async fn get_screen_contents(&self) -> Result<String> {
+        self.terminal.get_screen_contents().await
     }
 }
 
