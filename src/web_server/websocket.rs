@@ -103,73 +103,74 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
         }
     });
 
-    // Event-driven output handling with direct PTY data streaming
+    // Full-screen redraw approach instead of incremental updates
     let agent_output = agent.clone();
     let session_start = std::time::Instant::now();
 
     let output_task = tokio::spawn(async move {
-        info!("🔄 WebSocket direct PTY output task started");
+        info!("🔄 WebSocket full-screen output task started");
 
         // Get direct access to PTY raw bytes broadcast channel
         if let Ok(mut pty_bytes_rx) = agent_output.get_pty_bytes_receiver().await {
             info!("✅ Connected to PTY raw bytes broadcast channel");
 
-            info!("🔄 WebSocket: Starting recv loop for direct PTY raw bytes streaming");
+            info!("🔄 WebSocket: Starting recv loop for full-screen updates");
 
-            // Buffer for accumulating output (similar to ht project)
-            let mut output_buffer = Vec::new();
-            let mut last_send = std::time::Instant::now();
-            const BUFFER_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(16); // ~60fps
-            const MAX_BUFFER_SIZE: usize = 4096; // Reasonable buffer size
+            // Track last screen content to avoid redundant updates
+            let mut last_screen_content = String::new();
+            let mut last_update = std::time::Instant::now();
+            const UPDATE_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100); // ~10fps
+            const DEBOUNCE_TIME: std::time::Duration = std::time::Duration::from_millis(50); // Debounce rapid changes
 
-            while let Ok(bytes_data) = pty_bytes_rx.recv().await {
-                // Accumulate bytes in buffer
-                output_buffer.extend_from_slice(&bytes_data);
-
-                info!(
-                    "🔍 WebSocket: Buffering {} bytes (total buffered: {})",
-                    bytes_data.len(),
-                    output_buffer.len()
-                );
-
-                // Send buffer if timeout elapsed or buffer is large enough
-                let should_send =
-                    last_send.elapsed() >= BUFFER_TIMEOUT || output_buffer.len() >= MAX_BUFFER_SIZE;
-
-                if should_send && !output_buffer.is_empty() {
-                    // Convert buffered bytes to string for asciicast v2 format
-                    let string_data = String::from_utf8_lossy(&output_buffer).to_string();
-
-                    info!(
-                        "🔍 WebSocket: Processing {} buffered bytes for direct streaming",
-                        output_buffer.len()
-                    );
-
-                    // Calculate elapsed time from session start
-                    let time = session_start.elapsed().as_secs_f64();
-
-                    // Create asciinema event with the raw buffered data (asciicast v2 format)
-                    let asciinema_event = json!([time, "o", string_data]);
-                    let event_str = asciinema_event.to_string();
-
-                    info!(
-                        "📤 Sending direct PTY asciinema event: {} bytes at {:.3}s",
-                        event_str.len(),
-                        time
-                    );
-
-                    if sender.send(Message::Text(event_str)).await.is_err() {
-                        info!("WebSocket sender closed, stopping output task");
-                        break;
+            while let Ok(_bytes_data) = pty_bytes_rx.recv().await {
+                // Wait for debounce time or update interval
+                if last_update.elapsed() < UPDATE_INTERVAL {
+                    // For rapid changes, wait a bit to accumulate
+                    if last_update.elapsed() < DEBOUNCE_TIME {
+                        tokio::time::sleep(DEBOUNCE_TIME - last_update.elapsed()).await;
+                    } else {
+                        continue;
                     }
-                    info!("✅ Direct PTY asciinema event sent successfully");
+                }
 
-                    // Clear buffer and update send time
-                    output_buffer.clear();
-                    last_send = std::time::Instant::now();
+                // Get full screen contents from vt100 parser
+                match agent_output.get_screen_contents().await {
+                    Ok(screen_content) => {
+                        // Only send if screen content has changed
+                        if screen_content != last_screen_content {
+                            // Calculate elapsed time from session start
+                            let time = session_start.elapsed().as_secs_f64();
+
+                            // Clear screen and redraw
+                            let clear_screen = "\u{001b}[2J\u{001b}[H"; // Clear screen and move cursor to home
+                            let full_update = format!("{}{}", clear_screen, screen_content);
+
+                            // Create asciinema event with full screen content
+                            let asciinema_event = json!([time, "o", full_update]);
+                            let event_str = asciinema_event.to_string();
+
+                            info!(
+                                "📤 Sending full screen update: {} bytes at {:.3}s",
+                                event_str.len(),
+                                time
+                            );
+
+                            if sender.send(Message::Text(event_str)).await.is_err() {
+                                info!("WebSocket sender closed, stopping output task");
+                                break;
+                            }
+
+                            info!("✅ Full screen update sent successfully");
+                            last_screen_content = screen_content;
+                            last_update = std::time::Instant::now();
+                        }
+                    }
+                    Err(e) => {
+                        error!("❌ Failed to get screen contents: {}", e);
+                    }
                 }
             }
-            info!("🔚 WebSocket: PTY output recv loop ended");
+            info!("🔚 WebSocket: Full screen update loop ended");
         } else {
             error!("❌ Failed to get PTY output receiver from agent");
         }
