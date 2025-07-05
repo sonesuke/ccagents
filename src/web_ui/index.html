@@ -227,9 +227,24 @@
         const input = document.getElementById('input');
         const status = document.getElementById('status');
         
-        // Set initial status to connected (since WebSocket is handled by asciinema player)
-        status.className = 'status connected';
-        status.textContent = 'Connected';
+        // Function to update agent status
+        async function updateAgentStatus() {
+            try {
+                const response = await fetch('/api/agent-status');
+                const agentStatus = await response.json();
+                
+                status.className = 'status connected';
+                status.textContent = agentStatus.state;
+            } catch (error) {
+                console.error('Failed to fetch agent status:', error);
+                status.className = 'status disconnected';
+                status.textContent = 'Error';
+            }
+        }
+        
+        // Update status immediately and then every 2 seconds
+        updateAgentStatus();
+        setInterval(updateAgentStatus, 2000);
         
         // Function to send command via HTTP API
         async function sendCommand(command) {
