@@ -234,37 +234,6 @@ pub async fn execute_rule_action(
     Ok(())
 }
 
-/// Process direct command output (stdout/stderr)
-pub async fn process_direct_output(
-    agent: &agent::Agent,
-    ruler: &ruler::Ruler,
-    queue_manager: &SharedQueueManager,
-) -> Result<()> {
-    // Check for direct command output and process
-    while let Some(command_output) = agent.get_command_output().await {
-        tracing::debug!("=== DIRECT COMMAND OUTPUT ===");
-        tracing::debug!(
-            "Source: {}",
-            if command_output.is_stdout {
-                "stdout"
-            } else {
-                "stderr"
-            }
-        );
-        tracing::debug!("Content: {:?}", command_output.content);
-        tracing::debug!("==> Will check rules for command output");
-
-        println!("📤 Command output: {}", command_output.content);
-
-        let action = ruler
-            .decide_action_for_capture(&command_output.content)
-            .await;
-        execute_rule_action(&action, agent, queue_manager).await?;
-    }
-
-    Ok(())
-}
-
 /// Process PTY output for pattern matching
 pub async fn process_pty_output(
     pty_output: &str,
@@ -280,17 +249,21 @@ pub async fn process_pty_output(
     tracing::debug!("Clean output: {:?}", clean_output);
     tracing::debug!("==> Will check rules for PTY output");
 
-    // Split output by lines and check each line
-    for line in clean_output.lines() {
-        if !line.trim().is_empty() {
-            tracing::debug!("Checking line: {:?}", line);
+    // Split by both \n and \r for better handling of carriage returns
+    let lines: Vec<&str> = clean_output
+        .split(['\n', '\r'])
+        .filter(|line| !line.trim().is_empty())
+        .collect();
 
-            let action = ruler.decide_action_for_capture(line).await;
+    // Check each line for pattern matching
+    for line in lines {
+        tracing::debug!("Checking line: {:?}", line);
 
-            tracing::debug!("Action decided: {:?}", action);
+        let action = ruler.decide_action_for_capture(line).await;
 
-            execute_rule_action(&action, agent, queue_manager).await?;
-        }
+        tracing::debug!("Action decided: {:?}", action);
+
+        execute_rule_action(&action, agent, queue_manager).await?;
     }
 
     Ok(())
