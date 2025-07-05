@@ -114,6 +114,37 @@
         
         console.log('Connecting to WebSocket:', src);
         
+        // Debug WebSocket connection to see what data is actually being sent/received
+        function debugWebSocket() {
+            const ws = new WebSocket(src);
+            
+            ws.onopen = function(event) {
+                console.log('DEBUG: WebSocket opened', event);
+            };
+            
+            ws.onmessage = function(event) {
+                console.log('DEBUG: WebSocket received message:', event.data);
+                // Try to parse as JSON
+                try {
+                    const parsed = JSON.parse(event.data);
+                    console.log('DEBUG: Parsed JSON:', parsed);
+                } catch (e) {
+                    console.log('DEBUG: Not JSON, raw data length:', event.data.length);
+                }
+            };
+            
+            ws.onerror = function(error) {
+                console.error('DEBUG: WebSocket error:', error);
+            };
+            
+            ws.onclose = function(event) {
+                console.log('DEBUG: WebSocket closed:', event.code, event.reason);
+            };
+        }
+        
+        // Start debug WebSocket connection
+        setTimeout(debugWebSocket, 500);
+        
         // Fetch terminal dimensions from config
         async function getTerminalSize() {
             try {

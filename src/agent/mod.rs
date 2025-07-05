@@ -110,12 +110,6 @@ impl Agent {
         self.send_keys(input).await
     }
 
-    /// Get accumulated terminal output for initial WebSocket state
-    pub async fn get_accumulated_output(&self) -> Result<String> {
-        let bytes = self.ht_process.get_accumulated_output().await;
-        Ok(String::from_utf8_lossy(&bytes).to_string())
-    }
-
     /// Get terminal dimensions for asciinema integration
     pub fn get_terminal_size(&self) -> (u16, u16) {
         (self.cols, self.rows)
@@ -137,6 +131,14 @@ impl Agent {
     ) -> Result<tokio::sync::broadcast::Receiver<String>> {
         self.ht_process
             .get_pty_string_receiver()
+            .await
+            .map_err(|e| anyhow::anyhow!(e))
+    }
+
+    /// Get current screen contents from vt100::Parser for WebSocket initial state
+    pub async fn get_screen_contents(&self) -> Result<String> {
+        self.ht_process
+            .get_screen_contents()
             .await
             .map_err(|e| anyhow::anyhow!(e))
     }

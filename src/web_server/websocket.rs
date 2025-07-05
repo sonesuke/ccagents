@@ -8,33 +8,6 @@ use tracing::{debug, error, info};
 
 use crate::agent::Agent;
 
-/// Terminal session with avt virtual terminal for proper terminal state management
-pub struct TerminalSession {
-    vt: avt::Vt,
-    start_time: std::time::Instant,
-}
-
-impl TerminalSession {
-    /// Create a new terminal session with specified dimensions
-    pub fn new(cols: u16, rows: u16) -> Self {
-        let vt = avt::Vt::new(rows as usize, cols as usize);
-        Self {
-            vt,
-            start_time: std::time::Instant::now(),
-        }
-    }
-
-    /// Feed PTY output string to the virtual terminal
-    pub fn feed_output(&mut self, data: &str) {
-        self.vt.feed_str(data);
-    }
-
-    /// Get elapsed time since session start
-    pub fn elapsed_time(&self) -> f64 {
-        self.start_time.elapsed().as_secs_f64()
-    }
-}
-
 pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
     info!("WebSocket connection established for asciinema streaming");
 
@@ -46,9 +19,8 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
         .unwrap()
         .as_secs();
 
-    // Get actual terminal dimensions from agent config and create terminal session
+    // Get actual terminal dimensions from agent config
     let (cols, rows) = agent.get_terminal_size();
-    let mut terminal_session = TerminalSession::new(cols, rows);
 
     let header = json!({
         "version": 2,
@@ -77,29 +49,40 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
 
     info!("✅ Asciinema header sent successfully");
 
-    // Send accumulated terminal state to new client
-    if let Ok(accumulated_output) = agent.get_accumulated_output().await {
-        if !accumulated_output.is_empty() {
-            let time = 0.0; // Initial state at time 0
-            let initial_event = json!([time, "o", accumulated_output]);
-            let event_str = initial_event.to_string();
+    // Send initial state from vt100::Parser screen contents
+    match agent.get_screen_contents().await {
+        Ok(initial_content) => {
+            if !initial_content.trim().is_empty() {
+                let initial_time = 0.0;
+                let initial_event = json!([initial_time, "o", initial_content]);
 
-            info!(
-                "📤 Sending initial terminal state: {} bytes (accumulated output)",
-                event_str.len()
-            );
-            debug!(
-                "Initial state preview: {:?}",
-                &accumulated_output[..std::cmp::min(200, accumulated_output.len())]
-            );
+                info!(
+                    "📺 Sending initial terminal state from vt100: {} bytes at time {:.3}s",
+                    initial_content.len(),
+                    initial_time
+                );
+                info!(
+                    "🔍 Initial content preview (first 200 chars): {:?}",
+                    initial_content.chars().take(200).collect::<String>()
+                );
 
-            if sender.send(Message::Text(event_str)).await.is_err() {
-                error!("Failed to send initial terminal state");
-                return;
+                if sender
+                    .send(Message::Text(initial_event.to_string()))
+                    .await
+                    .is_err()
+                {
+                    error!("Failed to send initial terminal state");
+                    return;
+                }
+
+                info!("✅ Initial terminal state sent successfully");
+            } else {
+                info!("📺 No terminal content to send (empty screen)");
             }
-            info!("✅ Initial terminal state sent successfully");
-        } else {
-            info!("⚠️ No accumulated output available for initial state");
+        }
+        Err(e) => {
+            error!("❌ Failed to get screen contents: {}", e);
+            info!("📺 Proceeding without initial state");
         }
     }
 
@@ -120,17 +103,18 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
         }
     });
 
-    // Event-driven output handling using avt virtual terminal
+    // Event-driven output handling with direct PTY data streaming
     let agent_output = agent.clone();
+    let session_start = std::time::Instant::now();
 
     let output_task = tokio::spawn(async move {
-        info!("🔄 WebSocket avt-based output task started");
+        info!("🔄 WebSocket direct PTY output task started");
 
         // Get direct access to PTY raw bytes broadcast channel
         if let Ok(mut pty_bytes_rx) = agent_output.get_pty_bytes_receiver().await {
             info!("✅ Connected to PTY raw bytes broadcast channel");
 
-            info!("🔄 WebSocket: Starting recv loop for PTY raw bytes with avt processing and buffering");
+            info!("🔄 WebSocket: Starting recv loop for direct PTY raw bytes streaming");
 
             // Buffer for accumulating output (similar to ht project)
             let mut output_buffer = Vec::new();
@@ -153,26 +137,23 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
                     last_send.elapsed() >= BUFFER_TIMEOUT || output_buffer.len() >= MAX_BUFFER_SIZE;
 
                 if should_send && !output_buffer.is_empty() {
-                    // Convert buffered bytes to string and feed to virtual terminal
+                    // Convert buffered bytes to string for asciicast v2 format
                     let string_data = String::from_utf8_lossy(&output_buffer).to_string();
 
                     info!(
-                        "🔍 WebSocket: Processing {} buffered bytes through avt",
+                        "🔍 WebSocket: Processing {} buffered bytes for direct streaming",
                         output_buffer.len()
                     );
 
-                    // Feed the string data to avt virtual terminal
-                    terminal_session.feed_output(&string_data);
+                    // Calculate elapsed time from session start
+                    let time = session_start.elapsed().as_secs_f64();
 
-                    // Get elapsed time from terminal session
-                    let time = terminal_session.elapsed_time();
-
-                    // Create asciinema event with the buffered string data
+                    // Create asciinema event with the raw buffered data (asciicast v2 format)
                     let asciinema_event = json!([time, "o", string_data]);
                     let event_str = asciinema_event.to_string();
 
                     info!(
-                        "📤 Sending buffered avt-processed asciinema event: {} bytes at {:.3}s",
+                        "📤 Sending direct PTY asciinema event: {} bytes at {:.3}s",
                         event_str.len(),
                         time
                     );
@@ -181,7 +162,7 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
                         info!("WebSocket sender closed, stopping output task");
                         break;
                     }
-                    info!("✅ Buffered avt-processed asciinema event sent successfully");
+                    info!("✅ Direct PTY asciinema event sent successfully");
 
                     // Clear buffer and update send time
                     output_buffer.clear();
