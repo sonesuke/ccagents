@@ -1,15 +1,15 @@
-# Dedupe Queue Examples
+# Source Processing with Deduplication Examples
 
-This directory demonstrates queue processing with automatic deduplication to prevent duplicate item processing.
+This directory demonstrates source processing with automatic deduplication to prevent duplicate item processing using the new simplified configuration format.
 
 ## Files
 
 ### config.yaml
 Comprehensive deduplication demonstration:
 - **Periodic triggers with duplicates**: Script outputs include duplicate items
-- **Enqueue dedupe actions**: Only unique items are added to queues
-- **In-memory deduplication**: Prevents reprocessing of seen items
-- **Automatic queue processing**: Unique items are processed automatically
+- **Source field**: Directly executes command and processes output
+- **Built-in deduplication**: Optional `dedupe: true` flag prevents reprocessing
+- **Unified placeholders**: Uses `${1}` syntax for variable substitution
 
 ### generate_items.sh
 Script that intentionally generates duplicate items:
@@ -37,48 +37,45 @@ echo "Result: success"
 ## Usage
 
 ```bash
-# Run dedupe queue example
+# Run dedupe source processing example
 cargo run -- --config examples/dedupe_queue/config.yaml
 ```
 
 ## How It Works
 
 1. **Periodic Generation**: Every 8 seconds, `generate_items.sh` produces items (including duplicates)
-2. **Deduplication**: `enqueue_dedupe` automatically filters out previously seen items
-3. **Unique Processing**: Only new/unique items trigger processing actions
+2. **Automatic Deduplication**: `dedupe: true` flag filters out previously seen items
+3. **Direct Processing**: Only new/unique items are processed immediately
 4. **Memory Reset**: Deduplication memory is cleared when the process restarts
 
 ## Configuration Details
 
 ```yaml
-entries:
-  # Generate items with automatic deduplication
-  - name: "item_generator"
-    trigger: "periodic"
-    interval: "8s"
-    action: "enqueue_dedupe"  # Key difference from normal queue
-    queue: "pending_items"
-    command: "bash examples/dedupe_queue/generate_items.sh"
-
-  # Process each unique item
-  - name: "item_processor"
-    trigger: "enqueue:pending_items"
-    action: "send_keys"
-    keys: ["bash examples/dedupe_queue/process_item.sh <task>", "\r"]
+agents:
+  triggers:
+    # Generate and process items with automatic deduplication
+    - name: "process_unique_items"
+      event: "timer:8s"
+      source: "bash examples/dedupe_queue/generate_items.sh"
+      dedupe: true  # Key feature for deduplication
+      action: "send_keys"
+      keys: ["echo 'Processing unique: ${1}'", "\r", "bash examples/dedupe_queue/process_item.sh ${1}", "\r"]
 ```
 
-## Comparison: Normal vs Dedupe
+## Comparison: Normal vs Dedupe Processing
 
-| Feature | Normal Queue (`enqueue`) | Dedupe Queue (`enqueue_dedupe`) |
-|---------|--------------------------|--------------------------------|
+| Feature | Normal Processing | Dedupe Processing (`dedupe: true`) |
+|---------|-------------------|-----------------------------------|
 | Duplicate handling | Processes all items | Skips duplicate items |
 | Memory usage | Lower | Higher (stores seen items) |
 | Performance | Faster | Slightly slower (dedup check) |
+| Configuration | Simple | One additional boolean flag |
 | Use case | Simple workflows | Idempotent operations |
 
 ## Key Benefits
 
-- **Idempotent Operations**: Ensures each unique item is processed only once
-- **Automatic Filtering**: No manual duplicate detection needed
-- **Configurable**: Can mix normal and dedupe queues in same configuration
-- **Memory Efficient**: In-memory storage, no persistent state required
+- **Simplified Configuration**: Single trigger with optional deduplication flag
+- **Direct Processing**: No intermediate queue storage needed
+- **Unified Syntax**: Consistent `${1}` placeholder usage
+- **Automatic Filtering**: Built-in duplicate detection without separate queue concepts
+- **Flexible**: Can easily enable/disable deduplication per trigger

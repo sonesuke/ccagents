@@ -1,179 +1,256 @@
 use crate::agent;
-use crate::queue::{QueueExecutor, SharedQueueManager};
+use crate::queue::SharedQueueManager;
 use crate::ruler;
 use anyhow::Result;
+use std::collections::HashSet;
+use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Execute a periodic entry action (with agent context)
 pub async fn execute_periodic_entry(
     entry: &ruler::entry::CompiledEntry,
-    queue_manager: &SharedQueueManager,
+    _queue_manager: &SharedQueueManager,
     agent: Option<&agent::Agent>,
 ) -> Result<()> {
-    match &entry.action {
-        ruler::types::ActionType::SendKeys(keys) => {
-            if let Some(agent) = agent {
-                println!(
-                    "🤖 Executing periodic entry '{}' → Sending: {:?}",
-                    entry.name, keys
-                );
-                for key in keys {
-                    agent.send_keys(key).await?;
-                }
-            } else {
-                println!(
-                    "⚠️ Periodic entry '{}' has SendKeys action - skipping (no agent context)",
-                    entry.name
-                );
+    // If there's a source command, execute it first and process its output
+    if let Some(source) = &entry.source {
+        println!(
+            "📦 Executing periodic entry '{}' → Source: {}",
+            entry.name, source
+        );
+
+        // Execute the source command
+        let output = Command::new("sh").arg("-c").arg(source).output()?;
+
+        if !output.status.success() {
+            eprintln!(
+                "❌ Source command failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return Ok(());
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let lines: Vec<String> = stdout
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(|s| s.to_string())
+            .collect();
+
+        println!("✅ Source command produced {} lines", lines.len());
+
+        // Process each line with deduplication if needed
+        let mut seen = HashSet::new();
+        let mut processed = 0;
+
+        for line in lines {
+            // Skip if deduplication is enabled and we've seen this line
+            if entry.dedupe && !seen.insert(line.clone()) {
+                continue;
             }
+
+            // Replace ${1} placeholder with the line content
+            let resolved_action = resolve_source_placeholders(&entry.action, &line);
+
+            // Execute the resolved action
+            match &resolved_action {
+                ruler::types::ActionType::SendKeys(keys) => {
+                    if let Some(agent) = agent {
+                        for key in keys {
+                            agent.send_keys(key).await?;
+                        }
+                    }
+                }
+                ruler::types::ActionType::Workflow(workflow_name, args) => {
+                    println!("🔄 Workflow: {} {:?}", workflow_name, args);
+                    // TODO: Implement custom workflow execution if needed
+                }
+            }
+            processed += 1;
         }
-        ruler::types::ActionType::Workflow(workflow_name, args) => {
-            println!(
-                "🔄 Executing periodic entry '{}' → Workflow: {} {:?}",
-                entry.name, workflow_name, args
-            );
-            // TODO: Implement custom workflow execution if needed
+
+        if entry.dedupe {
+            println!("✅ Processed {} unique items", processed);
+        } else {
+            println!("✅ Processed {} items", processed);
         }
-        ruler::types::ActionType::Enqueue { queue, command } => {
-            println!(
-                "📦 Executing periodic entry '{}' → Enqueue to '{}': {}",
-                entry.name, queue, command
-            );
-            let executor = QueueExecutor::new(queue_manager.clone());
-            let count = executor.execute_and_enqueue(queue, command).await?;
-            println!("✅ Enqueued {} items to queue '{}'", count, queue);
-        }
-        ruler::types::ActionType::EnqueueDedupe { queue, command } => {
-            println!(
-                "📦 Executing periodic entry '{}' → EnqueueDedupe to '{}': {}",
-                entry.name, queue, command
-            );
-            let executor = QueueExecutor::new(queue_manager.clone());
-            let count = executor.execute_and_enqueue_dedupe(queue, command).await?;
-            println!(
-                "✅ Enqueued {} new items to dedupe queue '{}'",
-                count, queue
-            );
+    } else {
+        // No source, just execute the action directly
+        match &entry.action {
+            ruler::types::ActionType::SendKeys(keys) => {
+                if let Some(agent) = agent {
+                    println!(
+                        "🤖 Executing periodic entry '{}' → Sending: {:?}",
+                        entry.name, keys
+                    );
+                    for key in keys {
+                        agent.send_keys(key).await?;
+                    }
+                } else {
+                    println!(
+                        "⚠️ Periodic entry '{}' has SendKeys action - skipping (no agent context)",
+                        entry.name
+                    );
+                }
+            }
+            ruler::types::ActionType::Workflow(workflow_name, args) => {
+                println!(
+                    "🔄 Executing periodic entry '{}' → Workflow: {} {:?}",
+                    entry.name, workflow_name, args
+                );
+                // TODO: Implement custom workflow execution if needed
+            }
         }
     }
     Ok(())
+}
+
+/// Resolve ${1} placeholders in action with source line content
+fn resolve_source_placeholders(
+    action: &ruler::types::ActionType,
+    value: &str,
+) -> ruler::types::ActionType {
+    match action {
+        ruler::types::ActionType::SendKeys(keys) => {
+            let resolved_keys = keys.iter().map(|key| key.replace("${1}", value)).collect();
+            ruler::types::ActionType::SendKeys(resolved_keys)
+        }
+        ruler::types::ActionType::Workflow(workflow_name, args) => {
+            let resolved_workflow = workflow_name.replace("${1}", value);
+            let resolved_args = args.iter().map(|arg| arg.replace("${1}", value)).collect();
+            ruler::types::ActionType::Workflow(resolved_workflow, resolved_args)
+        }
+    }
 }
 
 /// Execute an entry action using the appropriate mechanism
 pub async fn execute_entry_action(
     agent: &agent::Agent,
     entry: &ruler::entry::CompiledEntry,
-    queue_manager: &SharedQueueManager,
+    _queue_manager: &SharedQueueManager,
 ) -> Result<()> {
     // DETAILED DEBUG LOGGING FOR ENTRY EXECUTION
     tracing::debug!("=== EXECUTING ENTRY ACTION ===");
     tracing::debug!("Entry name: {}", entry.name);
     tracing::debug!("Action type: {:?}", entry.action);
 
-    match &entry.action {
-        ruler::types::ActionType::SendKeys(keys) => {
-            println!("🤖 Executing entry '{}' → Sending: {:?}", entry.name, keys);
+    // If there's a source command, execute it first and process its output
+    if let Some(source) = &entry.source {
+        println!("📦 Executing entry '{}' → Source: {}", entry.name, source);
 
-            tracing::debug!("SendKeys action with {} keys:", keys.len());
-            for (i, key) in keys.iter().enumerate() {
-                tracing::debug!("  Key {}: {:?}", i, key);
+        // Execute the source command
+        let output = Command::new("sh").arg("-c").arg(source).output()?;
+
+        if !output.status.success() {
+            eprintln!(
+                "❌ Source command failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return Ok(());
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let lines: Vec<String> = stdout
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(|s| s.to_string())
+            .collect();
+
+        println!("✅ Source command produced {} lines", lines.len());
+
+        // Process each line with deduplication if needed
+        let mut seen = HashSet::new();
+        let mut processed = 0;
+
+        for line in lines {
+            // Skip if deduplication is enabled and we've seen this line
+            if entry.dedupe && !seen.insert(line.clone()) {
+                continue;
             }
 
-            // Start command tracking before sending keys
-            if let Ok(shell_pid) = agent.get_shell_pid().await {
-                agent.start_command_tracking(shell_pid).await;
+            // Replace ${1} placeholder with the line content
+            let resolved_action = resolve_source_placeholders(&entry.action, &line);
+
+            // Execute the resolved action
+            match &resolved_action {
+                ruler::types::ActionType::SendKeys(keys) => {
+                    // Start command tracking before sending keys
+                    if let Ok(shell_pid) = agent.get_shell_pid().await {
+                        agent.start_command_tracking(shell_pid).await;
+                    }
+
+                    for key in keys {
+                        tracing::debug!("📤 Sending individual key: {:?}", key);
+
+                        if key == "\\r" || key == "\r" {
+                            if let Err(e) = agent.send_keys("\r").await {
+                                eprintln!("❌ Error sending key: {}", e);
+                            }
+                        } else if let Err(e) = agent.send_keys(key).await {
+                            eprintln!("❌ Error sending key: {}", e);
+                        }
+                        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                    }
+                }
+                ruler::types::ActionType::Workflow(workflow_name, args) => {
+                    println!("🔄 Workflow: {} {:?}", workflow_name, args);
+                    // TODO: Implement custom workflow execution if needed
+                }
             }
+            processed += 1;
+        }
 
-            for key in keys {
-                tracing::debug!("📤 Sending individual key: {:?}", key);
+        if entry.dedupe {
+            println!("✅ Processed {} unique items", processed);
+        } else {
+            println!("✅ Processed {} items", processed);
+        }
+    } else {
+        // No source, just execute the action directly
+        match &entry.action {
+            ruler::types::ActionType::SendKeys(keys) => {
+                println!("🤖 Executing entry '{}' → Sending: {:?}", entry.name, keys);
 
-                if key == "\\r" || key == "\r" {
-                    if let Err(e) = agent.send_keys("\r").await {
+                tracing::debug!("SendKeys action with {} keys:", keys.len());
+                for (i, key) in keys.iter().enumerate() {
+                    tracing::debug!("  Key {}: {:?}", i, key);
+                }
+
+                // Start command tracking before sending keys
+                if let Ok(shell_pid) = agent.get_shell_pid().await {
+                    agent.start_command_tracking(shell_pid).await;
+                }
+
+                for key in keys {
+                    tracing::debug!("📤 Sending individual key: {:?}", key);
+
+                    if key == "\\r" || key == "\r" {
+                        if let Err(e) = agent.send_keys("\r").await {
+                            eprintln!("❌ Error sending key: {}", e);
+                        }
+                    } else if let Err(e) = agent.send_keys(key).await {
                         eprintln!("❌ Error sending key: {}", e);
                     }
-                } else if let Err(e) = agent.send_keys(key).await {
-                    eprintln!("❌ Error sending key: {}", e);
+                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
                 }
-                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
             }
-        }
-        ruler::types::ActionType::Workflow(workflow_name, args) => {
-            println!(
-                "🔄 Executing entry '{}' → Workflow: {} {:?}",
-                entry.name, workflow_name, args
-            );
-            // TODO: Implement custom workflow execution if needed
-        }
-        ruler::types::ActionType::Enqueue { queue, command } => {
-            println!(
-                "📦 Executing entry '{}' → Enqueue to '{}': {}",
-                entry.name, queue, command
-            );
-            let executor = QueueExecutor::new(queue_manager.clone());
-            let count = executor.execute_and_enqueue(queue, command).await?;
-            println!("✅ Enqueued {} items to queue '{}'", count, queue);
-        }
-        ruler::types::ActionType::EnqueueDedupe { queue, command } => {
-            println!(
-                "📦 Executing entry '{}' → EnqueueDedupe to '{}': {}",
-                entry.name, queue, command
-            );
-            let executor = QueueExecutor::new(queue_manager.clone());
-            let count = executor.execute_and_enqueue_dedupe(queue, command).await?;
-            println!(
-                "✅ Enqueued {} new items to dedupe queue '{}'",
-                count, queue
-            );
+            ruler::types::ActionType::Workflow(workflow_name, args) => {
+                println!(
+                    "🔄 Executing entry '{}' → Workflow: {} {:?}",
+                    entry.name, workflow_name, args
+                );
+                // TODO: Implement custom workflow execution if needed
+            }
         }
     }
     Ok(())
-}
-
-/// Resolve <task> placeholders in entry action with actual task value
-pub fn resolve_entry_task_placeholders(
-    entry: &ruler::entry::CompiledEntry,
-    task_value: &str,
-) -> ruler::entry::CompiledEntry {
-    let resolved_action = match &entry.action {
-        ruler::types::ActionType::SendKeys(keys) => ruler::types::ActionType::SendKeys(
-            ruler::rule::resolve_task_placeholder_in_vec(keys, task_value),
-        ),
-        ruler::types::ActionType::Workflow(workflow_name, args) => {
-            let resolved_workflow =
-                ruler::rule::resolve_task_placeholder(workflow_name, task_value);
-            let resolved_args = ruler::rule::resolve_task_placeholder_in_vec(args, task_value);
-            ruler::types::ActionType::Workflow(resolved_workflow, resolved_args)
-        }
-        ruler::types::ActionType::Enqueue { queue, command } => {
-            let resolved_queue = ruler::rule::resolve_task_placeholder(queue, task_value);
-            let resolved_command = ruler::rule::resolve_task_placeholder(command, task_value);
-            ruler::types::ActionType::Enqueue {
-                queue: resolved_queue,
-                command: resolved_command,
-            }
-        }
-        ruler::types::ActionType::EnqueueDedupe { queue, command } => {
-            let resolved_queue = ruler::rule::resolve_task_placeholder(queue, task_value);
-            let resolved_command = ruler::rule::resolve_task_placeholder(command, task_value);
-            ruler::types::ActionType::EnqueueDedupe {
-                queue: resolved_queue,
-                command: resolved_command,
-            }
-        }
-    };
-
-    ruler::entry::CompiledEntry {
-        name: entry.name.clone(),
-        trigger: entry.trigger.clone(),
-        action: resolved_action,
-    }
 }
 
 /// Execute a rule action
 pub async fn execute_rule_action(
     action: &ruler::types::ActionType,
     agent: &agent::Agent,
-    queue_manager: &SharedQueueManager,
+    _queue_manager: &SharedQueueManager,
 ) -> Result<()> {
     match action {
         ruler::types::ActionType::SendKeys(keys) => {
@@ -212,33 +289,6 @@ pub async fn execute_rule_action(
         ruler::types::ActionType::Workflow(workflow_name, args) => {
             println!("🔄 Matched workflow: {} {:?}", workflow_name, args);
             // TODO: Implement custom workflow execution if needed
-        }
-        ruler::types::ActionType::Enqueue { queue, command } => {
-            println!("📦 Matched enqueue to '{}': {}", queue, command);
-            let executor = QueueExecutor::new(queue_manager.clone());
-            match executor.execute_and_enqueue(queue, command).await {
-                Ok(count) => {
-                    println!("✅ Enqueued {} items to queue '{}'", count, queue);
-                }
-                Err(e) => {
-                    eprintln!("❌ Error executing enqueue action: {}", e);
-                }
-            }
-        }
-        ruler::types::ActionType::EnqueueDedupe { queue, command } => {
-            println!("📦 Matched enqueue_dedupe to '{}': {}", queue, command);
-            let executor = QueueExecutor::new(queue_manager.clone());
-            match executor.execute_and_enqueue_dedupe(queue, command).await {
-                Ok(count) => {
-                    println!(
-                        "✅ Enqueued {} new items to dedupe queue '{}'",
-                        count, queue
-                    );
-                }
-                Err(e) => {
-                    eprintln!("❌ Error executing enqueue_dedupe action: {}", e);
-                }
-            }
         }
     }
     Ok(())

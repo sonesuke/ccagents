@@ -18,9 +18,9 @@ pub struct Entry {
     #[serde(default)]
     pub args: Vec<String>,
     #[serde(default)]
-    pub queue: Option<String>,
+    pub source: Option<String>,
     #[serde(default)]
-    pub command: Option<String>,
+    pub dedupe: bool,
 }
 
 // Compiled structure for runtime use
@@ -29,6 +29,8 @@ pub struct CompiledEntry {
     pub name: String,
     pub trigger: TriggerType,
     pub action: ActionType,
+    pub source: Option<String>,
+    pub dedupe: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -36,7 +38,6 @@ pub enum TriggerType {
     OnStart,
     UserCommand(String),
     Periodic { interval: std::time::Duration },
-    Enqueue { queue_name: String },
 }
 
 impl Entry {
@@ -49,32 +50,20 @@ impl Entry {
                 .to_string();
             let interval = parse_duration(&duration_str)?;
             TriggerType::Periodic { interval }
-        } else if self.event.starts_with("queue:") {
-            let queue_name = self
-                .event
-                .strip_prefix("queue:")
-                .ok_or_else(|| anyhow::anyhow!("Invalid queue trigger format"))?
-                .to_string();
-            TriggerType::Enqueue { queue_name }
         } else if self.event == "startup" {
             TriggerType::OnStart
         } else {
             TriggerType::UserCommand(self.event.clone())
         };
 
-        let action = compile_action(
-            &self.action,
-            &self.keys,
-            &self.workflow,
-            &self.args,
-            &self.queue,
-            &self.command,
-        )?;
+        let action = compile_action(&self.action, &self.keys, &self.workflow, &self.args)?;
 
         Ok(CompiledEntry {
             name: self.name.clone(),
             trigger,
             action,
+            source: self.source.clone(),
+            dedupe: self.dedupe,
         })
     }
 }

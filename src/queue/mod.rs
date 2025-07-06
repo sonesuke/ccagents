@@ -8,7 +8,7 @@
 pub mod executor;
 pub mod manager;
 
-pub use executor::QueueExecutor;
+// pub use executor::QueueExecutor; // Unused after queue simplification
 pub use manager::QueueManager;
 
 use std::sync::Arc;

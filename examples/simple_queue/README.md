@@ -1,15 +1,15 @@
-# Queue System Examples
+# Simplified Source Processing Examples
 
-This directory demonstrates the queue system for periodic task execution and automatic processing.
+This directory demonstrates the simplified source processing system for periodic task execution and automatic processing.
 
 ## Files
 
 ### config.yaml
-Minimal queue system demonstration:
-- **Periodic triggers**: Execute commands at regular intervals
-- **Enqueue actions**: Add command output to named queues
-- **Queue listeners**: Process items when they're added to queues
-- **Variable expansion**: Use `<task>` placeholders in actions
+Minimal source processing demonstration:
+- **Periodic triggers**: Execute source commands at regular intervals
+- **Direct processing**: Process each line from source command output immediately
+- **Variable expansion**: Use `${1}` placeholders in actions
+- **Unified syntax**: No need for separate queue concepts
 
 ### list_tasks.sh
 Script that generates sample tasks:
@@ -33,39 +33,32 @@ echo "Result: success"
 ## Usage
 
 ```bash
-# Run queue example
+# Run source processing example
 cargo run -- --config examples/simple_queue/config.yaml
 ```
 
 ## How It Works
 
 1. **Periodic Generation**: Every 15 seconds, `list_tasks.sh` is executed
-2. **Enqueue**: Command output is added line-by-line to the "tasks" queue
-3. **Auto-Processing**: Each queued task triggers automatic processing
-4. **Variable Replacement**: `<task>` is replaced with actual task IDs
+2. **Direct Processing**: Each line from command output is processed immediately
+3. **Variable Replacement**: `${1}` is replaced with the actual line content
 
 ## Configuration Details
 
 ```yaml
-entries:
-  # Generate tasks every 15 seconds
-  - name: "generate_tasks"
-    trigger: "periodic"
-    interval: "15s"
-    action: "enqueue"
-    queue: "tasks"
-    command: "bash examples/simple_queue/list_tasks.sh"
-
-  # Process each task automatically
-  - name: "process_tasks"
-    trigger: "enqueue:tasks"
-    action: "send_keys"
-    keys: ["bash examples/simple_queue/process_task.sh <task>", "\r"]
+agents:
+  triggers:
+    # Generate and process tasks every 15 seconds
+    - name: "process_tasks"
+      event: "timer:15s"
+      source: "bash examples/simple_queue/list_tasks.sh"
+      action: "send_keys"
+      keys: ["bash examples/simple_queue/process_task.sh ${1}", "\r"]
 ```
 
 ## Key Features
 
-- **Automatic Workflow**: Tasks are generated and processed without manual intervention
-- **Queue-Based**: Reliable task queuing with FIFO processing
-- **Variable Substitution**: Dynamic command generation with placeholder replacement
-- **Configurable Intervals**: Support for various time formats (`10s`, `5m`, `2h`)
+- **Simplified Configuration**: Single trigger handles both generation and processing
+- **Direct Processing**: No intermediate queue storage needed
+- **Unified Placeholders**: Consistent `${1}` syntax throughout
+- **Clearer Flow**: Direct relationship between source and action

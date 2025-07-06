@@ -25,6 +25,7 @@ impl Default for QueueManager {
     }
 }
 
+#[allow(dead_code)] // Keep queue functionality for potential backward compatibility
 impl QueueManager {
     /// Create a new queue manager
     pub fn new() -> Self {

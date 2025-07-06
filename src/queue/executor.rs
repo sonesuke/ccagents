@@ -7,10 +7,12 @@ use tokio::process::Command;
 use tracing::{debug, error, info};
 
 /// Executes commands and manages queue operations
+#[allow(dead_code)] // Keep for potential backward compatibility
 pub struct QueueExecutor {
     manager: SharedQueueManager,
 }
 
+#[allow(dead_code)] // Keep for potential backward compatibility
 impl QueueExecutor {
     /// Create a new queue executor
     pub fn new(manager: SharedQueueManager) -> Self {
