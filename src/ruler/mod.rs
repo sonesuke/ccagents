@@ -79,14 +79,6 @@ impl Ruler {
             .collect()
     }
 
-    pub async fn get_enqueue_entries(&self) -> Vec<CompiledEntry> {
-        let entries = self.get_entries().await;
-        entries
-            .into_iter()
-            .filter(|entry| matches!(entry.trigger, TriggerType::Enqueue { .. }))
-            .collect()
-    }
-
     pub async fn decide_action_for_capture(&self, capture: &str) -> ActionType {
         let rules = self.get_rules().await;
         decide_action(capture, &rules)

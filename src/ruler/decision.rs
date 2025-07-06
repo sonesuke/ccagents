@@ -1,5 +1,5 @@
 use crate::ruler::rule::CompiledRule;
-use crate::ruler::rule::{resolve_capture_groups, resolve_capture_groups_in_vec};
+use crate::ruler::rule::resolve_capture_groups_in_vec;
 use crate::ruler::types::ActionType;
 
 /// Matches capture text against compiled rules and returns the appropriate action.
@@ -64,22 +64,6 @@ pub fn decide_action(capture: &str, rules: &[CompiledRule]) -> ActionType {
                 ActionType::Workflow(workflow, args) => {
                     let resolved_args = resolve_capture_groups_in_vec(args, &captured_groups);
                     ActionType::Workflow(workflow.clone(), resolved_args)
-                }
-                ActionType::Enqueue { queue, command } => {
-                    let resolved_queue = resolve_capture_groups(queue, &captured_groups);
-                    let resolved_command = resolve_capture_groups(command, &captured_groups);
-                    ActionType::Enqueue {
-                        queue: resolved_queue,
-                        command: resolved_command,
-                    }
-                }
-                ActionType::EnqueueDedupe { queue, command } => {
-                    let resolved_queue = resolve_capture_groups(queue, &captured_groups);
-                    let resolved_command = resolve_capture_groups(command, &captured_groups);
-                    ActionType::EnqueueDedupe {
-                        queue: resolved_queue,
-                        command: resolved_command,
-                    }
                 }
             };
 

@@ -7,10 +7,7 @@ mod web_ui;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use cli::{
-    Cli, Commands, execute_entry_action, execute_periodic_entry, process_pty_output,
-    resolve_entry_task_placeholders,
-};
+use cli::{Cli, Commands, execute_entry_action, execute_periodic_entry, process_pty_output};
 use queue::create_shared_manager;
 use ruler::Ruler;
 use ruler::entry::TriggerType;
@@ -173,65 +170,6 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
         }
     }
 
-    // Setup queue listeners for enqueue entries
-    let enqueue_entries = ruler.get_enqueue_entries().await;
-    tracing::debug!("📡 Setting up {} queue listeners...", enqueue_entries.len());
-    let mut queue_handles = Vec::new();
-    for entry in enqueue_entries {
-        if let TriggerType::Enqueue { queue_name } = &entry.trigger {
-            let queue_name_clone = queue_name.clone();
-            println!("📡 Listening to queue: {}", queue_name);
-
-            // Subscribe to queue and get receiver
-            let mut receiver = {
-                let mut manager = queue_manager.write().await;
-                manager.subscribe(queue_name)
-            };
-
-            // Clone necessary data for the async task
-            let entry_clone = entry;
-            let agent_pool_clone = Arc::clone(&agent_pool);
-            let queue_manager_clone = queue_manager.clone();
-
-            // Spawn task to listen for queue items
-            let handle = tokio::spawn(async move {
-                while let Some(task_item) = receiver.recv().await {
-                    println!(
-                        "🎯 Queue '{}' received item: '{}'",
-                        queue_name_clone, task_item
-                    );
-
-                    // Resolve task placeholders in the entry
-                    let resolved_entry = resolve_entry_task_placeholders(&entry_clone, &task_item);
-
-                    // Execute the entry action with resolved placeholders
-                    if let Some(agent) = agent_pool_clone.get_idle_agent().await {
-                        println!(
-                            "🔄 Setting agent {} to Active for queue entry",
-                            agent.get_id()
-                        );
-                        agent.set_status(agent::AgentStatus::Active).await;
-                        if let Err(e) =
-                            execute_entry_action(&agent, &resolved_entry, &queue_manager_clone)
-                                .await
-                        {
-                            println!(
-                                "❌ Error executing queue entry '{}': {}",
-                                resolved_entry.name, e
-                            );
-                        }
-                    } else {
-                        println!(
-                            "⚠️ No idle agent available for queue entry: {}",
-                            resolved_entry.name
-                        );
-                    }
-                }
-            });
-            queue_handles.push(handle);
-        }
-    }
-
     // Start state-based monitoring loop
     let ruler = Arc::new(ruler); // Wrap ruler in Arc for sharing
     let agent_pool_for_monitoring = Arc::clone(&agent_pool);
@@ -343,9 +281,6 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
 
     // Just abort all tasks - OS will clean up child processes
     for handle in periodic_handles {
-        handle.abort();
-    }
-    for handle in queue_handles {
         handle.abort();
     }
     for handle in web_server_handles {

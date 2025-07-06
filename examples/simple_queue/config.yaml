@@ -1,7 +1,7 @@
-# Simple Queue Demo
+# Simple Source Processing Demo
 #
-# A minimal example showing periodic task generation and processing
-# Usage: cargo run -- --rules examples/simple_queue/simple_queue.yaml
+# A minimal example showing periodic task generation and processing using the new simplified format
+# Usage: cargo run -- --config examples/simple_queue/config.yaml
 
 # Web UI settings
 web_ui:
@@ -17,18 +17,12 @@ agents:
   
   # External triggers - initiated by events
   triggers:
-    # Generate tasks every 15 seconds
-    - name: "generate_tasks"
-      event: "timer:15s"
-      action: "enqueue"
-      queue: "tasks"
-      command: "bash examples/simple_queue/list_tasks.sh"
-
-    # Process each task automatically
+    # Generate and process tasks every 15 seconds
     - name: "process_tasks"
-      event: "queue:tasks"
+      event: "timer:15s"
+      source: "bash examples/simple_queue/list_tasks.sh"
       action: "send_keys"
-      keys: ["bash examples/simple_queue/process_task.sh <task>", "\r"]
+      keys: ["bash examples/simple_queue/process_task.sh ${1}", "\r"]
 
   # No rules needed for this simple example
   rules: []
