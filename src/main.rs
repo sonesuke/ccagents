@@ -20,6 +20,18 @@ use tokio::signal;
 use tokio::time::interval;
 use web_server::WebServer;
 
+/// Check if the terminal output indicates return to bash prompt
+fn is_back_to_bash(output: &str) -> bool {
+    // Basic patterns that indicate return to bash
+    // This is a simple heuristic and may need refinement
+    output.contains("$ ")
+        || output.contains("% ")
+        || output.contains("> ")
+        || output.ends_with("$ ")
+        || output.ends_with("% ")
+        || output.ends_with("> ")
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Parse command line arguments first to get debug flag
@@ -116,8 +128,15 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
     if !on_start_entries.is_empty() {
         println!("🎬 Executing on_start entries...");
         for entry in on_start_entries {
-            let agent = agent_pool.get_agent();
-            execute_entry_action(&agent, &entry, &queue_manager).await?;
+            if let Some(agent) = agent_pool.get_idle_agent().await {
+                agent.set_status(agent::AgentStatus::Active).await;
+                execute_entry_action(&agent, &entry, &queue_manager).await?;
+            } else {
+                println!(
+                    "⚠️ No idle agent available for startup entry: {}",
+                    entry.name
+                );
+            }
         }
     }
 
@@ -135,14 +154,21 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
                 loop {
                     timer.tick().await;
                     println!("⏰ Executing periodic entry: {}", entry_clone.name);
-                    let agent = agent_pool_clone.get_agent();
-                    if let Err(e) =
-                        execute_periodic_entry(&entry_clone, &queue_manager_clone, Some(&agent))
-                            .await
-                    {
-                        eprintln!(
-                            "❌ Error executing periodic entry '{}': {}",
-                            entry_clone.name, e
+                    if let Some(agent) = agent_pool_clone.get_idle_agent().await {
+                        agent.set_status(agent::AgentStatus::Active).await;
+                        if let Err(e) =
+                            execute_periodic_entry(&entry_clone, &queue_manager_clone, Some(&agent))
+                                .await
+                        {
+                            eprintln!(
+                                "❌ Error executing periodic entry '{}': {}",
+                                entry_clone.name, e
+                            );
+                        }
+                    } else {
+                        println!(
+                            "⚠️ No idle agent available for periodic entry: {}",
+                            entry_clone.name
                         );
                     }
                 }
@@ -183,13 +209,21 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
                     let resolved_entry = resolve_entry_task_placeholders(&entry_clone, &task_item);
 
                     // Execute the entry action with resolved placeholders
-                    let agent = agent_pool_clone.get_agent();
-                    if let Err(e) =
-                        execute_entry_action(&agent, &resolved_entry, &queue_manager_clone).await
-                    {
+                    if let Some(agent) = agent_pool_clone.get_idle_agent().await {
+                        agent.set_status(agent::AgentStatus::Active).await;
+                        if let Err(e) =
+                            execute_entry_action(&agent, &resolved_entry, &queue_manager_clone)
+                                .await
+                        {
+                            println!(
+                                "❌ Error executing queue entry '{}': {}",
+                                resolved_entry.name, e
+                            );
+                        }
+                    } else {
                         println!(
-                            "❌ Error executing queue entry '{}': {}",
-                            resolved_entry.name, e
+                            "⚠️ No idle agent available for queue entry: {}",
+                            resolved_entry.name
                         );
                     }
                 }
@@ -198,38 +232,47 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
         }
     }
 
-    // Start PTY output monitoring tasks for each agent
+    // Start state-based monitoring loop
     let ruler = Arc::new(ruler); // Wrap ruler in Arc for sharing
-    let mut pty_monitor_handles = Vec::new();
-    for i in 0..agent_pool.size() {
-        let agent = agent_pool.get_agent_by_index(i);
-        let ruler_clone = Arc::clone(&ruler);
-        let queue_manager_clone = queue_manager.clone();
+    let agent_pool_for_monitoring = Arc::clone(&agent_pool);
+    let ruler_for_monitoring = Arc::clone(&ruler);
+    let queue_manager_for_monitoring = queue_manager.clone();
 
-        let handle = tokio::spawn(async move {
-            tracing::debug!("🔍 Starting PTY monitor task for agent {}", i);
+    let monitoring_handle = tokio::spawn(async move {
+        loop {
+            // Monitor active agents for rule matching
+            let active_agents = agent_pool_for_monitoring.get_active_agents().await;
+            for agent in active_agents {
+                // Get PTY string receiver for rule matching
+                if let Ok(mut rx) = agent.get_pty_string_receiver().await {
+                    // Check for new output (non-blocking)
+                    if let Ok(pty_output) = rx.try_recv() {
+                        // Check if agent returned to bash (basic detection)
+                        if is_back_to_bash(&pty_output) {
+                            agent.set_status(agent::AgentStatus::Idle).await;
+                            tracing::debug!("🔄 Agent {} returned to Idle", agent.get_id());
+                            continue;
+                        }
 
-            // Get PTY string receiver for rule matching
-            if let Ok(mut rx) = agent.get_pty_string_receiver().await {
-                tracing::debug!("✅ Got PTY string receiver for agent {}", i);
-
-                // Continuously monitor PTY output for rule matching
-                while let Ok(pty_output) = rx.recv().await {
-                    if let Err(e) =
-                        process_pty_output(&pty_output, &agent, &ruler_clone, &queue_manager_clone)
-                            .await
-                    {
-                        tracing::debug!("❌ Error processing PTY output: {}", e);
+                        // Process rules for active agents
+                        if let Err(e) = process_pty_output(
+                            &pty_output,
+                            &agent,
+                            &ruler_for_monitoring,
+                            &queue_manager_for_monitoring,
+                        )
+                        .await
+                        {
+                            tracing::debug!("❌ Error processing PTY output: {}", e);
+                        }
                     }
                 }
-
-                tracing::debug!("❌ PTY monitor task ended for agent {}", i);
-            } else {
-                tracing::debug!("❌ Failed to get PTY receiver for agent {}", i);
             }
-        });
-        pty_monitor_handles.push(handle);
-    }
+
+            // Small delay to prevent busy waiting
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        }
+    });
 
     // Wait for Ctrl+C signal
     signal::ctrl_c()
@@ -247,9 +290,7 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
     for handle in web_server_handles {
         handle.abort();
     }
-    for handle in pty_monitor_handles {
-        handle.abort();
-    }
+    monitoring_handle.abort();
 
     println!("🧹 Shutting down...");
 
@@ -269,9 +310,9 @@ async fn handle_show_command(args: &cli::ShowArgs) -> Result<()> {
     println!("  host: {}", monitor_config.web_ui.host);
     println!("  base_port: {}", monitor_config.web_ui.base_port);
     println!("\nAgents config:");
-    println!("  concurrency: {}", monitor_config.agents.concurrency);
-    println!("  cols: {}", monitor_config.agents.cols);
-    println!("  rows: {}", monitor_config.agents.rows);
+    println!("  pool: {}", monitor_config.agents.pool);
+    println!("  cols: {}", monitor_config.web_ui.cols);
+    println!("  rows: {}", monitor_config.web_ui.rows);
 
     if !entries.is_empty() {
         println!("\nEntries:");

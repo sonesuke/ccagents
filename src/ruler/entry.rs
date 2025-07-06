@@ -3,13 +3,12 @@ use anyhow::{anyhow, Result};
 use serde::Deserialize;
 use std::time::Duration;
 
-// YAML structure for loading entries
+// YAML structure for loading entries (triggers)
 #[derive(Debug, Deserialize)]
 pub struct Entry {
     pub name: String,
-    pub trigger: String,
-    #[serde(default)]
-    pub interval: Option<String>,
+    #[serde(alias = "trigger")]
+    pub event: String,
     #[serde(default)]
     pub action: Option<String>,
     #[serde(default)]
@@ -42,24 +41,25 @@ pub enum TriggerType {
 
 impl Entry {
     pub fn compile(&self) -> Result<CompiledEntry> {
-        let trigger = if self.trigger == "periodic" {
-            let interval_str = self
-                .interval
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("periodic trigger requires 'interval' field"))?;
-            let interval = parse_duration(interval_str)?;
+        let trigger = if self.event.starts_with("timer:") {
+            let duration_str = self
+                .event
+                .strip_prefix("timer:")
+                .ok_or_else(|| anyhow::anyhow!("Invalid timer format"))?
+                .to_string();
+            let interval = parse_duration(&duration_str)?;
             TriggerType::Periodic { interval }
-        } else if self.trigger.starts_with("enqueue:") {
+        } else if self.event.starts_with("queue:") {
             let queue_name = self
-                .trigger
-                .strip_prefix("enqueue:")
-                .ok_or_else(|| anyhow::anyhow!("Invalid enqueue trigger format"))?
+                .event
+                .strip_prefix("queue:")
+                .ok_or_else(|| anyhow::anyhow!("Invalid queue trigger format"))?
                 .to_string();
             TriggerType::Enqueue { queue_name }
-        } else if self.trigger == "on_start" {
+        } else if self.event == "startup" {
             TriggerType::OnStart
         } else {
-            TriggerType::UserCommand(self.trigger.clone())
+            TriggerType::UserCommand(self.event.clone())
         };
 
         let action = compile_action(

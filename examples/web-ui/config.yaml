@@ -6,22 +6,22 @@ web_ui:
   enabled: true          # Enable/disable web interface
   host: "localhost"      # Bind address (use "0.0.0.0" for external access)
   base_port: 9990        # First agent web interface port
-
-# Agent configuration
-agents:
-  concurrency: 2         # Number of agents (get sequential ports: 9990, 9991)
   cols: 120              # Terminal width for all agents
   rows: 40               # Terminal height for all agents
 
-# Example entries for automation
-entries:
-  - name: "compound_command_test"
-    trigger: "on_start"
-    action: "send_keys"
-    keys: ["ls --color=always", "\r"]
+# Agent configuration with triggers and rules
+agents:
+  pool: 2                # Number of agents (get sequential ports: 9990, 9991)
+  
+  # External triggers - initiated by events
+  triggers:
+    - name: "compound_command_test"
+      event: "startup"
+      action: "send_keys"
+      keys: ["ls --color=always", "\r"]
 
-# Example rules for pattern matching
-rules:
-  - pattern: "Web UI ready"
-    action: "send_keys"
-    keys: ["echo 'UI is ready'", "\r"]
+  # Automatic detection rules
+  rules:
+    - when: "Web UI ready"
+      action: "send_keys"
+      keys: ["echo 'UI is ready'", "\r"]

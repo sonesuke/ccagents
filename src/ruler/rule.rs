@@ -6,7 +6,8 @@ use serde::Deserialize;
 // YAML structure for loading rules
 #[derive(Debug, Deserialize)]
 pub struct Rule {
-    pub pattern: String,
+    #[serde(alias = "pattern")]
+    pub when: String,
     #[serde(default)]
     pub action: Option<String>,
     #[serde(default)]
@@ -30,8 +31,8 @@ pub struct CompiledRule {
 
 impl Rule {
     pub fn compile(&self) -> Result<CompiledRule> {
-        let regex = Regex::new(&self.pattern)
-            .with_context(|| format!("Invalid regex pattern: {}", self.pattern))?;
+        let regex = Regex::new(&self.when)
+            .with_context(|| format!("Invalid regex pattern: {}", self.when))?;
 
         let action = compile_action(
             &self.action,
