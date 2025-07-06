@@ -1,38 +1,41 @@
-# RuleAgents Default Configuration
-#
-# This is the default configuration file that demonstrates basic automation.
-# For more examples, see the examples/ directory:
-# - examples/basic/config.yaml - Basic pattern matching and on_start triggers
-# - examples/simple_queue/simple_queue.yaml - Queue system with periodic triggers
-# - examples/dedupe_queue/dedupe_example.yaml - Duplicate filtering queues
-# - examples/agent_pool/concurrency_demo.yaml - Multiple agents running in parallel
-
-# Web UI configuration
+# ccauto configuration for monitoring GitHub issues
 web_ui:
-  enabled: true        # Enable/disable web interface
-  host: "localhost"    # Bind address (use "0.0.0.0" for external access)
-  base_port: 9990      # First agent port (default: 9990)
+  enabled: true
+  host: "localhost"
+  base_port: 9990
+  cols: 120
+  rows: 40
 
-# Agent configuration
 agents:
-  concurrency: 1       # Number of parallel agents (default: 1)
-  cols: 80             # Terminal width
-  rows: 24             # Terminal height
+  pool: 1
+  
+  # External triggers - periodic execution
+  triggers:
+    - name: "monitor_issues"
+      event: "timer:10s"
+      source: "bash list-issue.sh"
+      dedupe: true
+      action: "send_keys"
+      keys: ["claude \"/solve ${1}\" --dangerously-skip-permissions", "\r"]
 
-# External triggers - initiated by system events
-entries:
-  - name: "start_mock"
-    trigger: "on_start"           # Automatic startup trigger
-    action: "send_keys"
-    keys: ["bash examples/basic/mock.sh", "\r"]
+  # Automatic detection rules
+  rules:      
+    - when: "Successfully Resolved"
+      action: "send_keys"
+      keys: ["/exit", "\r"]
 
-# Automatic detection rules - triggered by terminal state changes
-# Higher priority = earlier in the list (line order matters)
-rules:
-  - pattern: "Do you want to proceed"    # Highest priority
-    action: "send_keys"
-    keys: ["1", "\r"]
-    
-  - pattern: "^exit$"                    # Lower priority
-    action: "send_keys"
-    keys: ["/exit", "\r"]
+    - when: "Successfully completed issue"
+      action: "send_keys"
+      keys: ["/exit", "\r"]
+
+    - when: "Issue #\\d+ Complete"
+      action: "send_keys"
+      keys: ["/exit", "\r"]
+
+    - when: "✅ Issue #\\d+ -"
+      action: "send_keys"
+      keys: ["/exit", "\r"]
+
+    - when: "Pull Request: https://github.com"
+      action: "send_keys"
+      keys: ["/exit", "\r"]
