@@ -133,114 +133,26 @@ The built-in web interface provides real-time terminal monitoring:
 - **Single Agent**: http://localhost:9990
 - **Agent Pool**: Multiple ports (e.g., http://localhost:9990, http://localhost:9991, etc.)
 
-## Development
-
-See [CLAUDE.md](CLAUDE.md) for detailed development guidelines.
-
-### Building from Source
-
-```bash
-cargo build          # Debug build
-cargo test           # Run tests (sets up git hooks)
-cargo run -- --help  # Run with help flag
-```
-
-### Quality Checks
-
-Pre-commit hooks are automatically set up by `cargo-husky`:
-
-```bash
-cargo test                     # All tests must pass
-cargo clippy -- -D warnings    # No clippy warnings allowed
-cargo fmt                      # Code must be properly formatted
-```
-
-**Important**: Never bypass pre-commit hooks with `--no-verify`.
-
-### Test Coverage
-
-The project uses `cargo-llvm-cov` for comprehensive test coverage measurement:
-
-```bash
-# Generate coverage report in terminal
-cargo llvm-cov
-
-# Generate HTML coverage report
-cargo llvm-cov --html --output-dir target/coverage/html
-
-# Generate and open HTML report in browser
-cargo llvm-cov --open
-
-# Generate LCOV format for CI/CD integration
-cargo llvm-cov --lcov --output-path target/lcov.info
-
-# Using Makefile shortcuts
-make coverage        # Generate LCOV report
-```
-
-**Coverage Targets:**
-- **Line Coverage**: Minimum 75% (currently 23.34%)
-- **Function Coverage**: Minimum 70% (currently 25.47%)
-- **Region Coverage**: Target 70% (currently 15.13%)
-
-Coverage reports are automatically generated in CI/CD and uploaded to [Codecov](https://codecov.io).
-
-### Working with Git Worktrees
-
-For feature development, use git worktrees:
-
-```bash
-git worktree add .worktree/issue-<number> -b issue-<number>
-cd .worktree/issue-<number>
-```
 
 ## Examples
 
 Multiple example configurations demonstrate different features:
 
-### 1. Basic Automation (`examples/basic/`)
-```bash
-ccauto --config examples/basic/config.yaml
-```
-- Demonstrates on_start triggers and pattern-based rules
-- Automatically executes mock.sh and responds to prompts
+| Example | Command | Description |
+|---------|---------|-------------|
+| Basic Automation | `ccauto --config examples/basic/config.yaml` | On_start triggers and pattern-based rules |
+| Queue System | `ccauto --config examples/simple_queue/config.yaml` | Periodic task generation and queue workflows |
+| Web UI Test | `ccauto --config examples/web-ui-test/config.yaml` | Web UI functionality and Claude monitoring |
+| Agent Pool | `ccauto --config examples/agent_pool/config.yaml` | Multiple parallel agents with round-robin distribution |
 
-### 2. Queue System (`examples/simple_queue/`)
-```bash
-ccauto --config examples/simple_queue/config.yaml
-```
-- Shows periodic task generation and automatic processing
-- Demonstrates queue-based workflows with `<task>` variable expansion
+## Contributing
 
-### 3. Web UI Test (`examples/web-ui-test/`)
-```bash
-ccauto --config examples/web-ui-test/config.yaml
-```
-- Tests the web UI functionality
-- Demonstrates Claude command monitoring
+Interested in contributing to ccauto? We welcome contributions from developers of all skill levels!
 
-### 4. Agent Pool (`examples/agent_pool/`)
-```bash
-ccauto --config examples/agent_pool/config.yaml
-```
-- Multiple agents running in parallel
-- Round-robin task distribution
-- Multiple web interface tabs
+For detailed development guidelines, build instructions, testing procedures, and code standards, please see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Architecture
-
-The system consists of several key components:
-
-- **PTY Process**: Native pseudo-terminal implementation for full terminal emulation
-- **Agent Pool**: Manages multiple terminal agents for parallel execution
-- **Rule Engine**: Pattern matching and action execution system
-- **Queue System**: Task queuing and processing with deduplication
-- **Web Server**: Built-in HTTP server with WebSocket support for real-time updates
+For project-specific development rules and conventions, see [CLAUDE.md](CLAUDE.md).
 
 ## License
 
 [Add your license information here]
-
-## Contributing
-
-[Add contribution guidelines here]
