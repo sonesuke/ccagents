@@ -5,7 +5,7 @@ use portable_pty::{Child, CommandBuilder, NativePtySystem, PtySize, PtySystem};
 use std::io::Write;
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::{broadcast, mpsc, Mutex};
+use tokio::sync::{Mutex, broadcast, mpsc};
 use tracing::{error, info};
 
 const READ_BUF_SIZE: usize = 4096;

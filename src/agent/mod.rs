@@ -7,8 +7,8 @@ use crate::ruler::config::MonitorConfig;
 use anyhow::Result;
 use std::process::Command;
 use std::sync::{
-    atomic::{AtomicUsize, Ordering},
     Arc, RwLock,
+    atomic::{AtomicUsize, Ordering},
 };
 
 /// Agent status for state management

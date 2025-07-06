@@ -39,7 +39,7 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
     );
 
     if sender
-        .send(Message::Text(header.to_string()))
+        .send(Message::Text(header.to_string().into()))
         .await
         .is_err()
     {
@@ -67,7 +67,7 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
                 );
 
                 if sender
-                    .send(Message::Text(initial_event.to_string()))
+                    .send(Message::Text(initial_event.to_string().into()))
                     .await
                     .is_err()
                 {
@@ -155,7 +155,7 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
                                 time
                             );
 
-                            if sender.send(Message::Text(event_str)).await.is_err() {
+                            if sender.send(Message::Text(event_str.into())).await.is_err() {
                                 info!("WebSocket sender closed, stopping output task");
                                 break;
                             }
