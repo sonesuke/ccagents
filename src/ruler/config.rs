@@ -115,9 +115,12 @@ pub fn load_config(path: &Path) -> Result<(Vec<CompiledEntry>, Vec<CompiledRule>
 
     let mut compiled_rules = Vec::new();
     for rule in config_file.agents.rules {
-        let compiled = rule
-            .compile()
-            .with_context(|| format!("Failed to compile rule with pattern: {}", rule.when))?;
+        let compiled = rule.compile().with_context(|| {
+            format!(
+                "Failed to compile rule with pattern: {:?}",
+                rule.when.as_deref().unwrap_or("timeout")
+            )
+        })?;
         compiled_rules.push(compiled);
     }
 

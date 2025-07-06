@@ -315,15 +315,17 @@ pub async fn process_pty_output(
         .filter(|line| !line.trim().is_empty())
         .collect();
 
-    // Check each line for pattern matching
+    // Check each line for pattern matching and timeout rules
     for line in lines {
         tracing::debug!("Checking line: {:?}", line);
 
-        let action = ruler.decide_action_for_capture(line).await;
+        let actions = ruler.decide_actions_with_timeout(line).await;
 
-        tracing::debug!("Action decided: {:?}", action);
+        tracing::debug!("Actions decided: {:?}", actions);
 
-        execute_rule_action(&action, agent, queue_manager).await?;
+        for action in actions {
+            execute_rule_action(&action, agent, queue_manager).await?;
+        }
     }
 
     Ok(())

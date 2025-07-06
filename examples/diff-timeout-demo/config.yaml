@@ -1,0 +1,79 @@
+# Demo configuration showing diff timeout rule functionality
+# This demonstrates how to set up timeout rules that trigger when
+# diff detection (pattern matching) has been inactive for specified periods
+
+web_ui:
+  enabled: true
+  host: "localhost"
+  base_port: 9990
+  cols: 120
+  rows: 40
+
+agents:
+  pool: 1
+
+  # External triggers (startup, timer-based, etc.)
+  triggers:
+    - name: "startup_demo"
+      event: "startup"
+      action: "send_keys"
+      keys: 
+        - "echo 'Demo started - testing diff timeout functionality'"
+        - "\r"
+        - "echo 'Try typing patterns or wait for timeouts...'"
+        - "\r"
+
+  # Pattern and timeout-based rules
+  rules:
+    # Traditional pattern matching rules
+    - when: "hello"
+      action: "send_keys"
+      keys: 
+        - "echo 'Hello detected! This resets timeout timers.'"
+        - "\r"
+
+    - when: "test"
+      action: "send_keys"
+      keys: 
+        - "echo 'Test pattern matched! Activity detected.'"
+        - "\r"
+
+    # Diff timeout rules - trigger when no patterns match for specified durations
+    - diff_timeout: "30s"
+      action: "send_keys"
+      keys: 
+        - "echo 'No activity for 30 seconds - short timeout triggered'"
+        - "\r"
+
+    - diff_timeout: "1m"
+      action: "send_keys"
+      keys: 
+        - "echo 'No activity for 1 minute - medium timeout triggered'"
+        - "\r"
+
+    - diff_timeout: "2m"
+      action: "send_keys"
+      keys: 
+        - "echo 'No activity for 2 minutes - long timeout triggered'"
+        - "\r"
+
+    # Timeout rule with workflow action
+    - diff_timeout: "5m"
+      action: "workflow"
+      workflow: "restart_monitoring"
+      args: 
+        - "long_inactivity"
+
+    # Pattern that can interrupt timeouts
+    - when: "reset"
+      action: "send_keys" 
+      keys:
+        - "echo 'Reset command - this will reset all timeout timers'"
+        - "\r"
+
+    # Exit pattern
+    - when: "exit|quit"
+      action: "send_keys"
+      keys:
+        - "exit"
+        - "\r"
