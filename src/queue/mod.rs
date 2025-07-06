@@ -5,10 +5,7 @@
 //! - Event-driven queue listeners
 //! - Command execution and result enqueueing
 
-pub mod executor;
 pub mod manager;
-
-// pub use executor::QueueExecutor; // Unused after queue simplification
 pub use manager::QueueManager;
 
 use std::sync::Arc;
