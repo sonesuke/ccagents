@@ -1,5 +1,7 @@
 # ccauto
 
+[![codecov](https://codecov.io/github/sonesuke/ccauto/graph/badge.svg?token=4YGL6PWD3C)](https://codecov.io/github/sonesuke/ccauto)
+
 A command-line tool for YAML-driven agent auto-control system with automatic terminal interaction and Claude AI integration.
 
 ## Features
