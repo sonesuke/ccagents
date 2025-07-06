@@ -142,6 +142,11 @@ impl PtySession {
     pub async fn get_screen_contents(&self) -> Result<String> {
         self.terminal.get_screen_contents().await
     }
+
+    /// Get the PID of the shell process
+    pub async fn get_shell_pid(&self) -> Result<Option<u32>> {
+        self.terminal.get_shell_pid().await
+    }
 }
 
 fn parse_key(key: &str) -> Vec<u8> {

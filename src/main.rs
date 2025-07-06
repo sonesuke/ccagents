@@ -116,8 +116,19 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
     if !on_start_entries.is_empty() {
         println!("🎬 Executing on_start entries...");
         for entry in on_start_entries {
-            let agent = agent_pool.get_agent();
-            execute_entry_action(&agent, &entry, &queue_manager).await?;
+            if let Some(agent) = agent_pool.get_idle_agent().await {
+                println!(
+                    "🔄 Setting agent {} to Active for startup entry",
+                    agent.get_id()
+                );
+                agent.set_status(agent::AgentStatus::Active).await;
+                execute_entry_action(&agent, &entry, &queue_manager).await?;
+            } else {
+                println!(
+                    "⚠️ No idle agent available for startup entry: {}",
+                    entry.name
+                );
+            }
         }
     }
 
@@ -135,14 +146,25 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
                 loop {
                     timer.tick().await;
                     println!("⏰ Executing periodic entry: {}", entry_clone.name);
-                    let agent = agent_pool_clone.get_agent();
-                    if let Err(e) =
-                        execute_periodic_entry(&entry_clone, &queue_manager_clone, Some(&agent))
-                            .await
-                    {
-                        eprintln!(
-                            "❌ Error executing periodic entry '{}': {}",
-                            entry_clone.name, e
+                    if let Some(agent) = agent_pool_clone.get_idle_agent().await {
+                        println!(
+                            "🔄 Setting agent {} to Active for periodic entry",
+                            agent.get_id()
+                        );
+                        agent.set_status(agent::AgentStatus::Active).await;
+                        if let Err(e) =
+                            execute_periodic_entry(&entry_clone, &queue_manager_clone, Some(&agent))
+                                .await
+                        {
+                            eprintln!(
+                                "❌ Error executing periodic entry '{}': {}",
+                                entry_clone.name, e
+                            );
+                        }
+                    } else {
+                        println!(
+                            "⚠️ No idle agent available for periodic entry: {}",
+                            entry_clone.name
                         );
                     }
                 }
@@ -183,13 +205,25 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
                     let resolved_entry = resolve_entry_task_placeholders(&entry_clone, &task_item);
 
                     // Execute the entry action with resolved placeholders
-                    let agent = agent_pool_clone.get_agent();
-                    if let Err(e) =
-                        execute_entry_action(&agent, &resolved_entry, &queue_manager_clone).await
-                    {
+                    if let Some(agent) = agent_pool_clone.get_idle_agent().await {
                         println!(
-                            "❌ Error executing queue entry '{}': {}",
-                            resolved_entry.name, e
+                            "🔄 Setting agent {} to Active for queue entry",
+                            agent.get_id()
+                        );
+                        agent.set_status(agent::AgentStatus::Active).await;
+                        if let Err(e) =
+                            execute_entry_action(&agent, &resolved_entry, &queue_manager_clone)
+                                .await
+                        {
+                            println!(
+                                "❌ Error executing queue entry '{}': {}",
+                                resolved_entry.name, e
+                            );
+                        }
+                    } else {
+                        println!(
+                            "⚠️ No idle agent available for queue entry: {}",
+                            resolved_entry.name
                         );
                     }
                 }
@@ -198,38 +232,108 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
         }
     }
 
-    // Start PTY output monitoring tasks for each agent
+    // Start state-based monitoring loop
     let ruler = Arc::new(ruler); // Wrap ruler in Arc for sharing
-    let mut pty_monitor_handles = Vec::new();
-    for i in 0..agent_pool.size() {
-        let agent = agent_pool.get_agent_by_index(i);
-        let ruler_clone = Arc::clone(&ruler);
-        let queue_manager_clone = queue_manager.clone();
+    let agent_pool_for_monitoring = Arc::clone(&agent_pool);
+    let ruler_for_monitoring = Arc::clone(&ruler);
+    let queue_manager_for_monitoring = queue_manager.clone();
 
-        let handle = tokio::spawn(async move {
-            tracing::debug!("🔍 Starting PTY monitor task for agent {}", i);
+    let monitoring_handle = tokio::spawn(async move {
+        let mut last_status_log = std::time::Instant::now();
 
-            // Get PTY string receiver for rule matching
-            if let Ok(mut rx) = agent.get_pty_string_receiver().await {
-                tracing::debug!("✅ Got PTY string receiver for agent {}", i);
-
-                // Continuously monitor PTY output for rule matching
-                while let Ok(pty_output) = rx.recv().await {
-                    if let Err(e) =
-                        process_pty_output(&pty_output, &agent, &ruler_clone, &queue_manager_clone)
-                            .await
-                    {
-                        tracing::debug!("❌ Error processing PTY output: {}", e);
-                    }
+        // Create persistent receivers for each agent at startup
+        let mut agent_receivers = Vec::new();
+        for i in 0..agent_pool_for_monitoring.size() {
+            let agent = agent_pool_for_monitoring.get_agent_by_index(i);
+            match agent.get_pty_string_receiver().await {
+                Ok(rx) => {
+                    tracing::info!(
+                        "✅ Agent {} persistent string receiver created",
+                        agent.get_id()
+                    );
+                    agent_receivers.push(Some(rx));
                 }
-
-                tracing::debug!("❌ PTY monitor task ended for agent {}", i);
-            } else {
-                tracing::debug!("❌ Failed to get PTY receiver for agent {}", i);
+                Err(e) => {
+                    tracing::error!(
+                        "❌ Agent {} failed to create string receiver: {}",
+                        agent.get_id(),
+                        e
+                    );
+                    agent_receivers.push(None);
+                }
             }
-        });
-        pty_monitor_handles.push(handle);
-    }
+        }
+
+        loop {
+            // Log agent statuses periodically (every 5 seconds)
+            if last_status_log.elapsed() > std::time::Duration::from_secs(5) {
+                for i in 0..agent_pool_for_monitoring.size() {
+                    let agent = agent_pool_for_monitoring.get_agent_by_index(i);
+                    let status = agent.get_status().await;
+                    tracing::info!("📊 Agent {} status: {:?}", agent.get_id(), status);
+                }
+                last_status_log = std::time::Instant::now();
+            }
+
+            // Monitor all agents for rule matching using persistent receivers
+            for i in 0..agent_pool_for_monitoring.size() {
+                let agent = agent_pool_for_monitoring.get_agent_by_index(i);
+                let current_status = agent.get_status().await;
+
+                // Use the persistent receiver for this agent
+                if let Some(ref mut rx) = agent_receivers.get_mut(i).and_then(|r| r.as_mut()) {
+                    // Check for new output (non-blocking)
+                    let mut received_any = false;
+                    while let Ok(pty_output) = rx.try_recv() {
+                        received_any = true;
+                        tracing::debug!(
+                            "📝 Agent {} ({:?}) received PTY output: {} bytes: '{}'",
+                            agent.get_id(),
+                            current_status,
+                            pty_output.len(),
+                            pty_output.chars().take(50).collect::<String>()
+                        );
+
+                        // For Active agents, monitor command completion via process monitoring
+                        if current_status == agent::AgentStatus::Active {
+                            agent.monitor_command_completion().await;
+                        }
+
+                        // Process rules for all agents (both Active and Idle)
+                        // This ensures rules are processed even during startup
+                        tracing::debug!(
+                            "🔍 Processing rules for agent {} ({:?})",
+                            agent.get_id(),
+                            current_status
+                        );
+                        if let Err(e) = process_pty_output(
+                            &pty_output,
+                            &agent,
+                            &ruler_for_monitoring,
+                            &queue_manager_for_monitoring,
+                        )
+                        .await
+                        {
+                            tracing::debug!("❌ Error processing PTY output: {}", e);
+                        }
+                    }
+
+                    if received_any {
+                        tracing::debug!(
+                            "✅ Agent {} processed {} data chunks",
+                            agent.get_id(),
+                            "some"
+                        );
+                    }
+                } else {
+                    tracing::debug!("❌ Agent {} has no valid string receiver", agent.get_id());
+                }
+            }
+
+            // Small delay to prevent busy waiting
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+        }
+    });
 
     // Wait for Ctrl+C signal
     signal::ctrl_c()
@@ -247,9 +351,7 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
     for handle in web_server_handles {
         handle.abort();
     }
-    for handle in pty_monitor_handles {
-        handle.abort();
-    }
+    monitoring_handle.abort();
 
     println!("🧹 Shutting down...");
 
@@ -269,9 +371,9 @@ async fn handle_show_command(args: &cli::ShowArgs) -> Result<()> {
     println!("  host: {}", monitor_config.web_ui.host);
     println!("  base_port: {}", monitor_config.web_ui.base_port);
     println!("\nAgents config:");
-    println!("  concurrency: {}", monitor_config.agents.concurrency);
-    println!("  cols: {}", monitor_config.agents.cols);
-    println!("  rows: {}", monitor_config.agents.rows);
+    println!("  pool: {}", monitor_config.agents.pool);
+    println!("  cols: {}", monitor_config.web_ui.cols);
+    println!("  rows: {}", monitor_config.web_ui.rows);
 
     if !entries.is_empty() {
         println!("\nEntries:");

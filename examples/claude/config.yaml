@@ -1,32 +1,32 @@
-# Entry and Rule definitions for agent automation
+# Configuration for Claude automation example
 
 # Web UI configuration
 web_ui:
   enabled: true
   host: "localhost"
   base_port: 9990
-
-# Agent configuration
-agents:
-  concurrency: 1
   cols: 120
   rows: 40
 
-# External triggers - initiated by user commands
-entries:
-  - name: "claude"
-    trigger: "on_start"
-    action: "send_keys"
-    keys: ["claude 'say hello, in Japanese'", "\r"]
+# Agents configuration with triggers and rules
+agents:
+  pool: 1
+  
+  # External triggers - initiated by events
+  triggers:
+    - name: "claude"
+      event: "startup"
+      action: "send_keys"
+      keys: ["claude 'say hello, in Japanese'", "\r"]
 
-# Automatic detection rules - triggered by terminal state changes
-# Higher priority = earlier in the list (line order matters)
-rules:
-  - pattern: "Do you want to proceed"
-    action: "send_keys"
-    keys: ["1", "\r"]
-    
-  # Match Claude's response when it starts generating text
-  - pattern: "こんにちは"
-    action: "send_keys"
-    keys: ["/exit", "\r"]
+  # Automatic detection rules - triggered by terminal state changes
+  # Higher priority = earlier in the list (line order matters)
+  rules:
+    - when: "Do you want to proceed"
+      action: "send_keys"
+      keys: ["1", "\r"]
+      
+    # Match Claude's response when it starts generating text
+    - when: "こんにちは"
+      action: "send_keys"
+      keys: ["/exit", "\r"]

@@ -34,7 +34,7 @@ fn test_monitor_config_with_web_ui() {
     assert!(config.web_ui.enabled);
     assert_eq!(config.web_ui.host, "localhost");
     assert_eq!(config.web_ui.base_port, 9990);
-    assert_eq!(config.agents.concurrency, 1);
+    assert_eq!(config.agents.pool, 1);
 }
 
 #[tokio::test]

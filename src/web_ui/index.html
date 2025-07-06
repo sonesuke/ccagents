@@ -129,32 +129,6 @@
                     const parsed = JSON.parse(event.data);
                     console.log('DEBUG: Parsed JSON:', parsed);
                     
-                    // Check for Claude progress indicator patterns
-                    if (Array.isArray(parsed) && parsed.length === 3 && parsed[1] === "o") {
-                        const content = parsed[2];
-                        
-                        // Check for specific patterns
-                        const hasCarriageReturn = content.includes('\r');
-                        const hasCursorUp = content.includes('\u001b[1A');
-                        const hasClearLine = content.includes('\u001b[2K');
-                        const hasProgressSymbols = /[✻✽✳✢✶⚒]/u.test(content);
-                        const hasEnchanting = content.includes('Enchanting');
-                        const hasCombobulating = content.includes('Combobulating');
-                        
-                        if (hasCarriageReturn || hasCursorUp || hasClearLine || hasProgressSymbols || hasEnchanting || hasCombobulating) {
-                            console.log('🔍 CLAUDE PROGRESS INDICATOR DETECTED:', {
-                                time: parsed[0],
-                                hasCarriageReturn,
-                                hasCursorUp,
-                                hasClearLine, 
-                                hasProgressSymbols,
-                                hasEnchanting,
-                                hasCombobulating,
-                                contentPreview: content.substring(0, 100),
-                                contentLength: content.length
-                            });
-                        }
-                    }
                 } catch (e) {
                     console.log('DEBUG: Not JSON, raw data length:', event.data.length);
                 }
