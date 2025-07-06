@@ -139,6 +139,34 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
             let agent_pool_clone = Arc::clone(&agent_pool);
 
             let handle = tokio::spawn(async move {
+                // Execute immediately on startup
+                println!(
+                    "⏰ Executing periodic entry immediately on startup: {}",
+                    entry_clone.name
+                );
+                if let Some(agent) = agent_pool_clone.get_idle_agent().await {
+                    println!(
+                        "🔄 Setting agent {} to Active for startup periodic entry",
+                        agent.get_id()
+                    );
+                    agent.set_status(agent::AgentStatus::Active).await;
+                    if let Err(e) =
+                        execute_periodic_entry(&entry_clone, &queue_manager_clone, Some(&agent))
+                            .await
+                    {
+                        eprintln!(
+                            "❌ Error executing startup periodic entry '{}': {}",
+                            entry_clone.name, e
+                        );
+                    }
+                } else {
+                    println!(
+                        "⚠️ No idle agent available for startup periodic entry: {}",
+                        entry_clone.name
+                    );
+                }
+
+                // Continue with periodic execution
                 let mut timer = interval(period);
                 loop {
                     timer.tick().await;
