@@ -1,4 +1,4 @@
-use crate::ruler::types::{compile_action, ActionType};
+use crate::ruler::types::{ActionType, compile_action};
 use anyhow::{Context, Result};
 use regex::Regex;
 use serde::Deserialize;

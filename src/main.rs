@@ -8,12 +8,12 @@ mod web_ui;
 use anyhow::{Context, Result};
 use clap::Parser;
 use cli::{
-    execute_entry_action, execute_periodic_entry, process_pty_output,
-    resolve_entry_task_placeholders, Cli, Commands,
+    Cli, Commands, execute_entry_action, execute_periodic_entry, process_pty_output,
+    resolve_entry_task_placeholders,
 };
 use queue::create_shared_manager;
-use ruler::entry::TriggerType;
 use ruler::Ruler;
+use ruler::entry::TriggerType;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::signal;

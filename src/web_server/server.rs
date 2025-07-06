@@ -3,11 +3,11 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use axum::{
+    Router,
     extract::{State, WebSocketUpgrade},
     http::StatusCode,
     response::{Html, Json, Response},
     routing::{get, post},
-    Router,
 };
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;

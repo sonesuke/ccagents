@@ -1,7 +1,7 @@
 [package]
 name = "ccauto"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 authors = ["sonesuke <iamsonesuke@gmail.com>"]
 description = "YAML-driven agent auto-control system (command-line tool)"
 license = "MIT"
@@ -13,16 +13,13 @@ path = "src/main.rs"
 
 [dependencies]
 # Core dependencies
-tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "signal", "fs", "time", "sync", "process", "io-util"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_yaml = "0.9"
-regex = "1.0"
-anyhow = "1.0"
+tokio = { version = "1.46", features = ["rt-multi-thread", "macros", "signal", "fs", "time", "sync", "process", "io-util"] }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_yml = "0.0.12"
+regex = "1.10"
+anyhow = "1.0.98"
 thiserror = "1.0"
-clap = { version = "4.0", features = ["derive"] }
-
-# File watching
-notify = "6.0"
+clap = { version = "4.5", features = ["derive"] }
 
 # Logging
 tracing = "0.1"
@@ -30,35 +27,18 @@ tracing-subscriber = "0.3"
 
 # Process management for HT integration
 serde_json = "1.0"
-async-trait = "0.1"
-
-# Directory utilities
-dirs = "5.0"
-
-# Binary location
-which = "6.0"
-
-# Hash for output deduplication
-md5 = "0.7"
 
 # Terminal emulation dependencies
-portable-pty = "0.8"
-vt100 = "0.15"
-bytes = "1.7"
-libc = "0.2"
-nix = { version = "0.27", features = ["signal", "process"] }
-tokio-util = { version = "0.7", features = ["compat"] }
+portable-pty = "0.9"
+vt100 = "0.15.2"
+bytes = "1.10"
+nix = { version = "0.30", features = ["signal", "process"] }
 
 # Web UI dependencies
-axum = { version = "0.7", features = ["ws", "json", "tower-log"] }
+axum = { version = "0.8", features = ["ws", "json", "tower-log"] }
 tower = { version = "0.4", features = ["util"] }
 tower-http = { version = "0.5", features = ["cors", "fs"] }
-hyper = { version = "1.0", features = ["full"] }
-tokio-tungstenite = { version = "0.21", features = ["native-tls"] }
 futures-util = "0.3"
-tokio-stream = { version = "0.1", features = ["sync"] }
 
 [dev-dependencies]
-tempfile = "3.0"
-tokio-test = "0.4"
 cargo-husky = { version = "1", default-features = false, features = ["precommit-hook", "run-cargo-test", "run-cargo-clippy", "run-cargo-fmt"] }

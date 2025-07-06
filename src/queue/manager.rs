@@ -1,6 +1,6 @@
 //! Queue manager for handling multiple named queues with event notifications
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};

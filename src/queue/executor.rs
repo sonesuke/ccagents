@@ -1,7 +1,7 @@
 //! Command execution and queue integration
 
 use super::SharedQueueManager;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::process::Stdio;
 use tokio::process::Command;
 use tracing::{debug, error, info};

@@ -103,7 +103,7 @@ pub fn load_config(path: &Path) -> Result<(Vec<CompiledEntry>, Vec<CompiledRule>
         .with_context(|| format!("Failed to read config file: {}", path.display()))?;
 
     let config_file: ConfigFile =
-        serde_yaml::from_str(&content).with_context(|| "Failed to parse YAML config file")?;
+        serde_yml::from_str(&content).with_context(|| "Failed to parse YAML config file")?;
 
     let mut compiled_entries = Vec::new();
     for entry in config_file.agents.triggers {
