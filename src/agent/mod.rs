@@ -5,6 +5,7 @@ pub mod pty_terminal;
 use crate::agent::pty_process::{PtyProcess, PtyProcessConfig};
 use crate::ruler::config::MonitorConfig;
 use anyhow::Result;
+use std::process::Command;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc, RwLock,
@@ -74,17 +75,6 @@ impl AgentPool {
         }
         None
     }
-
-    /// Get all active agents
-    pub async fn get_active_agents(&self) -> Vec<Arc<Agent>> {
-        let mut active_agents = Vec::new();
-        for agent in &self.agents {
-            if agent.get_status().await == AgentStatus::Active {
-                active_agents.push(Arc::clone(agent));
-            }
-        }
-        active_agents
-    }
 }
 
 pub struct Agent {
@@ -93,6 +83,7 @@ pub struct Agent {
     cols: u16,
     rows: u16,
     status: RwLock<AgentStatus>,
+    command_start_time: RwLock<Option<std::time::Instant>>,
 }
 
 impl Agent {
@@ -122,6 +113,7 @@ impl Agent {
             cols,
             rows,
             status: RwLock::new(AgentStatus::Idle),
+            command_start_time: RwLock::new(None),
         })
     }
 
@@ -182,6 +174,14 @@ impl Agent {
         &self.id
     }
 
+    /// Get the shell PID
+    pub async fn get_shell_pid(&self) -> Result<Option<u32>> {
+        self.ht_process
+            .get_shell_pid()
+            .await
+            .map_err(|e| anyhow::anyhow!(e))
+    }
+
     /// Get the current status of the agent
     #[allow(dead_code)]
     pub async fn get_status(&self) -> AgentStatus {
@@ -192,6 +192,77 @@ impl Agent {
     pub async fn set_status(&self, new_status: AgentStatus) {
         let mut status = self.status.write().unwrap();
         *status = new_status;
+    }
+
+    /// Start tracking a command execution (using shell monitoring)
+    pub async fn start_command_tracking(&self, _shell_pid: Option<u32>) {
+        // We now monitor child processes instead of specific PIDs
+        if let Ok(mut start_time) = self.command_start_time.write() {
+            *start_time = Some(std::time::Instant::now());
+        }
+        tracing::info!(
+            "🚀 Agent {} started command tracking (child process monitoring)",
+            self.id
+        );
+    }
+
+    /// Stop tracking command execution
+    pub async fn stop_command_tracking(&self) {
+        if let Ok(mut start_time) = self.command_start_time.write() {
+            *start_time = None;
+        }
+        tracing::info!("🏁 Agent {} stopped command tracking", self.id);
+    }
+
+    /// Monitor command completion by checking child processes of the shell
+    pub async fn monitor_command_completion(&self) {
+        // Get the shell PID
+        if let Ok(Some(shell_pid)) = self.get_shell_pid().await {
+            // Get current child processes of the shell
+            let child_pids = get_child_processes(shell_pid);
+
+            if child_pids.is_empty() {
+                // No child processes = shell is at prompt = command completed
+                tracing::info!(
+                    "💀 Agent {} detected command completion (no child processes)",
+                    self.id
+                );
+                self.stop_command_tracking().await;
+                self.set_status(AgentStatus::Idle).await;
+            } else {
+                // Child processes still running = command still active
+                tracing::debug!(
+                    "🔄 Agent {} has active child processes: {:?}",
+                    self.id,
+                    child_pids
+                );
+            }
+        } else {
+            tracing::debug!("❌ Agent {} could not get shell PID", self.id);
+        }
+    }
+}
+
+/// Get child processes of a given parent PID
+fn get_child_processes(parent_pid: u32) -> Vec<u32> {
+    let output = Command::new("pgrep")
+        .arg("-P")
+        .arg(parent_pid.to_string())
+        .output();
+
+    match output {
+        Ok(output) => String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .filter_map(|line| line.trim().parse::<u32>().ok())
+            .collect(),
+        Err(e) => {
+            tracing::debug!(
+                "Failed to get child processes for PID {}: {}",
+                parent_pid,
+                e
+            );
+            Vec::new()
+        }
     }
 }
 

@@ -161,24 +161,17 @@ async fn get_terminal_size(
 async fn get_agent_status(
     State((agent, _)): State<(Arc<Agent>, AssetCache)>,
 ) -> Json<AgentStatusResponse> {
-    // Try to get screen contents to determine if agent is active
-    match agent.get_screen_contents().await {
-        Ok(content) => {
-            if content.trim().is_empty() {
-                Json(AgentStatusResponse {
-                    state: "Idle".to_string(),
-                    message: "Ready for commands".to_string(),
-                })
-            } else {
-                Json(AgentStatusResponse {
-                    state: "Active".to_string(),
-                    message: "Terminal session running".to_string(),
-                })
-            }
-        }
-        Err(_) => Json(AgentStatusResponse {
-            state: "Error".to_string(),
-            message: "Terminal not available".to_string(),
-        }),
-    }
+    // Get actual agent status
+    let status = agent.get_status().await;
+    let state = match status {
+        crate::agent::AgentStatus::Idle => "Idle",
+        crate::agent::AgentStatus::Active => "Active",
+    };
+
+    info!("📊 Agent status request: {}", state);
+
+    Json(AgentStatusResponse {
+        state: state.to_string(),
+        message: format!("Agent is {}", state.to_lowercase()),
+    })
 }

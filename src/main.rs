@@ -20,18 +20,6 @@ use tokio::signal;
 use tokio::time::interval;
 use web_server::WebServer;
 
-/// Check if the terminal output indicates return to bash prompt
-fn is_back_to_bash(output: &str) -> bool {
-    // Basic patterns that indicate return to bash
-    // This is a simple heuristic and may need refinement
-    output.contains("$ ")
-        || output.contains("% ")
-        || output.contains("> ")
-        || output.ends_with("$ ")
-        || output.ends_with("% ")
-        || output.ends_with("> ")
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     // Parse command line arguments first to get debug flag
@@ -129,6 +117,10 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
         println!("🎬 Executing on_start entries...");
         for entry in on_start_entries {
             if let Some(agent) = agent_pool.get_idle_agent().await {
+                println!(
+                    "🔄 Setting agent {} to Active for startup entry",
+                    agent.get_id()
+                );
                 agent.set_status(agent::AgentStatus::Active).await;
                 execute_entry_action(&agent, &entry, &queue_manager).await?;
             } else {
@@ -155,6 +147,10 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
                     timer.tick().await;
                     println!("⏰ Executing periodic entry: {}", entry_clone.name);
                     if let Some(agent) = agent_pool_clone.get_idle_agent().await {
+                        println!(
+                            "🔄 Setting agent {} to Active for periodic entry",
+                            agent.get_id()
+                        );
                         agent.set_status(agent::AgentStatus::Active).await;
                         if let Err(e) =
                             execute_periodic_entry(&entry_clone, &queue_manager_clone, Some(&agent))
@@ -210,6 +206,10 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
 
                     // Execute the entry action with resolved placeholders
                     if let Some(agent) = agent_pool_clone.get_idle_agent().await {
+                        println!(
+                            "🔄 Setting agent {} to Active for queue entry",
+                            agent.get_id()
+                        );
                         agent.set_status(agent::AgentStatus::Active).await;
                         if let Err(e) =
                             execute_entry_action(&agent, &resolved_entry, &queue_manager_clone)
@@ -239,22 +239,73 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
     let queue_manager_for_monitoring = queue_manager.clone();
 
     let monitoring_handle = tokio::spawn(async move {
+        let mut last_status_log = std::time::Instant::now();
+
+        // Create persistent receivers for each agent at startup
+        let mut agent_receivers = Vec::new();
+        for i in 0..agent_pool_for_monitoring.size() {
+            let agent = agent_pool_for_monitoring.get_agent_by_index(i);
+            match agent.get_pty_string_receiver().await {
+                Ok(rx) => {
+                    tracing::info!(
+                        "✅ Agent {} persistent string receiver created",
+                        agent.get_id()
+                    );
+                    agent_receivers.push(Some(rx));
+                }
+                Err(e) => {
+                    tracing::error!(
+                        "❌ Agent {} failed to create string receiver: {}",
+                        agent.get_id(),
+                        e
+                    );
+                    agent_receivers.push(None);
+                }
+            }
+        }
+
         loop {
-            // Monitor active agents for rule matching
-            let active_agents = agent_pool_for_monitoring.get_active_agents().await;
-            for agent in active_agents {
-                // Get PTY string receiver for rule matching
-                if let Ok(mut rx) = agent.get_pty_string_receiver().await {
+            // Log agent statuses periodically (every 5 seconds)
+            if last_status_log.elapsed() > std::time::Duration::from_secs(5) {
+                for i in 0..agent_pool_for_monitoring.size() {
+                    let agent = agent_pool_for_monitoring.get_agent_by_index(i);
+                    let status = agent.get_status().await;
+                    tracing::info!("📊 Agent {} status: {:?}", agent.get_id(), status);
+                }
+                last_status_log = std::time::Instant::now();
+            }
+
+            // Monitor all agents for rule matching using persistent receivers
+            for i in 0..agent_pool_for_monitoring.size() {
+                let agent = agent_pool_for_monitoring.get_agent_by_index(i);
+                let current_status = agent.get_status().await;
+
+                // Use the persistent receiver for this agent
+                if let Some(ref mut rx) = agent_receivers.get_mut(i).and_then(|r| r.as_mut()) {
                     // Check for new output (non-blocking)
-                    if let Ok(pty_output) = rx.try_recv() {
-                        // Check if agent returned to bash (basic detection)
-                        if is_back_to_bash(&pty_output) {
-                            agent.set_status(agent::AgentStatus::Idle).await;
-                            tracing::debug!("🔄 Agent {} returned to Idle", agent.get_id());
-                            continue;
+                    let mut received_any = false;
+                    while let Ok(pty_output) = rx.try_recv() {
+                        received_any = true;
+                        tracing::debug!(
+                            "📝 Agent {} ({:?}) received PTY output: {} bytes: '{}'",
+                            agent.get_id(),
+                            current_status,
+                            pty_output.len(),
+                            pty_output.chars().take(50).collect::<String>()
+                        );
+
+                        // For Active agents, monitor command completion via process monitoring
+                        if current_status == agent::AgentStatus::Active {
+                            agent.monitor_command_completion().await;
                         }
 
-                        // Process rules for active agents
+                        // Process rules for all agents (both Active and Idle)
+                        // This ensures rules are processed even during startup
+                        tracing::debug!(
+                            "🔍 Processing rules for agent {} ({:?})",
+                            agent.get_id(),
+                            current_status
+                        );
                         if let Err(e) = process_pty_output(
                             &pty_output,
                             &agent,
@@ -266,11 +317,21 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
                             tracing::debug!("❌ Error processing PTY output: {}", e);
                         }
                     }
+
+                    if received_any {
+                        tracing::debug!(
+                            "✅ Agent {} processed {} data chunks",
+                            agent.get_id(),
+                            "some"
+                        );
+                    }
+                } else {
+                    tracing::debug!("❌ Agent {} has no valid string receiver", agent.get_id());
                 }
             }
 
             // Small delay to prevent busy waiting
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
         }
     });
 

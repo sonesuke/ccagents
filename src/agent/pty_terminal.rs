@@ -279,6 +279,16 @@ impl PtyTerminal {
         let formatted_bytes = screen.contents_formatted();
         Ok(String::from_utf8_lossy(&formatted_bytes).to_string())
     }
+
+    /// Get the PID of the shell process
+    pub async fn get_shell_pid(&self) -> Result<Option<u32>> {
+        let child_guard = self.child_process.lock().await;
+        if let Some(child) = child_guard.as_ref() {
+            Ok(child.process_id())
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 impl Drop for PtyTerminal {

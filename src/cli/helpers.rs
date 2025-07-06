@@ -79,6 +79,11 @@ pub async fn execute_entry_action(
                 tracing::debug!("  Key {}: {:?}", i, key);
             }
 
+            // Start command tracking before sending keys
+            if let Ok(shell_pid) = agent.get_shell_pid().await {
+                agent.start_command_tracking(shell_pid).await;
+            }
+
             for key in keys {
                 tracing::debug!("📤 Sending individual key: {:?}", key);
 
@@ -181,6 +186,11 @@ pub async fn execute_rule_action(
                         .unwrap()
                         .as_secs()
                 );
+
+                // Start command tracking before sending keys for rule actions too
+                if let Ok(shell_pid) = agent.get_shell_pid().await {
+                    agent.start_command_tracking(shell_pid).await;
+                }
 
                 // Send the keys to the terminal
                 for (i, key) in keys.iter().enumerate() {

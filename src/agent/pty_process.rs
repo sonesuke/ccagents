@@ -180,6 +180,20 @@ impl PtyProcess {
             Err(PtyProcessError::NotRunning)
         }
     }
+
+    /// Get the PID of the shell process
+    pub async fn get_shell_pid(&self) -> Result<Option<u32>, PtyProcessError> {
+        let session_lock = self.session.lock().await;
+
+        if let Some(session) = session_lock.as_ref() {
+            session
+                .get_shell_pid()
+                .await
+                .map_err(|e| PtyProcessError::CommunicationError(e.to_string()))
+        } else {
+            Err(PtyProcessError::NotRunning)
+        }
+    }
 }
 
 async fn event_processor(
