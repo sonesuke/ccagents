@@ -80,6 +80,57 @@ cargo test -- --nocapture
 cargo test test_name
 ```
 
+### Test Coverage
+
+The project uses `cargo-llvm-cov` for comprehensive test coverage measurement:
+
+#### Coverage Tools Setup
+```bash
+# Install cargo-llvm-cov (if not already installed)
+cargo install cargo-llvm-cov
+
+# Ensure llvm-tools-preview component is installed
+rustup component add llvm-tools-preview
+```
+
+#### Local Coverage Commands
+```bash
+# Generate coverage report in terminal
+cargo llvm-cov
+
+# Generate HTML coverage report
+cargo llvm-cov --html --output-dir target/coverage/html
+
+# Generate and open HTML report in browser
+cargo llvm-cov --open
+
+# Generate LCOV format for CI/CD integration
+cargo llvm-cov --lcov --output-path target/lcov.info
+
+# Generate summary only
+cargo llvm-cov --summary-only
+
+# Using Makefile shortcuts
+make coverage        # Generate LCOV report
+```
+
+#### Coverage Requirements
+- **Line Coverage**: Minimum 75% target (current: ~23%)
+- **Function Coverage**: Minimum 70% target (current: ~25%)
+- **Region Coverage**: Target 70% (current: ~15%)
+
+#### Coverage Integration
+- GitHub Actions automatically generates coverage reports
+- LCOV reports are uploaded to Codecov for detailed analysis
+- PR comments show coverage changes and impact
+- Coverage thresholds are enforced via codecov.yml configuration
+
+#### Files Excluded from Coverage
+- `tests/` directory (test files themselves)
+- `examples/` directory
+- `target/` directory
+- Generated code and build artifacts
+
 ## CI/CD
 
 GitHub Actions runs the same checks as pre-commit hooks. To avoid CI failures:

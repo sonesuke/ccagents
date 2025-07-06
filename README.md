@@ -155,6 +155,34 @@ cargo fmt                      # Code must be properly formatted
 
 **Important**: Never bypass pre-commit hooks with `--no-verify`.
 
+### Test Coverage
+
+The project uses `cargo-llvm-cov` for comprehensive test coverage measurement:
+
+```bash
+# Generate coverage report in terminal
+cargo llvm-cov
+
+# Generate HTML coverage report
+cargo llvm-cov --html --output-dir target/coverage/html
+
+# Generate and open HTML report in browser
+cargo llvm-cov --open
+
+# Generate LCOV format for CI/CD integration
+cargo llvm-cov --lcov --output-path target/lcov.info
+
+# Using Makefile shortcuts
+make coverage        # Generate LCOV report
+```
+
+**Coverage Targets:**
+- **Line Coverage**: Minimum 75% (currently 23.34%)
+- **Function Coverage**: Minimum 70% (currently 25.47%)
+- **Region Coverage**: Target 70% (currently 15.13%)
+
+Coverage reports are automatically generated in CI/CD and uploaded to [Codecov](https://codecov.io).
+
 ### Working with Git Worktrees
 
 For feature development, use git worktrees:

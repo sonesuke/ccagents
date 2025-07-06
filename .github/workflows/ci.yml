@@ -27,6 +27,25 @@ jobs:
     - name: Check formatting
       run: cargo fmt -- --check
 
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@1.86.0
+      with:
+        components: rustfmt, clippy, llvm-tools-preview
+    - uses: Swatinem/rust-cache@v2
+    - name: Install cargo-llvm-cov
+      run: cargo install cargo-llvm-cov
+    - name: Generate coverage report
+      run: cargo llvm-cov --lcov --output-path lcov.info
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        files: lcov.info
+        fail_ci_if_error: true
+        token: ${{ secrets.CODECOV_TOKEN }}
+
   build:
     runs-on: ubuntu-latest
     steps:
