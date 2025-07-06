@@ -6,44 +6,55 @@
 # 3. In-memory deduplication prevents duplicate processing
 # 4. Automatic queue processing with <task> variable expansion
 #
-# Usage: cargo run -- --rules examples/dedupe_queue/dedupe_example.yaml
+# Usage: cargo run -- --config examples/dedupe_queue/config.yaml
 
-entries:
-  # 1. Periodic Item Generation with Deduplication
-  # Executes generate_items.sh every 8 seconds and adds ONLY unique results to pending_items queue
-  - name: "item_generator"
-    trigger: "periodic"
-    interval: "8s"
-    action: "enqueue_dedupe"
-    queue: "pending_items"
-    command: "bash examples/dedupe_queue/generate_items.sh"
+# Web UI configuration
+web_ui:
+  enabled: true
+  host: "localhost"
+  base_port: 9990
+  cols: 80
+  rows: 24
 
-  # 2. Dedupe Queue Processing
-  # Processes each unique item when it's added to the pending_items queue
-  # Uses <task> placeholder which gets replaced with the actual item value
-  - name: "item_processor"
-    trigger: "enqueue:pending_items"
-    action: "send_keys"
-    keys: ["echo 'Processing unique: <task>'", "\r", "bash examples/dedupe_queue/process_item.sh <task>", "\r"]
+# Agent configuration
+agents:
+  pool: 1
+  
+  triggers:
+    # 1. Periodic Item Generation with Deduplication
+    # Executes generate_items.sh every 8 seconds and adds ONLY unique results to pending_items queue
+    - name: "item_generator"
+      event: "timer:8s"
+      action: "enqueue_dedupe"
+      queue: "pending_items"
+      command: "bash examples/dedupe_queue/generate_items.sh"
 
-  # 3. Completed Item Logging
-  # Processes completed items for logging
-  - name: "completed_logger"
-    trigger: "enqueue:completed_items"
-    action: "send_keys"
-    keys: ["echo 'Logged unique: <task>'", "\r"]
+    # 2. Dedupe Queue Processing
+    # Processes each unique item when it's added to the pending_items queue
+    # Uses <task> placeholder which gets replaced with the actual item value
+    - name: "item_processor"
+      event: "queue:pending_items"
+      action: "send_keys"
+      keys: ["echo 'Processing unique: <task>'", "\r", "bash examples/dedupe_queue/process_item.sh <task>", "\r"]
 
-rules:
-  # 4. Rule-based Enqueuing for Completed Items
-  # When item processing shows "Status: processed", capture and log it
-  - pattern: "Status: processed"
-    action: "enqueue"
-    queue: "completed_items"
-    command: "echo 'Item completed at: $(date)'"
+    # 3. Completed Item Logging
+    # Processes completed items for logging
+    - name: "completed_logger"
+      event: "queue:completed_items"
+      action: "send_keys"
+      keys: ["echo 'Logged unique: <task>'", "\r"]
 
-  # 5. Capture Processed Items with Variables
-  # Captures specific item IDs from output and processes them
-  - pattern: "Processing unique item: (item-\\d+)"
-    action: "enqueue"
-    queue: "processed_items"
-    command: "echo 'Processed: ${1}'"
+  rules:
+    # 4. Rule-based Enqueuing for Completed Items
+    # When item processing shows "Status: processed", capture and log it
+    - when: "Status: processed"
+      action: "enqueue"
+      queue: "completed_items"
+      command: "echo 'Item completed at: $(date)'"
+
+    # 5. Capture Processed Items with Variables
+    # Captures specific item IDs from output and processes them
+    - when: "Processing unique item: (item-\\d+)"
+      action: "enqueue"
+      queue: "processed_items"
+      command: "echo 'Processed: ${1}'"

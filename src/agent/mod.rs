@@ -7,8 +7,15 @@ use crate::ruler::config::MonitorConfig;
 use anyhow::Result;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    Arc,
+    Arc, RwLock,
 };
+
+/// Agent status enumeration
+#[derive(Debug, Clone, PartialEq)]
+pub enum AgentStatus {
+    Idle,   // Waiting and monitoring triggers
+    Active, // Executing tasks and monitoring rules
+}
 
 /// Agent pool for managing multiple agents in parallel
 pub struct AgentPool {
@@ -55,9 +62,43 @@ impl AgentPool {
     pub fn get_agent_by_index(&self, index: usize) -> Arc<Agent> {
         Arc::clone(&self.agents[index % self.agents.len()])
     }
+
+    /// Get an idle agent from the pool
+    pub async fn get_idle_agent(&self) -> Option<Arc<Agent>> {
+        for agent in &self.agents {
+            if agent.is_idle().await {
+                return Some(Arc::clone(agent));
+            }
+        }
+        None
+    }
+
+    /// Get all active agents
+    pub async fn get_active_agents(&self) -> Vec<Arc<Agent>> {
+        let mut active_agents = Vec::new();
+        for agent in &self.agents {
+            if agent.is_active().await {
+                active_agents.push(Arc::clone(agent));
+            }
+        }
+        active_agents
+    }
+
+    /// Get status of all agents
+    #[allow(dead_code)]
+    pub async fn get_agent_statuses(&self) -> Vec<(String, AgentStatus)> {
+        let mut statuses = Vec::new();
+        for agent in &self.agents {
+            let status = agent.get_status().await;
+            statuses.push((agent.get_id().to_string(), status));
+        }
+        statuses
+    }
 }
 
 pub struct Agent {
+    id: String,
+    status: Arc<RwLock<AgentStatus>>,
     ht_process: PtyProcess,
     cols: u16,
     rows: u16,
@@ -65,7 +106,7 @@ pub struct Agent {
 
 impl Agent {
     pub async fn new(
-        _id: String,
+        id: String,
         test_mode: bool,
         _port: u16,
         cols: u16,
@@ -85,6 +126,8 @@ impl Agent {
         }
 
         Ok(Agent {
+            id,
+            status: Arc::new(RwLock::new(AgentStatus::Idle)),
             ht_process,
             cols,
             rows,
@@ -134,6 +177,33 @@ impl Agent {
             .get_pty_output_receiver()
             .await
             .map_err(|e| anyhow::anyhow!(e))
+    }
+
+    /// Get the current status of the agent
+    #[allow(dead_code)]
+    pub async fn get_status(&self) -> AgentStatus {
+        self.status.read().unwrap().clone()
+    }
+
+    /// Set the status of the agent
+    pub async fn set_status(&self, new_status: AgentStatus) {
+        *self.status.write().unwrap() = new_status.clone();
+        tracing::debug!("🔄 Agent {} status changed to {:?}", self.id, new_status);
+    }
+
+    /// Check if the agent is idle
+    pub async fn is_idle(&self) -> bool {
+        *self.status.read().unwrap() == AgentStatus::Idle
+    }
+
+    /// Check if the agent is active
+    pub async fn is_active(&self) -> bool {
+        *self.status.read().unwrap() == AgentStatus::Active
+    }
+
+    /// Get agent ID
+    pub fn get_id(&self) -> &str {
+        &self.id
     }
 }
 

@@ -1,19 +1,30 @@
-# Entry and Rule definitions for agent automation
+# Basic agent automation configuration
 
-# External triggers - initiated by user commands
-entries:
-  - name: "start_mock"
-    trigger: "on_start"
-    action: "send_keys"
-    keys: ["bash examples/basic/mock.sh", "\r"]
+# Web UI settings
+web_ui:
+  enabled: true
+  host: "localhost"
+  base_port: 9990
+  cols: 80
+  rows: 24
 
-# Automatic detection rules - triggered by terminal state changes
-# Higher priority = earlier in the list (line order matters)
-rules:
-  - pattern: "Do you want to proceed"
-    action: "send_keys"
-    keys: ["1", "\r"]
-    
-  - pattern: "^exit$"
-    action: "send_keys"
-    keys: ["/exit", "\r"]
+# Agent configuration and automation
+agents:
+  pool: 1
+  
+  # Triggers for starting automation
+  triggers:
+    - name: "start_mock"
+      event: "startup"
+      action: "send_keys"
+      keys: ["bash examples/basic/mock.sh", "\r"]
+  
+  # Rules for responding to terminal output
+  rules:
+    - when: "Do you want to proceed"
+      action: "send_keys"
+      keys: ["1", "\r"]
+      
+    - when: "^exit$"
+      action: "send_keys"
+      keys: ["/exit", "\r"]
