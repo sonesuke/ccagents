@@ -296,6 +296,21 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
                 }
             }
 
+            // Check for timeout rule triggers periodically
+            if agent_pool_for_monitoring.size() > 0 {
+                let agent = agent_pool_for_monitoring.get_agent_by_index(0);
+                let timeout_actions = ruler_for_monitoring.check_timeout_rules().await;
+                for action in timeout_actions {
+                    tracing::info!("⏰ Executing timeout rule action: {:?}", action);
+                    if let Err(e) =
+                        cli::execute_rule_action(&action, &agent, &queue_manager_for_monitoring)
+                            .await
+                    {
+                        tracing::error!("❌ Error executing timeout rule action: {}", e);
+                    }
+                }
+            }
+
             // Small delay to prevent busy waiting
             tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
         }
@@ -351,7 +366,13 @@ async fn handle_show_command(args: &cli::ShowArgs) -> Result<()> {
     if !rules.is_empty() {
         println!("\nRules:");
         for (i, rule) in rules.iter().enumerate() {
-            println!("  {}: {} -> {:?}", i + 1, rule.regex.as_str(), rule.action);
+            let rule_description = match &rule.rule_type {
+                crate::ruler::rule::RuleType::Pattern(regex) => regex.as_str().to_string(),
+                crate::ruler::rule::RuleType::DiffTimeout(duration) => {
+                    format!("timeout:{:?}", duration)
+                }
+            };
+            println!("  {}: {} -> {:?}", i + 1, rule_description, rule.action);
         }
     }
 

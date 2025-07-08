@@ -5,17 +5,18 @@ pub mod rule;
 pub mod types;
 
 use crate::ruler::config::load_config;
-use crate::ruler::decision::decide_action;
+use crate::ruler::decision::{TimeoutState, decide_action, decide_action_with_timeout};
 use crate::ruler::entry::{CompiledEntry, TriggerType};
 use crate::ruler::rule::CompiledRule;
 use crate::ruler::types::ActionType;
 use anyhow::Result;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 pub struct Ruler {
     entries: Arc<RwLock<Vec<CompiledEntry>>>,
     rules: Arc<RwLock<Vec<CompiledRule>>>,
+    timeout_state: Arc<Mutex<TimeoutState>>,
     test_mode: bool,
     // Monitor configuration
     monitor_config: config::MonitorConfig,
@@ -50,6 +51,7 @@ impl Ruler {
         Ok(Ruler {
             entries,
             rules,
+            timeout_state: Arc::new(Mutex::new(TimeoutState::new())),
             test_mode: is_test,
             monitor_config,
         })
@@ -79,9 +81,24 @@ impl Ruler {
             .collect()
     }
 
+    #[allow(dead_code)]
     pub async fn decide_action_for_capture(&self, capture: &str) -> ActionType {
         let rules = self.get_rules().await;
         decide_action(capture, &rules)
+    }
+
+    /// Enhanced decision function that handles both pattern matching and timeout rules
+    pub async fn decide_actions_with_timeout(&self, capture: &str) -> Vec<ActionType> {
+        let rules = self.get_rules().await;
+        let mut timeout_state = self.timeout_state.lock().await;
+        decide_action_with_timeout(capture, &rules, &mut timeout_state)
+    }
+
+    /// Check only timeout rules (useful for periodic checks)
+    pub async fn check_timeout_rules(&self) -> Vec<ActionType> {
+        let rules = self.get_rules().await;
+        let mut timeout_state = self.timeout_state.lock().await;
+        crate::ruler::decision::check_timeout_rules(&rules, &mut timeout_state)
     }
 
     /// Get monitor configuration
