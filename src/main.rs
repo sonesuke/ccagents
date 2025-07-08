@@ -171,26 +171,49 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
                 loop {
                     timer.tick().await;
                     println!("⏰ Executing periodic entry: {}", entry_clone.name);
-                    if let Some(agent) = agent_pool_clone.get_idle_agent().await {
-                        println!(
-                            "🔄 Setting agent {} to Active for periodic entry",
-                            agent.get_id()
-                        );
-                        agent.set_status(agent::AgentStatus::Active).await;
-                        if let Err(e) =
-                            execute_periodic_entry(&entry_clone, &queue_manager_clone, Some(&agent))
+
+                    // Check if there's data to process before setting agent to Active
+                    match cli::has_data_to_process(&entry_clone).await {
+                        Ok(true) => {
+                            // Only proceed if there's data to process
+                            if let Some(agent) = agent_pool_clone.get_idle_agent().await {
+                                println!(
+                                    "🔄 Setting agent {} to Active for periodic entry",
+                                    agent.get_id()
+                                );
+                                agent.set_status(agent::AgentStatus::Active).await;
+                                if let Err(e) = execute_periodic_entry(
+                                    &entry_clone,
+                                    &queue_manager_clone,
+                                    Some(&agent),
+                                )
                                 .await
-                        {
+                                {
+                                    eprintln!(
+                                        "❌ Error executing periodic entry '{}': {}",
+                                        entry_clone.name, e
+                                    );
+                                }
+                            } else {
+                                println!(
+                                    "⚠️ No idle agent available for periodic entry: {}",
+                                    entry_clone.name
+                                );
+                            }
+                        }
+                        Ok(false) => {
+                            // No data to process, agent remains idle
+                            println!(
+                                "ℹ️ No data to process for periodic entry: {}",
+                                entry_clone.name
+                            );
+                        }
+                        Err(e) => {
                             eprintln!(
-                                "❌ Error executing periodic entry '{}': {}",
+                                "❌ Error checking data for periodic entry '{}': {}",
                                 entry_clone.name, e
                             );
                         }
-                    } else {
-                        println!(
-                            "⚠️ No idle agent available for periodic entry: {}",
-                            entry_clone.name
-                        );
                     }
                 }
             });

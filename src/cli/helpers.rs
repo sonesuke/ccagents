@@ -6,6 +6,35 @@ use std::collections::HashSet;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Check if a periodic entry will produce data to process
+pub async fn has_data_to_process(entry: &ruler::entry::CompiledEntry) -> Result<bool> {
+    // If there's no source command, we consider it as having data to process
+    if entry.source.is_none() {
+        return Ok(true);
+    }
+
+    if let Some(source) = &entry.source {
+        // Execute the source command
+        let output = Command::new("sh").arg("-c").arg(source).output()?;
+
+        if !output.status.success() {
+            return Ok(false);
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let lines: Vec<String> = stdout
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(|s| s.to_string())
+            .collect();
+
+        // Return true if we have any lines to process
+        Ok(!lines.is_empty())
+    } else {
+        Ok(true)
+    }
+}
+
 /// Execute a periodic entry action (with agent context)
 pub async fn execute_periodic_entry(
     entry: &ruler::entry::CompiledEntry,
@@ -335,4 +364,107 @@ pub async fn process_pty_output(
 fn strip_ansi_escapes(text: &str) -> String {
     let ansi_regex = regex::Regex::new(r"\x1b\[[0-9;]*[mGKHF]").unwrap();
     ansi_regex.replace_all(text, "").to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ruler::entry::{CompiledEntry, TriggerType};
+    use crate::ruler::types::ActionType;
+    use std::time::Duration;
+
+    #[tokio::test]
+    async fn test_has_data_to_process_with_no_source() {
+        // Create a compiled entry without a source command
+        let entry = CompiledEntry {
+            name: "test_entry".to_string(),
+            trigger: TriggerType::Periodic {
+                interval: Duration::from_secs(10),
+            },
+            source: None,
+            action: ActionType::SendKeys(vec!["echo test".to_string()]),
+            dedupe: false,
+        };
+
+        // Should return true for entries without source commands
+        let result = has_data_to_process(&entry).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_has_data_to_process_with_empty_source() {
+        // Create a compiled entry with a source command that returns empty output
+        let entry = CompiledEntry {
+            name: "test_entry".to_string(),
+            trigger: TriggerType::Periodic {
+                interval: Duration::from_secs(10),
+            },
+            source: Some("true".to_string()), // true command produces no output
+            action: ActionType::SendKeys(vec!["echo test".to_string()]),
+            dedupe: false,
+        };
+
+        // Should return false for source commands that produce no output
+        let result = has_data_to_process(&entry).await;
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_has_data_to_process_with_data() {
+        // Create a compiled entry with a source command that returns data
+        let entry = CompiledEntry {
+            name: "test_entry".to_string(),
+            trigger: TriggerType::Periodic {
+                interval: Duration::from_secs(10),
+            },
+            source: Some("echo 'test line'".to_string()),
+            action: ActionType::SendKeys(vec!["echo test".to_string()]),
+            dedupe: false,
+        };
+
+        // Should return true for source commands that produce output
+        let result = has_data_to_process(&entry).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_has_data_to_process_with_whitespace_only() {
+        // Create a compiled entry with a source command that returns only whitespace
+        let entry = CompiledEntry {
+            name: "test_entry".to_string(),
+            trigger: TriggerType::Periodic {
+                interval: Duration::from_secs(10),
+            },
+            source: Some("echo '   '".to_string()), // Only whitespace
+            action: ActionType::SendKeys(vec!["echo test".to_string()]),
+            dedupe: false,
+        };
+
+        // Should return false for source commands that produce only whitespace
+        let result = has_data_to_process(&entry).await;
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_has_data_to_process_with_failing_command() {
+        // Create a compiled entry with a source command that fails
+        let entry = CompiledEntry {
+            name: "test_entry".to_string(),
+            trigger: TriggerType::Periodic {
+                interval: Duration::from_secs(10),
+            },
+            source: Some("false".to_string()), // Command that always fails
+            action: ActionType::SendKeys(vec!["echo test".to_string()]),
+            dedupe: false,
+        };
+
+        // Should return false for failing commands
+        let result = has_data_to_process(&entry).await;
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+    }
 }
