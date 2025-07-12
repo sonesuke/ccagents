@@ -23,7 +23,7 @@ pub struct Agent {
 }
 
 impl Agent {
-    pub async fn new(id: String, test_mode: bool, cols: u16, rows: u16) -> Result<Self> {
+    pub async fn new(id: String, cols: u16, rows: u16) -> Result<Self> {
         let config = PtyProcessConfig {
             shell_command: Some(std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string())),
             cols,
@@ -32,10 +32,8 @@ impl Agent {
 
         let process = PtyProcess::new(config);
 
-        // Start the HT process
-        if !test_mode {
-            process.start().await?;
-        }
+        // Start the PTY process
+        process.start().await?;
 
         Ok(Agent {
             id,
@@ -70,7 +68,7 @@ impl Agent {
     }
 
     /// Set the status of the agent
-    pub async fn set_status(&self, new_status: AgentStatus) {
+    async fn set_status(&self, new_status: AgentStatus) {
         let mut status = self.status.write().unwrap();
         *status = new_status;
     }
@@ -84,7 +82,7 @@ impl Agent {
         let web_server = WebServer::new(port, host, std::sync::Arc::clone(&self));
         let handle = tokio::spawn(async move {
             if let Err(e) = web_server.start().await {
-                eprintln!("❌ Web server failed on port {}: {}", port, e);
+                tracing::error!("❌ Web server failed on port {}: {}", port, e);
             }
         });
 
@@ -93,7 +91,7 @@ impl Agent {
     }
 
     /// Monitor agent status by checking child processes
-    pub async fn monitor(&self) {
+    async fn monitor(&self) {
         if let Ok(Some(shell_pid)) = self.process.get_shell_pid().await {
             let child_pids = get_child_processes(shell_pid);
             let current_status = self.get_status().await;
@@ -143,9 +141,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_agent_creation() {
-        let _agent = Agent::new("test-agent".to_string(), true, 80, 24)
-            .await
-            .unwrap();
+        let _agent = Agent::new("test-agent".to_string(), 80, 24).await.unwrap();
         // Just verify the agent can be created successfully
         // Agent functionality is tested through integration tests
     }

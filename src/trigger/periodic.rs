@@ -44,9 +44,10 @@ impl Periodic {
             );
             let agent = agents_clone.get_agent_by_index(0);
             if let Err(e) = entry_clone.execute(&agent).await {
-                eprintln!(
+                tracing::error!(
                     "❌ Error executing startup periodic entry '{}': {}",
-                    entry_clone.name, e
+                    entry_clone.name,
+                    e
                 );
             }
 
@@ -62,9 +63,10 @@ impl Periodic {
                         // Execute on available agent
                         let agent = agents_clone.get_agent_by_index(0);
                         if let Err(e) = entry_clone.execute(&agent).await {
-                            eprintln!(
+                            tracing::error!(
                                 "❌ Error executing periodic entry '{}': {}",
-                                entry_clone.name, e
+                                entry_clone.name,
+                                e
                             );
                         }
                     }
@@ -76,9 +78,10 @@ impl Periodic {
                         );
                     }
                     Err(e) => {
-                        eprintln!(
+                        tracing::error!(
                             "❌ Error checking data for periodic entry '{}': {}",
-                            entry_clone.name, e
+                            entry_clone.name,
+                            e
                         );
                     }
                 }

@@ -19,13 +19,12 @@ impl Agents {
         let mut agents = Vec::new();
         let pool_size = monitor_config.get_agent_pool_size();
         let base_port = monitor_config.get_web_ui_port();
-        let test_mode = crate::config::is_test_mode();
 
         for i in 0..pool_size {
             let port = base_port + i as u16;
             let agent_id = format!("agent-{}", i);
             let (cols, rows) = monitor_config.get_agent_dimensions(i);
-            let agent = Arc::new(Agent::new(agent_id, test_mode, cols, rows).await?);
+            let agent = Arc::new(Agent::new(agent_id, cols, rows).await?);
 
             // Start web server if enabled
             if monitor_config.web_ui.enabled {
