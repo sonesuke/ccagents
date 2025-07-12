@@ -18,7 +18,7 @@ pub enum AgentStatus {
 
 pub struct Agent {
     id: String,
-    ht_process: PtyProcess,
+    process: PtyProcess,
     cols: u16,
     rows: u16,
     status: RwLock<AgentStatus>,
@@ -44,16 +44,16 @@ impl Agent {
             rows,
         };
 
-        let ht_process = PtyProcess::new(config);
+        let process = PtyProcess::new(config);
 
         // Start the HT process
         if !test_mode {
-            ht_process.start().await?;
+            process.start().await?;
         }
 
         Ok(Agent {
             id,
-            ht_process,
+            process,
             cols,
             rows,
             status: RwLock::new(AgentStatus::Idle),
@@ -69,9 +69,9 @@ impl Agent {
 
         tracing::debug!("=== AGENT SEND_KEYS ===");
         tracing::debug!("Keys: {:?}", keys);
-        tracing::debug!("About to call ht_process.send_input");
+        tracing::debug!("About to call process.send_input");
 
-        self.ht_process
+        self.process
             .send_input(keys.to_string())
             .await
             .map_err(|e| anyhow::anyhow!("Failed to send keys: {}", e))
@@ -91,7 +91,7 @@ impl Agent {
     pub async fn get_pty_bytes_receiver(
         &self,
     ) -> Result<tokio::sync::broadcast::Receiver<bytes::Bytes>> {
-        self.ht_process
+        self.process
             .get_pty_bytes_receiver()
             .await
             .map_err(|e| anyhow::anyhow!(e))
@@ -101,7 +101,7 @@ impl Agent {
     pub async fn get_pty_string_receiver(
         &self,
     ) -> Result<tokio::sync::broadcast::Receiver<String>> {
-        self.ht_process
+        self.process
             .get_pty_string_receiver()
             .await
             .map_err(|e| anyhow::anyhow!(e))
@@ -109,7 +109,7 @@ impl Agent {
 
     /// Get current screen contents from vt100::Parser for WebSocket initial state
     pub async fn get_screen_contents(&self) -> Result<String> {
-        self.ht_process
+        self.process
             .get_screen_contents()
             .await
             .map_err(|e| anyhow::anyhow!(e))
@@ -122,7 +122,7 @@ impl Agent {
 
     /// Get the shell PID
     pub async fn get_shell_pid(&self) -> Result<Option<u32>> {
-        self.ht_process
+        self.process
             .get_shell_pid()
             .await
             .map_err(|e| anyhow::anyhow!(e))
