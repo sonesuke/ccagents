@@ -8,11 +8,9 @@ pub mod web_ui;
 use crate::config::loader::load_config;
 use crate::config::rule::CompiledRule;
 use crate::config::trigger::{CompiledEntry, TriggerType};
-use crate::config::types::ActionType;
-use crate::rule::engine::{TimeoutState, decide_action_with_timeout};
 use anyhow::Result;
 use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 
 /// Configuration for trigger system
 pub struct TriggerConfig {
@@ -41,35 +39,6 @@ impl TriggerConfig {
     }
 }
 
-/// Configuration for rule processing and monitoring
-#[derive(Clone)]
-pub struct RuleConfig {
-    rules: Arc<RwLock<Vec<CompiledRule>>>,
-    timeout_state: Arc<Mutex<TimeoutState>>,
-}
-
-impl RuleConfig {
-    /// Enhanced decision function that handles both pattern matching and timeout rules
-    pub async fn decide_actions_with_timeout(&self, capture: &str) -> Vec<ActionType> {
-        let rules = self.rules.read().await;
-        let mut timeout_state = self.timeout_state.lock().await;
-        decide_action_with_timeout(capture, &rules, &mut timeout_state)
-    }
-
-    /// Check only timeout rules (useful for periodic checks)
-    pub async fn check_timeout_rules(&self) -> Vec<ActionType> {
-        let rules = self.rules.read().await;
-        let mut timeout_state = self.timeout_state.lock().await;
-        crate::rule::engine::check_timeout_rules(&rules, &mut timeout_state)
-    }
-
-    /// Reset timeout activity (called when any terminal output is received)
-    pub async fn reset_timeout_activity(&self) {
-        let mut timeout_state = self.timeout_state.lock().await;
-        timeout_state.reset_activity();
-    }
-}
-
 /// Detect if running in test environment
 pub fn is_test_mode() -> bool {
     std::env::var("CARGO_TEST").is_ok()
@@ -93,7 +62,6 @@ pub fn is_test_mode() -> bool {
 pub struct Config {
     entries: Arc<RwLock<Vec<CompiledEntry>>>,
     rules: Arc<RwLock<Vec<CompiledRule>>>,
-    timeout_state: Arc<Mutex<TimeoutState>>,
     test_mode: bool,
     // Monitor configuration
     monitor_config: loader::MonitorConfig,
@@ -113,7 +81,6 @@ impl Config {
         Ok(Config {
             entries,
             rules,
-            timeout_state: Arc::new(Mutex::new(TimeoutState::new())),
             test_mode: is_test,
             monitor_config,
         })
@@ -131,12 +98,9 @@ impl Config {
         }
     }
 
-    /// Get rule configuration
-    pub fn get_rule_config(&self) -> RuleConfig {
-        RuleConfig {
-            rules: Arc::clone(&self.rules),
-            timeout_state: Arc::clone(&self.timeout_state),
-        }
+    /// Get compiled rules directly
+    pub fn get_rules(&self) -> Vec<CompiledRule> {
+        self.rules.try_read().map(|r| r.clone()).unwrap_or_default()
     }
 }
 
@@ -151,38 +115,25 @@ impl std::fmt::Debug for Config {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
 
     #[tokio::test]
-    async fn test_reset_timeout_activity() {
+    async fn test_get_rules() {
         // Use existing diff-timeout-demo config
         let config_path = "examples/diff-timeout-demo/config.yaml";
         let config = Config::new(config_path).await.unwrap();
 
-        // Manually set last activity to simulate timeout condition
-        {
-            let mut timeout_state = config.timeout_state.lock().await;
-            timeout_state.set_last_activity_for_test(
-                std::time::Instant::now() - Duration::from_millis(31000), // 31 seconds ago to trigger 30s timeout
-            );
-        }
+        // Test that we can get rules directly
+        let rules = config.get_rules();
 
-        // Should have timeout action available
-        let rule_config = config.get_rule_config();
-        let actions = rule_config.check_timeout_rules().await;
-        assert!(
-            !actions.is_empty(),
-            "Should have timeout actions when 31 seconds have passed"
-        );
+        // Should have some rules (the diff-timeout-demo config has rules)
+        assert!(!rules.is_empty(), "Should have rules from config file");
 
-        // Reset timeout activity
-        rule_config.reset_timeout_activity().await;
-
-        // Should no longer have timeout actions
-        let actions = rule_config.check_timeout_rules().await;
-        assert!(
-            actions.is_empty(),
-            "Should not have timeout actions after reset"
+        // Test that we can call it multiple times
+        let rules2 = config.get_rules();
+        assert_eq!(
+            rules.len(),
+            rules2.len(),
+            "Should get same number of rules each time"
         );
     }
 }

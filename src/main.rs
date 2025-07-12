@@ -50,8 +50,8 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
     println!("🛑 Press Ctrl+C to stop");
 
     // Create agents system (includes agent pool and web server management)
-    let agents =
-        Arc::new(Agents::new(config.get_rule_config(), config.get_monitor_config()).await?);
+    let rules = config.get_rules();
+    let agents = Arc::new(Agents::new(rules, config.get_monitor_config()).await?);
 
     // 1. Start triggers (startup + periodic)
     let triggers = Triggers::new(config.get_trigger_config(), Arc::clone(&agents));

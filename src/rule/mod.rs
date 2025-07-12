@@ -1,5 +1,4 @@
 pub mod diff_timeout;
-pub mod engine;
 pub mod when;
 
 // Re-export for convenience

@@ -3,19 +3,19 @@ use std::sync::Arc;
 use tokio::task::JoinHandle;
 
 use crate::agent::Agent;
-use crate::config::RuleConfig;
 use crate::config::loader::MonitorConfig;
+use crate::config::rule::CompiledRule;
 use crate::rule::{DiffTimeout, When};
 
 /// Agents responsible for managing agent pool and monitoring agents
 pub struct Agents {
-    rule_config: RuleConfig,
+    rules: Vec<CompiledRule>,
     agents: Vec<Arc<Agent>>,
 }
 
 impl Agents {
     /// Create a new agents system from monitor configuration
-    pub async fn new(rule_config: RuleConfig, monitor_config: &MonitorConfig) -> Result<Self> {
+    pub async fn new(rules: Vec<CompiledRule>, monitor_config: &MonitorConfig) -> Result<Self> {
         let mut agents = Vec::new();
         let pool_size = monitor_config.get_agent_pool_size();
         let base_port = monitor_config.get_web_ui_port();
@@ -49,10 +49,7 @@ impl Agents {
             agents.push(agent);
         }
 
-        Ok(Self {
-            rule_config,
-            agents,
-        })
+        Ok(Self { rules, agents })
     }
 
     /// Get the number of agents in the pool
@@ -68,6 +65,10 @@ impl Agents {
     /// Start all monitoring systems: agent monitors and timeout monitor
     pub async fn start_all(&self) -> Result<Vec<JoinHandle<()>>> {
         let mut monitoring_handles = Vec::new();
+
+        // Create shared diff_timeout monitor - pass agents as a reference
+        let agents_arc = Arc::new(self.agents.clone());
+        let diff_timeout_monitor = Arc::new(DiffTimeout::new(self.rules.clone(), agents_arc));
 
         // Create agent monitors for each agent
         for i in 0..self.size() {
@@ -91,7 +92,8 @@ impl Agents {
                     monitoring_handles.push(status_handle);
 
                     // Start PTY output monitoring for when condition processing
-                    let when_processor = When::new(self.rule_config.clone());
+                    let when_processor =
+                        When::new(self.rules.clone(), Some(Arc::clone(&diff_timeout_monitor)));
                     let pty_agent = Arc::clone(&agent);
                     let pty_handle = tokio::spawn(async move {
                         if let Err(e) = when_processor
@@ -113,15 +115,11 @@ impl Agents {
             }
         }
 
-        // Create diff_timeout monitor - pass agents as a reference
-        let agents_arc = Arc::new(self.agents.clone());
-        let diff_timeout_monitor = DiffTimeout {
-            rule_config: self.rule_config.clone(),
-            agents: agents_arc,
-        };
-
+        // Start the diff_timeout monitor
+        let timeout_monitor_for_task =
+            DiffTimeout::new(self.rules.clone(), Arc::new(self.agents.clone()));
         let timeout_handle = tokio::spawn(async move {
-            if let Err(e) = diff_timeout_monitor.start_monitoring().await {
+            if let Err(e) = timeout_monitor_for_task.start_monitoring().await {
                 tracing::error!("❌ Diff timeout monitor failed: {}", e);
             }
         });
