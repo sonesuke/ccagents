@@ -9,12 +9,12 @@ use crate::agent::execute_entry;
 use crate::config::trigger::{CompiledEntry, TriggerType};
 
 /// Periodic task manager responsible for handling periodic entries
-pub struct PeriodicTaskManager {
+pub struct Periodic {
     pub entries: Vec<CompiledEntry>,
     pub agents: Arc<Agents>,
 }
 
-impl PeriodicTaskManager {
+impl Periodic {
     pub fn new(entries: Vec<CompiledEntry>, agents: Arc<Agents>) -> Self {
         Self { entries, agents }
     }

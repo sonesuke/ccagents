@@ -6,12 +6,12 @@ use crate::agent::execute_entry;
 use crate::config::trigger::CompiledEntry;
 
 /// Startup task manager responsible for handling on_start entries
-pub struct StartupTaskManager {
+pub struct Startup {
     pub entries: Vec<CompiledEntry>,
     pub agents: Arc<Agents>,
 }
 
-impl StartupTaskManager {
+impl Startup {
     pub fn new(entries: Vec<CompiledEntry>, agents: Arc<Agents>) -> Self {
         Self { entries, agents }
     }

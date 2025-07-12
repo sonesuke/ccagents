@@ -97,11 +97,6 @@ impl TimeoutState {
         }
     }
 
-    #[cfg(test)]
-    pub fn set_last_activity_for_test(&mut self, instant: Instant) {
-        self.last_activity = instant;
-    }
-
     pub fn check_timeouts(&mut self, timeout_durations: &[Duration]) -> Vec<usize> {
         let elapsed = self.last_activity.elapsed();
         let mut triggered_indices = Vec::new();
