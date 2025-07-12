@@ -1,6 +1,7 @@
 pub mod agents;
 pub mod loader;
 pub mod rule;
+pub mod terminal;
 pub mod trigger;
 pub mod types;
 pub mod web_ui;

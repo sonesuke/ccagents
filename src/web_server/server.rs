@@ -152,15 +152,15 @@ async fn send_command(
 async fn get_terminal_size(
     State((agent, _)): State<(Arc<Agent>, AssetCache)>,
 ) -> Json<TerminalSizeResponse> {
-    let terminal_size = agent.get_terminal_size();
+    let terminal_config = agent.get_terminal_config();
     info!(
         "📐 Terminal size API request: {}x{}",
-        terminal_size.cols, terminal_size.rows
+        terminal_config.cols, terminal_config.rows
     );
 
     Json(TerminalSizeResponse {
-        cols: terminal_size.cols,
-        rows: terminal_size.rows,
+        cols: terminal_config.cols,
+        rows: terminal_config.rows,
     })
 }
 

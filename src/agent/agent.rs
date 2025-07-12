@@ -1,3 +1,4 @@
+use crate::config::terminal::TerminalConfig;
 use crate::terminal::pty_process::{PtyProcess, PtyProcessConfig};
 use crate::web_server::WebServer;
 use anyhow::Result;
@@ -13,34 +14,21 @@ pub enum AgentStatus {
     Active, // Executing tasks and monitoring rules
 }
 
-/// Terminal dimensions configuration
-#[derive(Debug, Clone, Copy)]
-pub struct TerminalSize {
-    pub cols: u16,
-    pub rows: u16,
-}
-
-impl TerminalSize {
-    pub fn new(cols: u16, rows: u16) -> Self {
-        Self { cols, rows }
-    }
-}
-
 pub struct Agent {
     id: String,
     pub process: PtyProcess,
-    terminal_size: TerminalSize,
+    terminal_config: TerminalConfig,
     status: RwLock<AgentStatus>,
     web_server_handle: RwLock<Option<JoinHandle<()>>>,
 }
 
 impl Agent {
     pub async fn new(id: String, cols: u16, rows: u16) -> Result<Self> {
-        let terminal_size = TerminalSize::new(cols, rows);
+        let terminal_config = TerminalConfig::new(cols, rows);
         let config = PtyProcessConfig {
-            shell_command: Some(std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string())),
-            cols: terminal_size.cols,
-            rows: terminal_size.rows,
+            shell_command: Some(terminal_config.shell_command.clone()),
+            cols: terminal_config.cols,
+            rows: terminal_config.rows,
         };
 
         let process = PtyProcess::new(config);
@@ -51,7 +39,7 @@ impl Agent {
         Ok(Agent {
             id,
             process,
-            terminal_size,
+            terminal_config,
             status: RwLock::new(AgentStatus::Idle),
             web_server_handle: RwLock::new(None),
         })
@@ -65,8 +53,8 @@ impl Agent {
     }
 
     /// Get terminal dimensions for asciinema integration
-    pub fn get_terminal_size(&self) -> TerminalSize {
-        self.terminal_size
+    pub fn get_terminal_config(&self) -> &TerminalConfig {
+        &self.terminal_config
     }
 
     /// Get agent ID
