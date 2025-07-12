@@ -22,8 +22,7 @@ pub struct Agent {
 }
 
 impl Agent {
-    pub async fn new(id: String, cols: u16, rows: u16) -> Result<Self> {
-        let terminal_config = TerminalConfig::new(cols, rows);
+    pub async fn new(id: String, terminal_config: TerminalConfig) -> Result<Self> {
         let config = PtyProcessConfig {
             shell_command: Some(terminal_config.shell_command.clone()),
             cols: terminal_config.cols,
@@ -127,7 +126,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_agent_creation() {
-        let _agent = Agent::new("test-agent".to_string(), 80, 24).await.unwrap();
+        let terminal_config = TerminalConfig::new(80, 24);
+        let _agent = Agent::new("test-agent".to_string(), terminal_config)
+            .await
+            .unwrap();
         // Just verify the agent can be created successfully
         // Agent functionality is tested through integration tests
     }

@@ -7,7 +7,12 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn test_web_server_creation() {
-    let agent = Arc::new(Agent::new("test-agent".to_string(), 80, 24).await.unwrap());
+    let terminal_config = crate::config::terminal::TerminalConfig::new(80, 24);
+    let agent = Arc::new(
+        Agent::new("test-agent".to_string(), terminal_config)
+            .await
+            .unwrap(),
+    );
     let web_server = WebServer::new(8080, "localhost".to_string(), agent);
 
     assert_eq!(web_server.port, 8080);

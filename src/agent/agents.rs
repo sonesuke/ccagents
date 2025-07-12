@@ -24,7 +24,8 @@ impl Agents {
             let port = base_port + i as u16;
             let agent_id = format!("agent-{}", i);
             let (cols, rows) = monitor_config.get_agent_dimensions(i);
-            let agent = Arc::new(Agent::new(agent_id, cols, rows).await?);
+            let terminal_config = crate::config::terminal::TerminalConfig::new(cols, rows);
+            let agent = Arc::new(Agent::new(agent_id, terminal_config).await?);
 
             // Start web server if enabled
             if monitor_config.web_ui.enabled {
