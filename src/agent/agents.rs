@@ -2,8 +2,8 @@ use anyhow::Result;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 
+use crate::agent::Agent;
 use crate::agent::AgentMonitor;
-use crate::agent::terminal::Agent;
 use crate::config::RuleConfig;
 use crate::config::app_config::MonitorConfig;
 use crate::rule::TimeoutMonitor;

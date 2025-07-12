@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio::time::Duration;
 
-use crate::agent::terminal::{Agent, AgentStatus};
+use crate::agent::{Agent, AgentStatus};
 use crate::config::RuleConfig;
 
 use crate::rule::Monitor;
