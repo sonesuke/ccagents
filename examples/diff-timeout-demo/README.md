@@ -4,7 +4,7 @@ This example demonstrates the new `diff_timeout` rule type that triggers actions
 
 ## How It Works
 
-The `diff_timeout` rule type monitors the time since the last successful pattern match and triggers specified actions when timeout periods are reached. This is useful for:
+The `diff_timeout` rule type monitors the time since ANY terminal output was received and triggers specified actions when timeout periods are reached. The timeout counter resets whenever any terminal output is received, not just when patterns match. This is useful for:
 
 - Detecting when monitoring has gone quiet
 - Implementing watchdog behavior
@@ -79,7 +79,9 @@ The timeout functionality is implemented through:
 
 1. **Rule Compilation:** `diff_timeout` field is parsed into `Duration` objects
 2. **State Tracking:** `TimeoutState` tracks last activity time and timer states  
-3. **Decision Engine:** Enhanced to handle both pattern matching and timeout checks
-4. **Monitoring Loop:** Periodically checks timeout conditions every 50ms
+3. **Activity Reset:** Timeout counters reset on ANY terminal output, not just pattern matches
+4. **Agent Status:** Rules are only evaluated when agents are in Active status
+5. **Decision Engine:** Enhanced to handle both pattern matching and timeout checks
+6. **Monitoring Loop:** Periodically checks timeout conditions every 50ms
 
-This provides efficient, responsive timeout detection without impacting normal pattern matching performance.
+This provides efficient, responsive timeout detection without impacting normal pattern matching performance. The timeout can trigger multiple times during a session as it resets whenever new terminal output is received.

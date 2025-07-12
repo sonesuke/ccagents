@@ -101,6 +101,12 @@ impl Ruler {
         crate::ruler::decision::check_timeout_rules(&rules, &mut timeout_state)
     }
 
+    /// Reset timeout activity (called when any terminal output is received)
+    pub async fn reset_timeout_activity(&self) {
+        let mut timeout_state = self.timeout_state.lock().await;
+        timeout_state.reset_activity();
+    }
+
     /// Get monitor configuration
     pub fn get_monitor_config(&self) -> &config::MonitorConfig {
         &self.monitor_config
@@ -112,5 +118,43 @@ impl std::fmt::Debug for Ruler {
         f.debug_struct("Ruler")
             .field("test_mode", &self.test_mode)
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[tokio::test]
+    async fn test_reset_timeout_activity() {
+        // Use existing diff-timeout-demo config
+        let config_path = "examples/diff-timeout-demo/config.yaml";
+        let ruler = Ruler::new(config_path).await.unwrap();
+
+        // Manually set last activity to simulate timeout condition
+        {
+            let mut timeout_state = ruler.timeout_state.lock().await;
+            timeout_state.set_last_activity_for_test(
+                std::time::Instant::now() - Duration::from_millis(31000), // 31 seconds ago to trigger 30s timeout
+            );
+        }
+
+        // Should have timeout action available
+        let actions = ruler.check_timeout_rules().await;
+        assert!(
+            !actions.is_empty(),
+            "Should have timeout actions when 31 seconds have passed"
+        );
+
+        // Reset timeout activity
+        ruler.reset_timeout_activity().await;
+
+        // Should no longer have timeout actions
+        let actions = ruler.check_timeout_rules().await;
+        assert!(
+            actions.is_empty(),
+            "Should not have timeout actions after reset"
+        );
     }
 }
