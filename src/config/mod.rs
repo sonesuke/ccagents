@@ -4,11 +4,11 @@ pub mod placeholder;
 pub mod rule;
 pub mod types;
 
-use crate::agent::rule_engine::{TimeoutState, decide_action_with_timeout};
 use crate::config::app_config::load_config;
 use crate::config::entry::{CompiledEntry, TriggerType};
 use crate::config::rule::CompiledRule;
 use crate::config::types::ActionType;
+use crate::rule::engine::{TimeoutState, decide_action_with_timeout};
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
@@ -59,7 +59,7 @@ impl RuleConfig {
     pub async fn check_timeout_rules(&self) -> Vec<ActionType> {
         let rules = self.rules.read().await;
         let mut timeout_state = self.timeout_state.lock().await;
-        crate::agent::rule_engine::check_timeout_rules(&rules, &mut timeout_state)
+        crate::rule::engine::check_timeout_rules(&rules, &mut timeout_state)
     }
 
     /// Reset timeout activity (called when any terminal output is received)

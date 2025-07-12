@@ -2,9 +2,10 @@ use anyhow::Result;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 
+use crate::agent::AgentMonitor;
 use crate::agent::AgentPool;
-use crate::agent::{AgentMonitor, TimeoutMonitor};
 use crate::config::RuleConfig;
+use crate::rule::TimeoutMonitor;
 
 /// Agents responsible for monitoring agents and processing rules
 pub struct Agents {

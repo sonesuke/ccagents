@@ -7,7 +7,7 @@ use crate::agent::pty_processor::process_pty_output;
 use crate::agent::terminal_agent::{Agent, AgentStatus};
 use crate::config::RuleConfig;
 
-use super::Monitor;
+use crate::rule::Monitor;
 
 /// Agent monitor responsible for monitoring a single terminal's PTY output and processing rules
 pub struct AgentMonitor {

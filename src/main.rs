@@ -1,6 +1,7 @@
 mod agent;
 mod cli;
 mod config;
+mod rule;
 mod terminal;
 mod trigger;
 mod web_server;
