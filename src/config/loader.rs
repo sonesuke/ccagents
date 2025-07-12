@@ -1,5 +1,7 @@
-use crate::config::rule::{CompiledRule, Rule};
-use crate::config::trigger::{CompiledEntry, Entry};
+use crate::config::agents::{AgentsConfig, FullAgentsConfig};
+use crate::config::rule::CompiledRule;
+use crate::config::trigger::CompiledEntry;
+use crate::config::web_ui::WebUIConfig;
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::path::Path;
@@ -13,70 +15,6 @@ pub struct MonitorConfig {
     pub agents: AgentsConfig,
 }
 
-#[derive(Debug, Deserialize, Clone)]
-pub struct AgentsConfig {
-    #[serde(default = "default_pool_size")]
-    pub pool: usize,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-pub struct WebUIConfig {
-    #[serde(default = "default_enabled")]
-    pub enabled: bool,
-    #[serde(default = "default_host")]
-    pub host: String,
-    #[serde(default = "default_base_port")]
-    pub base_port: u16,
-    #[serde(default = "default_cols")]
-    pub cols: u16,
-    #[serde(default = "default_rows")]
-    pub rows: u16,
-}
-
-impl Default for AgentsConfig {
-    fn default() -> Self {
-        Self {
-            pool: default_pool_size(),
-        }
-    }
-}
-
-impl Default for WebUIConfig {
-    fn default() -> Self {
-        Self {
-            enabled: default_enabled(),
-            host: default_host(),
-            base_port: default_base_port(),
-            cols: default_cols(),
-            rows: default_rows(),
-        }
-    }
-}
-
-fn default_base_port() -> u16 {
-    9990
-}
-
-fn default_pool_size() -> usize {
-    1
-}
-
-fn default_enabled() -> bool {
-    true
-}
-
-fn default_host() -> String {
-    "localhost".to_string()
-}
-
-fn default_cols() -> u16 {
-    80
-}
-
-fn default_rows() -> u16 {
-    24
-}
-
 // YAML structure for loading complete configuration
 #[derive(Debug, Deserialize)]
 pub struct ConfigFile {
@@ -84,17 +22,6 @@ pub struct ConfigFile {
     pub web_ui: WebUIConfig,
     #[serde(default)]
     pub agents: FullAgentsConfig,
-}
-
-// Extended agents config that includes triggers and rules
-#[derive(Debug, Deserialize, Default)]
-pub struct FullAgentsConfig {
-    #[serde(default = "default_pool_size")]
-    pub pool: usize,
-    #[serde(default)]
-    pub triggers: Vec<Entry>,
-    #[serde(default)]
-    pub rules: Vec<Rule>,
 }
 
 /// Load configuration from a YAML file and compile entries and rules

@@ -5,12 +5,12 @@ use tokio::sync::broadcast;
 use crate::agent::{Agent, AgentStatus};
 use crate::config::RuleConfig;
 
-/// Diff monitor responsible for processing PTY output and detecting pattern changes
-pub struct DiffMonitor {
+/// When condition processor for PTY output pattern matching
+pub struct When {
     pub rule_config: RuleConfig,
 }
 
-impl DiffMonitor {
+impl When {
     pub fn new(rule_config: RuleConfig) -> Self {
         Self { rule_config }
     }

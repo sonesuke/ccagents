@@ -4,8 +4,8 @@ use tokio::task::JoinHandle;
 
 use crate::agent::Agent;
 use crate::config::RuleConfig;
-use crate::config::app_config::MonitorConfig;
-use crate::rule::{DiffMonitor, TimeoutMonitor};
+use crate::config::loader::MonitorConfig;
+use crate::rule::{DiffTimeout, When};
 
 /// Agents responsible for managing agent pool and monitoring agents
 pub struct Agents {
@@ -90,11 +90,13 @@ impl Agents {
                     });
                     monitoring_handles.push(status_handle);
 
-                    // Start PTY output monitoring for rule processing
-                    let diff_monitor = DiffMonitor::new(self.rule_config.clone());
+                    // Start PTY output monitoring for when condition processing
+                    let when_processor = When::new(self.rule_config.clone());
                     let pty_agent = Arc::clone(&agent);
                     let pty_handle = tokio::spawn(async move {
-                        if let Err(e) = diff_monitor.start_pty_monitoring(pty_agent, receiver).await
+                        if let Err(e) = when_processor
+                            .start_pty_monitoring(pty_agent, receiver)
+                            .await
                         {
                             tracing::error!("❌ PTY monitor failed: {}", e);
                         }
@@ -111,16 +113,16 @@ impl Agents {
             }
         }
 
-        // Create timeout monitor - pass agents as a reference
+        // Create diff_timeout monitor - pass agents as a reference
         let agents_arc = Arc::new(self.agents.clone());
-        let timeout_monitor = TimeoutMonitor {
+        let diff_timeout_monitor = DiffTimeout {
             rule_config: self.rule_config.clone(),
             agents: agents_arc,
         };
 
         let timeout_handle = tokio::spawn(async move {
-            if let Err(e) = timeout_monitor.start_monitoring().await {
-                tracing::error!("❌ Timeout monitor failed: {}", e);
+            if let Err(e) = diff_timeout_monitor.start_monitoring().await {
+                tracing::error!("❌ Diff timeout monitor failed: {}", e);
             }
         });
         monitoring_handles.push(timeout_handle);

@@ -1,10 +1,10 @@
-pub mod diff_monitor;
+pub mod diff_timeout;
 pub mod engine;
-pub mod timeout;
+pub mod when;
 
 // Re-export for convenience
-pub use diff_monitor::DiffMonitor;
-pub use timeout::TimeoutMonitor;
+pub use diff_timeout::DiffTimeout;
+pub use when::When;
 
 use anyhow::Result;
 

@@ -1,9 +1,11 @@
-pub mod app_config;
+pub mod agents;
+pub mod loader;
 pub mod rule;
 pub mod trigger;
 pub mod types;
+pub mod web_ui;
 
-use crate::config::app_config::load_config;
+use crate::config::loader::load_config;
 use crate::config::rule::CompiledRule;
 use crate::config::trigger::{CompiledEntry, TriggerType};
 use crate::config::types::ActionType;
@@ -94,7 +96,7 @@ pub struct Config {
     timeout_state: Arc<Mutex<TimeoutState>>,
     test_mode: bool,
     // Monitor configuration
-    monitor_config: app_config::MonitorConfig,
+    monitor_config: loader::MonitorConfig,
 }
 
 impl Config {
@@ -118,7 +120,7 @@ impl Config {
     }
 
     /// Get monitor configuration
-    pub fn get_monitor_config(&self) -> &app_config::MonitorConfig {
+    pub fn get_monitor_config(&self) -> &loader::MonitorConfig {
         &self.monitor_config
     }
 

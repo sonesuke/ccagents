@@ -1,0 +1,32 @@
+use crate::config::rule::Rule;
+use crate::config::trigger::Entry;
+use serde::Deserialize;
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct AgentsConfig {
+    #[serde(default = "default_pool_size")]
+    pub pool: usize,
+}
+
+// Extended agents config that includes triggers and rules
+#[derive(Debug, Deserialize, Default)]
+pub struct FullAgentsConfig {
+    #[serde(default = "default_pool_size")]
+    pub pool: usize,
+    #[serde(default)]
+    pub triggers: Vec<Entry>,
+    #[serde(default)]
+    pub rules: Vec<Rule>,
+}
+
+impl Default for AgentsConfig {
+    fn default() -> Self {
+        Self {
+            pool: default_pool_size(),
+        }
+    }
+}
+
+fn default_pool_size() -> usize {
+    1
+}

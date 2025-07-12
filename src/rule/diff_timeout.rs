@@ -9,19 +9,19 @@ use crate::config::RuleConfig;
 
 use super::Monitor;
 
-/// Timeout monitor responsible for checking timeout rules across all agents
-pub struct TimeoutMonitor {
+/// Diff timeout processor responsible for checking diff_timeout rules across all agents
+pub struct DiffTimeout {
     pub rule_config: RuleConfig,
     pub agents: Arc<Vec<Arc<Agent>>>,
 }
 
-impl Monitor for TimeoutMonitor {
+impl Monitor for DiffTimeout {
     async fn start_monitoring(self) -> Result<()> {
         self.start_monitoring().await
     }
 }
 
-impl TimeoutMonitor {
+impl DiffTimeout {
     pub async fn start_monitoring(self) -> Result<()> {
         let mut interval = tokio::time::interval(Duration::from_millis(100));
 

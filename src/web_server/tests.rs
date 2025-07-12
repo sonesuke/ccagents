@@ -1,6 +1,7 @@
 use super::server::WebServer;
 use crate::agent::Agent;
-use crate::config::app_config::{MonitorConfig, WebUIConfig};
+use crate::config::loader::MonitorConfig;
+use crate::config::web_ui::WebUIConfig;
 use crate::web_ui::assets::AssetCache;
 use std::sync::Arc;
 
