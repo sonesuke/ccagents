@@ -1,4 +1,4 @@
-use crate::ruler::types::{ActionType, compile_action};
+use crate::config::types::{ActionType, compile_action};
 use anyhow::{Context, Result, anyhow};
 use regex::Regex;
 use serde::Deserialize;
@@ -118,7 +118,7 @@ fn parse_duration(s: &str) -> Result<Duration> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ruler::types::ActionType;
+    use crate::config::types::ActionType;
     use std::time::Duration;
 
     fn create_test_rule(pattern: &str, keys: Vec<String>) -> CompiledRule {

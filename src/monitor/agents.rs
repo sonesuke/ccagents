@@ -3,27 +3,20 @@ use std::sync::Arc;
 use tokio::task::JoinHandle;
 
 use crate::agent;
+use crate::config::RuleConfig;
 use crate::monitor::{AgentMonitor, TimeoutMonitor};
-use crate::queue::SharedQueueManager;
-use crate::ruler::Ruler;
 
-/// Agent system responsible for monitoring agents and processing rules
-pub struct AgentSystem {
-    ruler: Arc<Ruler>,
+/// Agents responsible for monitoring agents and processing rules
+pub struct Agents {
+    rule_config: RuleConfig,
     agent_pool: Arc<agent::AgentPool>,
-    queue_manager: SharedQueueManager,
 }
 
-impl AgentSystem {
-    pub fn new(
-        ruler: Arc<Ruler>,
-        agent_pool: Arc<agent::AgentPool>,
-        queue_manager: SharedQueueManager,
-    ) -> Self {
+impl Agents {
+    pub fn new(rule_config: RuleConfig, agent_pool: Arc<agent::AgentPool>) -> Self {
         Self {
-            ruler,
+            rule_config,
             agent_pool,
-            queue_manager,
         }
     }
 
@@ -44,8 +37,7 @@ impl AgentSystem {
                     );
 
                     let monitor = AgentMonitor {
-                        ruler: Arc::clone(&self.ruler),
-                        queue_manager: self.queue_manager.clone(),
+                        rule_config: self.rule_config.clone(), // RuleConfigはCloneする必要があります
                         agent,
                         receiver,
                     };
@@ -69,9 +61,8 @@ impl AgentSystem {
 
         // Create timeout monitor
         let timeout_monitor = TimeoutMonitor {
-            ruler: Arc::clone(&self.ruler),
+            rule_config: self.rule_config.clone(),
             agent_pool: Arc::clone(&self.agent_pool),
-            queue_manager: self.queue_manager.clone(),
         };
 
         let timeout_handle = tokio::spawn(async move {

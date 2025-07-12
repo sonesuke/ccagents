@@ -1,4 +1,4 @@
-use crate::ruler::types::{ActionType, compile_action};
+use crate::config::types::{ActionType, compile_action};
 use anyhow::{Result, anyhow};
 use serde::Deserialize;
 use std::time::Duration;

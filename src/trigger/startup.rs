@@ -3,26 +3,19 @@ use std::sync::Arc;
 
 use crate::agent;
 use crate::cli::execute_entry_action;
-use crate::queue::SharedQueueManager;
-use crate::ruler::entry::CompiledEntry;
+use crate::config::entry::CompiledEntry;
 
 /// Startup task manager responsible for handling on_start entries
 pub struct StartupTaskManager {
     pub entries: Vec<CompiledEntry>,
     pub agent_pool: Arc<agent::AgentPool>,
-    pub queue_manager: SharedQueueManager,
 }
 
 impl StartupTaskManager {
-    pub fn new(
-        entries: Vec<CompiledEntry>,
-        agent_pool: Arc<agent::AgentPool>,
-        queue_manager: SharedQueueManager,
-    ) -> Self {
+    pub fn new(entries: Vec<CompiledEntry>, agent_pool: Arc<agent::AgentPool>) -> Self {
         Self {
             entries,
             agent_pool,
-            queue_manager,
         }
     }
 
@@ -43,7 +36,7 @@ impl StartupTaskManager {
                 entry.name,
                 agent.get_id()
             );
-            execute_entry_action(&agent, entry, &self.queue_manager).await?;
+            execute_entry_action(&agent, entry).await?;
         }
 
         Ok(())

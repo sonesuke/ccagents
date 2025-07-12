@@ -3,7 +3,7 @@ pub mod pty_session;
 pub mod pty_terminal;
 
 use crate::agent::pty_process::{PtyProcess, PtyProcessConfig};
-use crate::ruler::config::MonitorConfig;
+use crate::config::app_config::MonitorConfig;
 use crate::web_server::WebServer;
 use anyhow::Result;
 use std::process::Command;
@@ -23,14 +23,12 @@ pub struct AgentPool {
 }
 
 impl AgentPool {
-    /// Create a new agent pool with the specified size
-    pub async fn new(
-        pool_size: usize,
-        base_port: u16,
-        test_mode: bool,
-        monitor_config: &MonitorConfig,
-    ) -> Result<Self> {
+    /// Create a new agent pool from monitor configuration
+    pub async fn new(monitor_config: &MonitorConfig) -> Result<Self> {
         let mut agents = Vec::new();
+        let pool_size = monitor_config.get_agent_pool_size();
+        let base_port = monitor_config.get_web_ui_port();
+        let test_mode = crate::config::is_test_mode();
 
         for i in 0..pool_size {
             let port = base_port + i as u16;

@@ -1,6 +1,6 @@
-use crate::ruler::rule::resolve_capture_groups_in_vec;
-use crate::ruler::rule::{CompiledRule, RuleType};
-use crate::ruler::types::ActionType;
+use crate::config::rule::resolve_capture_groups_in_vec;
+use crate::config::rule::{CompiledRule, RuleType};
+use crate::config::types::ActionType;
 use std::time::{Duration, Instant};
 
 /// Timeout state tracker for diff timeout rules

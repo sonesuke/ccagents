@@ -1,5 +1,5 @@
-use crate::ruler::entry::{CompiledEntry, Entry};
-use crate::ruler::rule::{CompiledRule, Rule};
+use crate::config::entry::{CompiledEntry, Entry};
+use crate::config::rule::{CompiledRule, Rule};
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::path::Path;

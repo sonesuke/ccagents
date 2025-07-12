@@ -5,15 +5,13 @@ use tokio::time::Duration;
 
 use crate::agent;
 use crate::cli::process_pty_output;
-use crate::queue::SharedQueueManager;
-use crate::ruler::Ruler;
+use crate::config::RuleConfig;
 
 use super::Monitor;
 
 /// Agent monitor responsible for monitoring a single agent's PTY output and processing rules
 pub struct AgentMonitor {
-    pub ruler: Arc<Ruler>,
-    pub queue_manager: SharedQueueManager,
+    pub rule_config: RuleConfig,
     pub agent: Arc<agent::Agent>,
     pub receiver: broadcast::Receiver<String>,
 }
@@ -61,8 +59,7 @@ impl AgentMonitor {
                     status
                 );
                 if let Err(e) =
-                    process_pty_output(&pty_output, &self.agent, &self.ruler, &self.queue_manager)
-                        .await
+                    process_pty_output(&pty_output, &self.agent, &self.rule_config).await
                 {
                     tracing::debug!("❌ Error processing PTY output: {}", e);
                 }

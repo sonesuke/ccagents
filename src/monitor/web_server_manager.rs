@@ -2,7 +2,7 @@ use std::sync::Arc;
 use tokio::task::JoinHandle;
 
 use crate::agent;
-use crate::ruler::config::MonitorConfig;
+use crate::config::app_config::MonitorConfig;
 use crate::web_server::WebServer;
 
 /// Web server manager responsible for starting and managing web servers for each agent

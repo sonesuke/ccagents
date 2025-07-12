@@ -1,20 +1,20 @@
 mod agent;
 mod cli;
+mod config;
 mod monitor;
-mod queue;
-mod ruler;
+mod trigger;
 mod web_server;
 mod web_ui;
 
 use anyhow::{Context, Result};
 use clap::Parser;
 use cli::Cli;
-use monitor::{AgentSystem, TriggerSystem};
-use queue::create_shared_manager;
-use ruler::Ruler;
+use config::Config;
+use monitor::Agents;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::signal;
+use trigger::Triggers;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -39,10 +39,9 @@ async fn main() -> Result<()> {
 /// Run automation command (default mode when no subcommand is provided)
 async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
     // Create core components
-    let queue_manager = create_shared_manager();
-    let ruler = Arc::new(Ruler::new(rules_path.to_str().unwrap()).await?);
+    let config = Arc::new(Config::new(rules_path.to_str().unwrap()).await?);
 
-    let base_port = ruler.get_monitor_config().get_web_ui_port();
+    let base_port = config.get_monitor_config().get_web_ui_port();
 
     println!("🎯 RuleAgents started");
     println!("📂 Config file: {}", rules_path.display());
@@ -50,31 +49,15 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
     println!("🛑 Press Ctrl+C to stop");
 
     // Create agent pool (includes web server management now)
-    let monitor_config = ruler.get_monitor_config();
-    let agent_pool = Arc::new(
-        agent::AgentPool::new(
-            monitor_config.get_agent_pool_size(),
-            monitor_config.get_web_ui_port(),
-            false,
-            monitor_config,
-        )
-        .await?,
-    );
+    let agent_pool = Arc::new(agent::AgentPool::new(config.get_monitor_config()).await?);
 
-    // 1. Start trigger system (startup + periodic)
-    let on_start_entries = ruler.get_on_start_entries().await;
-    let periodic_entries = ruler.get_periodic_entries().await;
-    let trigger_system = TriggerSystem::new(
-        on_start_entries,
-        periodic_entries,
-        Arc::clone(&agent_pool),
-        queue_manager.clone(),
-    );
-    let trigger_handles = trigger_system.start_all_triggers().await?;
+    // 1. Start triggers (startup + periodic)
+    let triggers = Triggers::new(config.get_trigger_config(), Arc::clone(&agent_pool));
+    let trigger_handles = triggers.start_all().await?;
 
-    // 2. Start agent system (monitoring)
-    let agent_system = AgentSystem::new(Arc::clone(&ruler), Arc::clone(&agent_pool), queue_manager);
-    let monitoring_handles = agent_system.start_monitoring().await?;
+    // 2. Start agents (monitoring)
+    let agents = Agents::new(config.get_rule_config(), Arc::clone(&agent_pool));
+    let agent_handles = agents.start_monitoring().await?;
 
     // Wait for Ctrl+C signal
     signal::ctrl_c()
@@ -86,7 +69,7 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
     for handle in trigger_handles {
         handle.abort();
     }
-    for handle in monitoring_handles {
+    for handle in agent_handles {
         handle.abort();
     }
 

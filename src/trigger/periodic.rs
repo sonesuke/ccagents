@@ -4,26 +4,19 @@ use tokio::time::interval;
 
 use crate::agent;
 use crate::cli::{execute_periodic_entry, has_data_to_process};
-use crate::queue::SharedQueueManager;
-use crate::ruler::entry::{CompiledEntry, TriggerType};
+use crate::config::entry::{CompiledEntry, TriggerType};
 
 /// Periodic task manager responsible for handling periodic entries
 pub struct PeriodicTaskManager {
     pub entries: Vec<CompiledEntry>,
     pub agent_pool: Arc<agent::AgentPool>,
-    pub queue_manager: SharedQueueManager,
 }
 
 impl PeriodicTaskManager {
-    pub fn new(
-        entries: Vec<CompiledEntry>,
-        agent_pool: Arc<agent::AgentPool>,
-        queue_manager: SharedQueueManager,
-    ) -> Self {
+    pub fn new(entries: Vec<CompiledEntry>, agent_pool: Arc<agent::AgentPool>) -> Self {
         Self {
             entries,
             agent_pool,
-            queue_manager,
         }
     }
 
@@ -47,7 +40,6 @@ impl PeriodicTaskManager {
         period: tokio::time::Duration,
     ) -> JoinHandle<()> {
         let entry_clone = entry.clone();
-        let queue_manager_clone = self.queue_manager.clone();
         let agent_pool_clone = Arc::clone(&self.agent_pool);
 
         tokio::spawn(async move {
@@ -57,9 +49,7 @@ impl PeriodicTaskManager {
                 entry_clone.name
             );
             let agent = agent_pool_clone.get_agent_by_index(0);
-            if let Err(e) =
-                execute_periodic_entry(&entry_clone, &queue_manager_clone, Some(&agent)).await
-            {
+            if let Err(e) = execute_periodic_entry(&entry_clone, Some(&agent)).await {
                 eprintln!(
                     "❌ Error executing startup periodic entry '{}': {}",
                     entry_clone.name, e
@@ -77,10 +67,7 @@ impl PeriodicTaskManager {
                     Ok(true) => {
                         // Execute on available agent
                         let agent = agent_pool_clone.get_agent_by_index(0);
-                        if let Err(e) =
-                            execute_periodic_entry(&entry_clone, &queue_manager_clone, Some(&agent))
-                                .await
-                        {
+                        if let Err(e) = execute_periodic_entry(&entry_clone, Some(&agent)).await {
                             eprintln!(
                                 "❌ Error executing periodic entry '{}': {}",
                                 entry_clone.name, e

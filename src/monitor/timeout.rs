@@ -4,16 +4,14 @@ use tokio::time::Duration;
 
 use crate::agent;
 use crate::cli;
-use crate::queue::SharedQueueManager;
-use crate::ruler::Ruler;
+use crate::config::RuleConfig;
 
 use super::Monitor;
 
 /// Timeout monitor responsible for checking timeout rules across all agents
 pub struct TimeoutMonitor {
-    pub ruler: Arc<Ruler>,
+    pub rule_config: RuleConfig,
     pub agent_pool: Arc<agent::AgentPool>,
-    pub queue_manager: SharedQueueManager,
 }
 
 impl Monitor for TimeoutMonitor {
@@ -41,12 +39,10 @@ impl TimeoutMonitor {
             let current_status = agent.get_status().await;
 
             if current_status == agent::AgentStatus::Active {
-                let timeout_actions = self.ruler.check_timeout_rules().await;
+                let timeout_actions = self.rule_config.check_timeout_rules().await;
                 for action in timeout_actions {
                     tracing::info!("⏰ Executing timeout rule action: {:?}", action);
-                    if let Err(e) =
-                        cli::execute_rule_action(&action, &agent, &self.queue_manager).await
-                    {
+                    if let Err(e) = cli::execute_rule_action(&action, &agent).await {
                         tracing::error!("❌ Error executing timeout rule action: {}", e);
                     }
                 }

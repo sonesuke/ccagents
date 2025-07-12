@@ -1,13 +1,12 @@
 use crate::agent;
-use crate::queue::SharedQueueManager;
-use crate::ruler;
+use crate::config;
 use anyhow::Result;
 use std::collections::HashSet;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Check if a periodic entry will produce data to process
-pub async fn has_data_to_process(entry: &ruler::entry::CompiledEntry) -> Result<bool> {
+pub async fn has_data_to_process(entry: &config::entry::CompiledEntry) -> Result<bool> {
     // If there's no source command, we consider it as having data to process
     if entry.source.is_none() {
         return Ok(true);
@@ -37,8 +36,7 @@ pub async fn has_data_to_process(entry: &ruler::entry::CompiledEntry) -> Result<
 
 /// Execute a periodic entry action (with agent context)
 pub async fn execute_periodic_entry(
-    entry: &ruler::entry::CompiledEntry,
-    _queue_manager: &SharedQueueManager,
+    entry: &config::entry::CompiledEntry,
     agent: Option<&agent::Agent>,
 ) -> Result<()> {
     // If there's a source command, execute it first and process its output
@@ -83,14 +81,14 @@ pub async fn execute_periodic_entry(
 
             // Execute the resolved action
             match &resolved_action {
-                ruler::types::ActionType::SendKeys(keys) => {
+                config::types::ActionType::SendKeys(keys) => {
                     if let Some(agent) = agent {
                         for key in keys {
                             agent.send_keys(key).await?;
                         }
                     }
                 }
-                ruler::types::ActionType::Workflow(workflow_name, args) => {
+                config::types::ActionType::Workflow(workflow_name, args) => {
                     println!("🔄 Workflow: {} {:?}", workflow_name, args);
                     // TODO: Implement custom workflow execution if needed
                 }
@@ -106,7 +104,7 @@ pub async fn execute_periodic_entry(
     } else {
         // No source, just execute the action directly
         match &entry.action {
-            ruler::types::ActionType::SendKeys(keys) => {
+            config::types::ActionType::SendKeys(keys) => {
                 if let Some(agent) = agent {
                     println!(
                         "🤖 Executing periodic entry '{}' → Sending: {:?}",
@@ -122,7 +120,7 @@ pub async fn execute_periodic_entry(
                     );
                 }
             }
-            ruler::types::ActionType::Workflow(workflow_name, args) => {
+            config::types::ActionType::Workflow(workflow_name, args) => {
                 println!(
                     "🔄 Executing periodic entry '{}' → Workflow: {} {:?}",
                     entry.name, workflow_name, args
@@ -136,18 +134,18 @@ pub async fn execute_periodic_entry(
 
 /// Resolve ${1} placeholders in action with source line content
 fn resolve_source_placeholders(
-    action: &ruler::types::ActionType,
+    action: &config::types::ActionType,
     value: &str,
-) -> ruler::types::ActionType {
+) -> config::types::ActionType {
     match action {
-        ruler::types::ActionType::SendKeys(keys) => {
+        config::types::ActionType::SendKeys(keys) => {
             let resolved_keys = keys.iter().map(|key| key.replace("${1}", value)).collect();
-            ruler::types::ActionType::SendKeys(resolved_keys)
+            config::types::ActionType::SendKeys(resolved_keys)
         }
-        ruler::types::ActionType::Workflow(workflow_name, args) => {
+        config::types::ActionType::Workflow(workflow_name, args) => {
             let resolved_workflow = workflow_name.replace("${1}", value);
             let resolved_args = args.iter().map(|arg| arg.replace("${1}", value)).collect();
-            ruler::types::ActionType::Workflow(resolved_workflow, resolved_args)
+            config::types::ActionType::Workflow(resolved_workflow, resolved_args)
         }
     }
 }
@@ -155,8 +153,7 @@ fn resolve_source_placeholders(
 /// Execute an entry action using the appropriate mechanism
 pub async fn execute_entry_action(
     agent: &agent::Agent,
-    entry: &ruler::entry::CompiledEntry,
-    _queue_manager: &SharedQueueManager,
+    entry: &config::entry::CompiledEntry,
 ) -> Result<()> {
     // DETAILED DEBUG LOGGING FOR ENTRY EXECUTION
     tracing::debug!("=== EXECUTING ENTRY ACTION ===");
@@ -202,7 +199,7 @@ pub async fn execute_entry_action(
 
             // Execute the resolved action
             match &resolved_action {
-                ruler::types::ActionType::SendKeys(keys) => {
+                config::types::ActionType::SendKeys(keys) => {
                     // Start command tracking before sending keys
                     if let Ok(shell_pid) = agent.get_shell_pid().await {
                         agent.start_command_tracking(shell_pid).await;
@@ -221,7 +218,7 @@ pub async fn execute_entry_action(
                         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
                     }
                 }
-                ruler::types::ActionType::Workflow(workflow_name, args) => {
+                config::types::ActionType::Workflow(workflow_name, args) => {
                     println!("🔄 Workflow: {} {:?}", workflow_name, args);
                     // TODO: Implement custom workflow execution if needed
                 }
@@ -237,7 +234,7 @@ pub async fn execute_entry_action(
     } else {
         // No source, just execute the action directly
         match &entry.action {
-            ruler::types::ActionType::SendKeys(keys) => {
+            config::types::ActionType::SendKeys(keys) => {
                 println!("🤖 Executing entry '{}' → Sending: {:?}", entry.name, keys);
 
                 tracing::debug!("SendKeys action with {} keys:", keys.len());
@@ -263,7 +260,7 @@ pub async fn execute_entry_action(
                     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
                 }
             }
-            ruler::types::ActionType::Workflow(workflow_name, args) => {
+            config::types::ActionType::Workflow(workflow_name, args) => {
                 println!(
                     "🔄 Executing entry '{}' → Workflow: {} {:?}",
                     entry.name, workflow_name, args
@@ -277,12 +274,11 @@ pub async fn execute_entry_action(
 
 /// Execute a rule action
 pub async fn execute_rule_action(
-    action: &ruler::types::ActionType,
+    action: &config::types::ActionType,
     agent: &agent::Agent,
-    _queue_manager: &SharedQueueManager,
 ) -> Result<()> {
     match action {
-        ruler::types::ActionType::SendKeys(keys) => {
+        config::types::ActionType::SendKeys(keys) => {
             if !keys.is_empty() {
                 println!("🤖 EXECUTING RULE → Sending: {:?}", keys);
                 println!(
@@ -315,7 +311,7 @@ pub async fn execute_rule_action(
                 tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
             }
         }
-        ruler::types::ActionType::Workflow(workflow_name, args) => {
+        config::types::ActionType::Workflow(workflow_name, args) => {
             println!("🔄 Matched workflow: {} {:?}", workflow_name, args);
             // TODO: Implement custom workflow execution if needed
         }
@@ -327,12 +323,11 @@ pub async fn execute_rule_action(
 pub async fn process_pty_output(
     pty_output: &str,
     agent: &agent::Agent,
-    ruler: &ruler::Ruler,
-    queue_manager: &SharedQueueManager,
+    rule_config: &config::RuleConfig,
 ) -> Result<()> {
     // Reset timeout activity for diff_timeout rules whenever ANY terminal output is received
     // This ensures diff_timeout detects "no terminal output" rather than "no pattern matches"
-    ruler.reset_timeout_activity().await;
+    rule_config.reset_timeout_activity().await;
 
     // Remove ANSI escape sequences for cleaner pattern matching
     let clean_output = strip_ansi_escapes(pty_output);
@@ -352,12 +347,12 @@ pub async fn process_pty_output(
     for line in lines {
         tracing::debug!("Checking line: {:?}", line);
 
-        let actions = ruler.decide_actions_with_timeout(line).await;
+        let actions = rule_config.decide_actions_with_timeout(line).await;
 
         tracing::debug!("Actions decided: {:?}", actions);
 
         for action in actions {
-            execute_rule_action(&action, agent, queue_manager).await?;
+            execute_rule_action(&action, agent).await?;
         }
     }
 
@@ -373,8 +368,8 @@ fn strip_ansi_escapes(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ruler::entry::{CompiledEntry, TriggerType};
-    use crate::ruler::types::ActionType;
+    use crate::config::entry::{CompiledEntry, TriggerType};
+    use crate::config::types::ActionType;
     use std::time::Duration;
 
     #[tokio::test]
