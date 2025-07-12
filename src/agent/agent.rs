@@ -13,21 +13,34 @@ pub enum AgentStatus {
     Active, // Executing tasks and monitoring rules
 }
 
+/// Terminal dimensions configuration
+#[derive(Debug, Clone, Copy)]
+pub struct TerminalSize {
+    pub cols: u16,
+    pub rows: u16,
+}
+
+impl TerminalSize {
+    pub fn new(cols: u16, rows: u16) -> Self {
+        Self { cols, rows }
+    }
+}
+
 pub struct Agent {
     id: String,
     pub process: PtyProcess,
-    cols: u16,
-    rows: u16,
+    terminal_size: TerminalSize,
     status: RwLock<AgentStatus>,
     web_server_handle: RwLock<Option<JoinHandle<()>>>,
 }
 
 impl Agent {
     pub async fn new(id: String, cols: u16, rows: u16) -> Result<Self> {
+        let terminal_size = TerminalSize::new(cols, rows);
         let config = PtyProcessConfig {
             shell_command: Some(std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string())),
-            cols,
-            rows,
+            cols: terminal_size.cols,
+            rows: terminal_size.rows,
         };
 
         let process = PtyProcess::new(config);
@@ -38,8 +51,7 @@ impl Agent {
         Ok(Agent {
             id,
             process,
-            cols,
-            rows,
+            terminal_size,
             status: RwLock::new(AgentStatus::Idle),
             web_server_handle: RwLock::new(None),
         })
@@ -53,8 +65,8 @@ impl Agent {
     }
 
     /// Get terminal dimensions for asciinema integration
-    pub fn get_terminal_size(&self) -> (u16, u16) {
-        (self.cols, self.rows)
+    pub fn get_terminal_size(&self) -> TerminalSize {
+        self.terminal_size
     }
 
     /// Get agent ID
