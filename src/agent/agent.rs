@@ -92,8 +92,8 @@ impl Agent {
         Ok(())
     }
 
-    /// Monitor command completion by checking child processes of the shell
-    pub async fn monitor_command_completion(&self) {
+    /// Monitor agent status by checking child processes
+    pub async fn monitor(&self) {
         if let Ok(Some(shell_pid)) = self.process.get_shell_pid().await {
             let child_pids = get_child_processes(shell_pid);
             let current_status = self.get_status().await;
@@ -115,7 +115,7 @@ impl Agent {
     /// Start monitoring this agent's status (Active/Idle) based on child processes
     pub async fn start_status_monitoring(self: std::sync::Arc<Self>) -> Result<()> {
         loop {
-            self.monitor_command_completion().await;
+            self.monitor().await;
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }
