@@ -5,7 +5,7 @@ use tokio::task::JoinHandle;
 use tokio::time::interval;
 
 use crate::agent::Agents;
-use crate::agent::execution::execute_periodic_entry;
+use crate::agent::execute_entry;
 use crate::config::trigger::{CompiledEntry, TriggerType};
 
 /// Periodic task manager responsible for handling periodic entries
@@ -48,7 +48,7 @@ impl PeriodicTaskManager {
                 entry_clone.name
             );
             let agent = agents_clone.get_agent_by_index(0);
-            if let Err(e) = execute_periodic_entry(&entry_clone, Some(&agent)).await {
+            if let Err(e) = execute_entry(&entry_clone, &agent).await {
                 eprintln!(
                     "❌ Error executing startup periodic entry '{}': {}",
                     entry_clone.name, e
@@ -66,7 +66,7 @@ impl PeriodicTaskManager {
                     Ok(true) => {
                         // Execute on available agent
                         let agent = agents_clone.get_agent_by_index(0);
-                        if let Err(e) = execute_periodic_entry(&entry_clone, Some(&agent)).await {
+                        if let Err(e) = execute_entry(&entry_clone, &agent).await {
                             eprintln!(
                                 "❌ Error executing periodic entry '{}': {}",
                                 entry_clone.name, e

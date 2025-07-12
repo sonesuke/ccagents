@@ -1,8 +1,11 @@
+use crate::config;
 use crate::terminal::pty_process::{PtyProcess, PtyProcessConfig};
 use crate::web_server::WebServer;
 use anyhow::Result;
+use std::collections::HashSet;
 use std::process::Command;
 use std::sync::{Arc, RwLock};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
 
@@ -253,6 +256,191 @@ fn get_child_processes(parent_pid: u32) -> Vec<u32> {
                 e
             );
             Vec::new()
+        }
+    }
+}
+
+// ================== Execution Functions ==================
+
+/// Execute an entry action (unified for all entry types)
+pub async fn execute_entry(entry: &config::trigger::CompiledEntry, agent: &Agent) -> Result<()> {
+    tracing::debug!("Entry name: {}", entry.name);
+    tracing::debug!("Action type: {:?}", entry.action);
+
+    if let Some(source) = &entry.source {
+        println!("📦 Executing entry '{}' → Source: {}", entry.name, source);
+        execute_source_command(entry, source, Some(agent)).await
+    } else {
+        execute_action_with_context(&entry.action, &entry.name, Some(agent)).await
+    }
+}
+
+/// Execute a rule action
+pub async fn execute_rule_action(action: &config::types::ActionType, agent: &Agent) -> Result<()> {
+    execute_send_keys_action(action, Some(agent), "🤖 EXECUTING RULE", Some(1000)).await
+}
+
+/// Execute a source command and process its output
+async fn execute_source_command(
+    entry: &config::trigger::CompiledEntry,
+    source: &str,
+    agent: Option<&Agent>,
+) -> Result<()> {
+    let output = Command::new("sh").arg("-c").arg(source).output()?;
+
+    if !output.status.success() {
+        eprintln!(
+            "❌ Source command failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return Ok(());
+    }
+
+    let lines: Vec<String> = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|s| s.to_string())
+        .collect();
+
+    println!("✅ Source command produced {} lines", lines.len());
+
+    let mut seen = HashSet::new();
+    let mut processed = 0;
+
+    for line in lines {
+        if entry.dedupe && !seen.insert(line.clone()) {
+            continue;
+        }
+
+        let resolved_action = resolve_source_placeholders(&entry.action, &line);
+        execute_action(&resolved_action, agent).await?;
+        processed += 1;
+    }
+
+    let suffix = if entry.dedupe {
+        "unique items"
+    } else {
+        "items"
+    };
+    println!("✅ Processed {} {}", processed, suffix);
+    Ok(())
+}
+
+/// Execute an action with optional context information
+async fn execute_action_with_context(
+    action: &config::types::ActionType,
+    entry_name: &str,
+    agent: Option<&Agent>,
+) -> Result<()> {
+    execute_action_internal(action, agent, Some(entry_name)).await
+}
+
+/// Execute an action (common logic for both source and direct actions)
+async fn execute_action(action: &config::types::ActionType, agent: Option<&Agent>) -> Result<()> {
+    execute_action_internal(action, agent, None).await
+}
+
+/// Internal action execution with optional context
+async fn execute_action_internal(
+    action: &config::types::ActionType,
+    agent: Option<&Agent>,
+    entry_name: Option<&str>,
+) -> Result<()> {
+    match agent {
+        Some(agent) => {
+            let prefix = entry_name
+                .map(|name| format!("🤖 Executing entry '{}'", name))
+                .unwrap_or_default();
+            execute_send_keys_action(action, Some(agent), &prefix, None).await
+        }
+        None => {
+            if let Some(name) = entry_name {
+                println!(
+                    "⚠️ Entry '{}' has SendKeys action - skipping (no agent context)",
+                    name
+                );
+            }
+            Ok(())
+        }
+    }
+}
+
+/// Common SendKeys execution logic with configurable output and delay
+async fn execute_send_keys_action(
+    action: &config::types::ActionType,
+    agent: Option<&Agent>,
+    log_prefix: &str,
+    post_delay_ms: Option<u64>,
+) -> Result<()> {
+    match action {
+        config::types::ActionType::SendKeys(keys) => {
+            if let Some(agent) = agent {
+                if !keys.is_empty() {
+                    if !log_prefix.is_empty() {
+                        println!("{} → Sending: {:?}", log_prefix, keys);
+                        if log_prefix.contains("RULE") {
+                            println!(
+                                "🕐 Timestamp: {}",
+                                SystemTime::now()
+                                    .duration_since(UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_secs()
+                            );
+                        }
+                    }
+
+                    start_command_tracking(agent).await;
+                    send_keys_with_delay(keys, agent, 100).await?;
+
+                    if let Some(delay_ms) = post_delay_ms {
+                        println!("✅ Rule execution completed, waiting {}ms", delay_ms);
+                        tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+                    }
+                }
+                Ok(())
+            } else {
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Start command tracking for an agent
+async fn start_command_tracking(agent: &Agent) {
+    if let Ok(shell_pid) = agent.get_shell_pid().await {
+        agent.start_command_tracking(shell_pid).await;
+    }
+}
+
+/// Send keys with delay between each key
+async fn send_keys_with_delay(keys: &[String], agent: &Agent, delay_ms: u64) -> Result<()> {
+    for key in keys {
+        tracing::debug!("📤 Sending individual key: {:?}", key);
+
+        let key_to_send = if key == "\\r" || key == "\r" {
+            "\r"
+        } else {
+            key
+        };
+
+        if let Err(e) = agent.send_keys(key_to_send).await {
+            eprintln!("❌ Error sending key: {}", e);
+        }
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+    }
+    Ok(())
+}
+
+/// Resolve ${1} placeholders in action with source line content
+fn resolve_source_placeholders(
+    action: &config::types::ActionType,
+    value: &str,
+) -> config::types::ActionType {
+    match action {
+        config::types::ActionType::SendKeys(keys) => {
+            let resolved_keys = keys.iter().map(|key| key.replace("${1}", value)).collect();
+            config::types::ActionType::SendKeys(resolved_keys)
         }
     }
 }

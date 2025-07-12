@@ -44,7 +44,7 @@ impl DiffMonitor {
             tracing::debug!("Actions decided: {:?}", actions);
 
             for action in actions {
-                crate::agent::execution::execute_rule_action(&action, agent).await?;
+                crate::agent::execute_rule_action(&action, agent).await?;
             }
         }
 

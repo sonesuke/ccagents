@@ -4,7 +4,7 @@ use tokio::time::Duration;
 
 use crate::agent;
 use crate::agent::Agent;
-use crate::agent::execution::execute_rule_action;
+use crate::agent::execute_rule_action;
 use crate::config::RuleConfig;
 
 use super::Monitor;

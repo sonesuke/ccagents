@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::sync::Arc;
 
 use crate::agent::Agents;
-use crate::agent::execution::execute_entry_action;
+use crate::agent::execute_entry;
 use crate::config::trigger::CompiledEntry;
 
 /// Startup task manager responsible for handling on_start entries
@@ -31,7 +31,7 @@ impl StartupTaskManager {
                 entry.name,
                 agent.get_id()
             );
-            execute_entry_action(&agent, entry).await?;
+            execute_entry(entry, &agent).await?;
         }
 
         Ok(())
