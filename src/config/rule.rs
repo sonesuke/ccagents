@@ -118,22 +118,7 @@ fn parse_duration(s: &str) -> Result<Duration> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::types::ActionType;
     use std::time::Duration;
-
-    fn create_test_rule(pattern: &str, keys: Vec<String>) -> CompiledRule {
-        CompiledRule {
-            rule_type: RuleType::Pattern(Regex::new(pattern).unwrap()),
-            action: ActionType::SendKeys(keys),
-        }
-    }
-
-    fn create_timeout_rule(timeout_str: &str, keys: Vec<String>) -> CompiledRule {
-        CompiledRule {
-            rule_type: RuleType::DiffTimeout(parse_duration(timeout_str).unwrap()),
-            action: ActionType::SendKeys(keys),
-        }
-    }
 
     #[test]
     fn test_parse_duration() {
