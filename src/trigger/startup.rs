@@ -1,18 +1,18 @@
 use anyhow::Result;
 use std::sync::Arc;
 
-use crate::agent;
-use crate::cli::execute_entry_action;
+use crate::agent::AgentPool;
+use crate::agent::execution::execute_entry_action;
 use crate::config::entry::CompiledEntry;
 
 /// Startup task manager responsible for handling on_start entries
 pub struct StartupTaskManager {
     pub entries: Vec<CompiledEntry>,
-    pub agent_pool: Arc<agent::AgentPool>,
+    pub agent_pool: Arc<AgentPool>,
 }
 
 impl StartupTaskManager {
-    pub fn new(entries: Vec<CompiledEntry>, agent_pool: Arc<agent::AgentPool>) -> Self {
+    pub fn new(entries: Vec<CompiledEntry>, agent_pool: Arc<AgentPool>) -> Self {
         Self {
             entries,
             agent_pool,

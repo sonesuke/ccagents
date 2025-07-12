@@ -1,4 +1,4 @@
-use crate::agent::pty_session::{PtyEvent, PtyEventData};
+use crate::terminal::pty_session::{PtyEvent, PtyEventData};
 use anyhow::{Context, Result};
 use bytes::Bytes;
 use portable_pty::{Child, CommandBuilder, NativePtySystem, PtySize, PtySystem};

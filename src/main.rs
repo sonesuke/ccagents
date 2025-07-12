@@ -1,16 +1,16 @@
 mod agent;
 mod cli;
 mod config;
-mod monitor;
+mod terminal;
 mod trigger;
 mod web_server;
 mod web_ui;
 
+use agent::Agents;
 use anyhow::{Context, Result};
 use clap::Parser;
 use cli::Cli;
 use config::Config;
-use monitor::Agents;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::signal;

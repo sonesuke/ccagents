@@ -57,12 +57,12 @@ agents:
         - "echo 'No activity for 2 minutes - long timeout triggered'"
         - "\r"
 
-    # Timeout rule with workflow action
+    # Very long timeout rule
     - diff_timeout: "5m"
-      action: "workflow"
-      workflow: "restart_monitoring"
-      args: 
-        - "long_inactivity"
+      action: "send_keys"
+      keys:
+        - "echo 'Very long inactivity detected - 5 minutes'"
+        - "\r"
 
     # Pattern that can interrupt timeouts
     - when: "reset"

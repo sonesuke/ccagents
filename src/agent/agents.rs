@@ -2,18 +2,18 @@ use anyhow::Result;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 
-use crate::agent;
+use crate::agent::AgentPool;
+use crate::agent::{AgentMonitor, TimeoutMonitor};
 use crate::config::RuleConfig;
-use crate::monitor::{AgentMonitor, TimeoutMonitor};
 
 /// Agents responsible for monitoring agents and processing rules
 pub struct Agents {
     rule_config: RuleConfig,
-    agent_pool: Arc<agent::AgentPool>,
+    agent_pool: Arc<AgentPool>,
 }
 
 impl Agents {
-    pub fn new(rule_config: RuleConfig, agent_pool: Arc<agent::AgentPool>) -> Self {
+    pub fn new(rule_config: RuleConfig, agent_pool: Arc<AgentPool>) -> Self {
         Self {
             rule_config,
             agent_pool,

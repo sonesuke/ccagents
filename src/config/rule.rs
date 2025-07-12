@@ -128,13 +128,6 @@ mod tests {
         }
     }
 
-    fn create_workflow_rule(pattern: &str, workflow: String, args: Vec<String>) -> CompiledRule {
-        CompiledRule {
-            rule_type: RuleType::Pattern(Regex::new(pattern).unwrap()),
-            action: ActionType::Workflow(workflow, args),
-        }
-    }
-
     fn create_timeout_rule(timeout_str: &str, keys: Vec<String>) -> CompiledRule {
         CompiledRule {
             rule_type: RuleType::DiffTimeout(parse_duration(timeout_str).unwrap()),

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::time::Duration;
 
 use crate::agent;
-use crate::cli;
+use crate::agent::execution::execute_rule_action;
 use crate::config::RuleConfig;
 
 use super::Monitor;
@@ -42,7 +42,7 @@ impl TimeoutMonitor {
                 let timeout_actions = self.rule_config.check_timeout_rules().await;
                 for action in timeout_actions {
                     tracing::info!("⏰ Executing timeout rule action: {:?}", action);
-                    if let Err(e) = cli::execute_rule_action(&action, &agent).await {
+                    if let Err(e) = execute_rule_action(&action, &agent).await {
                         tracing::error!("❌ Error executing timeout rule action: {}", e);
                     }
                 }

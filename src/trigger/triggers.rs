@@ -2,18 +2,18 @@ use anyhow::Result;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 
-use crate::agent;
+use crate::agent::AgentPool;
 use crate::config::TriggerConfig;
 use crate::trigger::{PeriodicTaskManager, StartupTaskManager};
 
 /// Triggers responsible for managing startup and periodic entries
 pub struct Triggers {
     trigger_config: TriggerConfig,
-    agent_pool: Arc<agent::AgentPool>,
+    agent_pool: Arc<AgentPool>,
 }
 
 impl Triggers {
-    pub fn new(trigger_config: TriggerConfig, agent_pool: Arc<agent::AgentPool>) -> Self {
+    pub fn new(trigger_config: TriggerConfig, agent_pool: Arc<AgentPool>) -> Self {
         Self {
             trigger_config,
             agent_pool,

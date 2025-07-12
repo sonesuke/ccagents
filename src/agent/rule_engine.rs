@@ -109,11 +109,6 @@ pub fn decide_action(capture: &str, rules: &[CompiledRule]) -> ActionType {
                         ActionType::SendKeys(keys) => ActionType::SendKeys(
                             resolve_capture_groups_in_vec(keys, &captured_groups),
                         ),
-                        ActionType::Workflow(workflow, args) => {
-                            let resolved_args =
-                                resolve_capture_groups_in_vec(args, &captured_groups);
-                            ActionType::Workflow(workflow.clone(), resolved_args)
-                        }
                     };
 
                     return resolved_action;
@@ -212,13 +207,6 @@ mod tests {
         }
     }
 
-    fn create_workflow_rule(pattern: &str, workflow: String, args: Vec<String>) -> CompiledRule {
-        CompiledRule {
-            rule_type: RuleType::Pattern(Regex::new(pattern).unwrap()),
-            action: ActionType::Workflow(workflow, args),
-        }
-    }
-
     fn create_timeout_rule(duration_str: &str, keys: Vec<String>) -> CompiledRule {
         let duration = match duration_str.strip_suffix('s') {
             Some(n) => Duration::from_secs(n.parse().unwrap()),
@@ -308,21 +296,6 @@ mod tests {
                 "app".to_string(),
                 "production".to_string()
             ])
-        );
-    }
-
-    #[test]
-    fn test_decide_action_workflow() {
-        let rules = vec![create_workflow_rule(
-            r"fix\s+issue\s+(\d+)",
-            "github_issue_fix".to_string(),
-            vec!["${1}".to_string()],
-        )];
-
-        let action = decide_action("fix issue 456", &rules);
-        assert_eq!(
-            action,
-            ActionType::Workflow("github_issue_fix".to_string(), vec!["456".to_string()])
         );
     }
 

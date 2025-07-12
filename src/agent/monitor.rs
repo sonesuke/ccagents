@@ -3,16 +3,16 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio::time::Duration;
 
-use crate::agent;
-use crate::cli::process_pty_output;
+use crate::agent::pty_processor::process_pty_output;
+use crate::agent::terminal_agent::{Agent, AgentStatus};
 use crate::config::RuleConfig;
 
 use super::Monitor;
 
-/// Agent monitor responsible for monitoring a single agent's PTY output and processing rules
+/// Agent monitor responsible for monitoring a single terminal's PTY output and processing rules
 pub struct AgentMonitor {
     pub rule_config: RuleConfig,
-    pub agent: Arc<agent::Agent>,
+    pub agent: Arc<Agent>,
     pub receiver: broadcast::Receiver<String>,
 }
 
@@ -38,7 +38,7 @@ impl AgentMonitor {
         }
     }
 
-    async fn process_pty_output(&mut self, status: agent::AgentStatus) -> Result<()> {
+    async fn process_pty_output(&mut self, status: AgentStatus) -> Result<()> {
         let mut received_any = false;
 
         while let Ok(pty_output) = self.receiver.try_recv() {
@@ -52,7 +52,7 @@ impl AgentMonitor {
             );
 
             // Process rules only for Active agents
-            if status == agent::AgentStatus::Active {
+            if status == AgentStatus::Active {
                 tracing::debug!(
                     "🔍 Processing rules for agent {} ({:?})",
                     self.agent.get_id(),
