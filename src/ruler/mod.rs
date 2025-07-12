@@ -5,7 +5,7 @@ pub mod rule;
 pub mod types;
 
 use crate::ruler::config::load_config;
-use crate::ruler::decision::{TimeoutState, decide_action, decide_action_with_timeout};
+use crate::ruler::decision::{TimeoutState, decide_action_with_timeout};
 use crate::ruler::entry::{CompiledEntry, TriggerType};
 use crate::ruler::rule::CompiledRule;
 use crate::ruler::types::ActionType;
@@ -79,12 +79,6 @@ impl Ruler {
             .into_iter()
             .filter(|entry| matches!(entry.trigger, TriggerType::Periodic { .. }))
             .collect()
-    }
-
-    #[allow(dead_code)]
-    pub async fn decide_action_for_capture(&self, capture: &str) -> ActionType {
-        let rules = self.get_rules().await;
-        decide_action(capture, &rules)
     }
 
     /// Enhanced decision function that handles both pattern matching and timeout rules

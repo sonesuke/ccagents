@@ -6,10 +6,7 @@ use crate::agent::pty_process::{PtyProcess, PtyProcessConfig};
 use crate::ruler::config::MonitorConfig;
 use anyhow::Result;
 use std::process::Command;
-use std::sync::{
-    Arc, RwLock,
-    atomic::{AtomicUsize, Ordering},
-};
+use std::sync::{Arc, RwLock};
 
 /// Agent status for state management
 #[derive(Debug, Clone, PartialEq)]
@@ -21,8 +18,6 @@ pub enum AgentStatus {
 /// Agent pool for managing multiple agents in parallel
 pub struct AgentPool {
     agents: Vec<Arc<Agent>>,
-    #[allow(dead_code)]
-    next_index: AtomicUsize,
 }
 
 impl AgentPool {
@@ -43,17 +38,7 @@ impl AgentPool {
             agents.push(agent);
         }
 
-        Ok(Self {
-            agents,
-            next_index: AtomicUsize::new(0),
-        })
-    }
-
-    /// Get the next agent using round-robin selection
-    #[allow(dead_code)]
-    pub fn get_agent(&self) -> Arc<Agent> {
-        let index = self.next_index.fetch_add(1, Ordering::Relaxed) % self.agents.len();
-        Arc::clone(&self.agents[index])
+        Ok(Self { agents })
     }
 
     /// Get the number of agents in the pool
@@ -64,16 +49,6 @@ impl AgentPool {
     /// Get agent by index for web server assignment
     pub fn get_agent_by_index(&self, index: usize) -> Arc<Agent> {
         Arc::clone(&self.agents[index % self.agents.len()])
-    }
-
-    /// Get an idle agent (first available)
-    pub async fn get_idle_agent(&self) -> Option<Arc<Agent>> {
-        for agent in &self.agents {
-            if agent.get_status().await == AgentStatus::Idle {
-                return Some(Arc::clone(agent));
-            }
-        }
-        None
     }
 }
 
@@ -183,7 +158,6 @@ impl Agent {
     }
 
     /// Get the current status of the agent
-    #[allow(dead_code)]
     pub async fn get_status(&self) -> AgentStatus {
         self.status.read().unwrap().clone()
     }
@@ -215,25 +189,36 @@ impl Agent {
     }
 
     /// Monitor command completion by checking child processes of the shell
+    /// Automatically manages Active/Idle status based on child process presence
     pub async fn monitor_command_completion(&self) {
         // Get the shell PID
         if let Ok(Some(shell_pid)) = self.get_shell_pid().await {
             // Get current child processes of the shell
             let child_pids = get_child_processes(shell_pid);
+            let current_status = self.get_status().await;
 
-            if child_pids.is_empty() {
-                // No child processes = shell is at prompt = command completed
+            if !child_pids.is_empty() && current_status == AgentStatus::Idle {
+                // Child processes present + Idle → switch to Active
                 tracing::info!(
-                    "💀 Agent {} detected command completion (no child processes)",
+                    "🚀 Agent {} detected child processes, setting to Active: {:?}",
+                    self.id,
+                    child_pids
+                );
+                self.set_status(AgentStatus::Active).await;
+            } else if child_pids.is_empty() && current_status == AgentStatus::Active {
+                // No child processes + Active → switch to Idle
+                tracing::info!(
+                    "💀 Agent {} detected command completion (no child processes), setting to Idle",
                     self.id
                 );
                 self.stop_command_tracking().await;
                 self.set_status(AgentStatus::Idle).await;
             } else {
-                // Child processes still running = command still active
-                tracing::debug!(
-                    "🔄 Agent {} has active child processes: {:?}",
+                // Status matches child process state, no change needed
+                tracing::trace!(
+                    "✅ Agent {} status consistent: {:?} (child processes: {:?})",
                     self.id,
+                    current_status,
                     child_pids
                 );
             }

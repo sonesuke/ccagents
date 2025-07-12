@@ -112,20 +112,14 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
     let on_start_entries = ruler.get_on_start_entries().await;
     if !on_start_entries.is_empty() {
         println!("🎬 Executing on_start entries...");
-        for entry in on_start_entries {
-            if let Some(agent) = agent_pool.get_idle_agent().await {
-                println!(
-                    "🔄 Setting agent {} to Active for startup entry",
-                    agent.get_id()
-                );
-                agent.set_status(agent::AgentStatus::Active).await;
-                execute_entry_action(&agent, &entry, &queue_manager).await?;
-            } else {
-                println!(
-                    "⚠️ No idle agent available for startup entry: {}",
-                    entry.name
-                );
-            }
+        for (i, entry) in on_start_entries.iter().enumerate() {
+            let agent = agent_pool.get_agent_by_index(i % agent_pool.size());
+            println!(
+                "🎯 Executing startup entry '{}' on agent {}",
+                entry.name,
+                agent.get_id()
+            );
+            execute_entry_action(&agent, entry, &queue_manager).await?;
         }
     }
 
@@ -144,25 +138,13 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
                     "⏰ Executing periodic entry immediately on startup: {}",
                     entry_clone.name
                 );
-                if let Some(agent) = agent_pool_clone.get_idle_agent().await {
-                    println!(
-                        "🔄 Setting agent {} to Active for startup periodic entry",
-                        agent.get_id()
-                    );
-                    agent.set_status(agent::AgentStatus::Active).await;
-                    if let Err(e) =
-                        execute_periodic_entry(&entry_clone, &queue_manager_clone, Some(&agent))
-                            .await
-                    {
-                        eprintln!(
-                            "❌ Error executing startup periodic entry '{}': {}",
-                            entry_clone.name, e
-                        );
-                    }
-                } else {
-                    println!(
-                        "⚠️ No idle agent available for startup periodic entry: {}",
-                        entry_clone.name
+                let agent = agent_pool_clone.get_agent_by_index(0);
+                if let Err(e) =
+                    execute_periodic_entry(&entry_clone, &queue_manager_clone, Some(&agent)).await
+                {
+                    eprintln!(
+                        "❌ Error executing startup periodic entry '{}': {}",
+                        entry_clone.name, e
                     );
                 }
 
@@ -172,37 +154,26 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
                     timer.tick().await;
                     println!("⏰ Executing periodic entry: {}", entry_clone.name);
 
-                    // Check if there's data to process before setting agent to Active
+                    // Check if there's data to process
                     match cli::has_data_to_process(&entry_clone).await {
                         Ok(true) => {
-                            // Only proceed if there's data to process
-                            if let Some(agent) = agent_pool_clone.get_idle_agent().await {
-                                println!(
-                                    "🔄 Setting agent {} to Active for periodic entry",
-                                    agent.get_id()
-                                );
-                                agent.set_status(agent::AgentStatus::Active).await;
-                                if let Err(e) = execute_periodic_entry(
-                                    &entry_clone,
-                                    &queue_manager_clone,
-                                    Some(&agent),
-                                )
-                                .await
-                                {
-                                    eprintln!(
-                                        "❌ Error executing periodic entry '{}': {}",
-                                        entry_clone.name, e
-                                    );
-                                }
-                            } else {
-                                println!(
-                                    "⚠️ No idle agent available for periodic entry: {}",
-                                    entry_clone.name
+                            // Execute on available agent
+                            let agent = agent_pool_clone.get_agent_by_index(0);
+                            if let Err(e) = execute_periodic_entry(
+                                &entry_clone,
+                                &queue_manager_clone,
+                                Some(&agent),
+                            )
+                            .await
+                            {
+                                eprintln!(
+                                    "❌ Error executing periodic entry '{}': {}",
+                                    entry_clone.name, e
                                 );
                             }
                         }
                         Ok(false) => {
-                            // No data to process, agent remains idle
+                            // No data to process
                             println!(
                                 "ℹ️ No data to process for periodic entry: {}",
                                 entry_clone.name
@@ -228,8 +199,6 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
     let queue_manager_for_monitoring = queue_manager.clone();
 
     let monitoring_handle = tokio::spawn(async move {
-        let mut last_status_log = std::time::Instant::now();
-
         // Create persistent receivers for each agent at startup
         let mut agent_receivers = Vec::new();
         for i in 0..agent_pool_for_monitoring.size() {
@@ -254,19 +223,13 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
         }
 
         loop {
-            // Log agent statuses periodically (every 5 seconds)
-            if last_status_log.elapsed() > std::time::Duration::from_secs(5) {
-                for i in 0..agent_pool_for_monitoring.size() {
-                    let agent = agent_pool_for_monitoring.get_agent_by_index(i);
-                    let status = agent.get_status().await;
-                    tracing::info!("📊 Agent {} status: {:?}", agent.get_id(), status);
-                }
-                last_status_log = std::time::Instant::now();
-            }
-
-            // Monitor all agents for rule matching using persistent receivers
+            // Monitor all agents for rule matching and status management
             for i in 0..agent_pool_for_monitoring.size() {
                 let agent = agent_pool_for_monitoring.get_agent_by_index(i);
+
+                // Always monitor command completion to auto-manage Active/Idle status
+                agent.monitor_command_completion().await;
+
                 let current_status = agent.get_status().await;
 
                 // Use the persistent receiver for this agent
@@ -282,11 +245,6 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
                             pty_output.len(),
                             pty_output.chars().take(50).collect::<String>()
                         );
-
-                        // For Active agents, monitor command completion via process monitoring
-                        if current_status == agent::AgentStatus::Active {
-                            agent.monitor_command_completion().await;
-                        }
 
                         // Process rules only for Active agents
                         // Rules should only be evaluated when agent is actively running commands
