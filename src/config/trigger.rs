@@ -25,7 +25,7 @@ pub struct Entry {
 
 // Compiled structure for runtime use
 #[derive(Debug, Clone)]
-pub struct CompiledEntry {
+pub struct Trigger {
     pub name: String,
     pub trigger: TriggerType,
     pub action: ActionType,
@@ -41,7 +41,7 @@ pub enum TriggerType {
 }
 
 impl Entry {
-    pub fn compile(&self) -> Result<CompiledEntry> {
+    pub fn compile(&self) -> Result<Trigger> {
         let trigger = if self.event.starts_with("timer:") {
             let duration_str = self
                 .event
@@ -58,7 +58,7 @@ impl Entry {
 
         let action = compile_action(&self.action, &self.keys, &self.workflow, &self.args)?;
 
-        Ok(CompiledEntry {
+        Ok(Trigger {
             name: self.name.clone(),
             trigger,
             action,

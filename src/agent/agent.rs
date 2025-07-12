@@ -263,7 +263,7 @@ fn get_child_processes(parent_pid: u32) -> Vec<u32> {
 // ================== Execution Functions ==================
 
 /// Execute an entry action (unified for all entry types)
-pub async fn execute_entry(entry: &config::trigger::CompiledEntry, agent: &Agent) -> Result<()> {
+pub async fn execute_entry(entry: &config::trigger::Trigger, agent: &Agent) -> Result<()> {
     tracing::debug!("Entry name: {}", entry.name);
     tracing::debug!("Action type: {:?}", entry.action);
 
@@ -282,7 +282,7 @@ pub async fn execute_rule_action(action: &config::types::ActionType, agent: &Age
 
 /// Execute a source command and process its output
 async fn execute_source_command(
-    entry: &config::trigger::CompiledEntry,
+    entry: &config::trigger::Trigger,
     source: &str,
     agent: Option<&Agent>,
 ) -> Result<()> {

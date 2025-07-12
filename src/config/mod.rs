@@ -7,19 +7,19 @@ pub mod web_ui;
 
 use crate::config::loader::load_config;
 use crate::config::rule::CompiledRule;
-use crate::config::trigger::{CompiledEntry, TriggerType};
+use crate::config::trigger::{Trigger, TriggerType};
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// Configuration for trigger system
 pub struct TriggerConfig {
-    entries: Arc<RwLock<Vec<CompiledEntry>>>,
+    entries: Arc<RwLock<Vec<Trigger>>>,
 }
 
 impl TriggerConfig {
     /// Get startup entries (on_start triggers)
-    pub async fn get_on_start_entries(&self) -> Vec<CompiledEntry> {
+    pub async fn get_on_start_entries(&self) -> Vec<Trigger> {
         let entries = self.entries.read().await;
         entries
             .iter()
@@ -29,7 +29,7 @@ impl TriggerConfig {
     }
 
     /// Get periodic entries (periodic triggers)
-    pub async fn get_periodic_entries(&self) -> Vec<CompiledEntry> {
+    pub async fn get_periodic_entries(&self) -> Vec<Trigger> {
         let entries = self.entries.read().await;
         entries
             .iter()
@@ -60,7 +60,7 @@ pub fn is_test_mode() -> bool {
 }
 
 pub struct Config {
-    entries: Arc<RwLock<Vec<CompiledEntry>>>,
+    entries: Arc<RwLock<Vec<Trigger>>>,
     rules: Arc<RwLock<Vec<CompiledRule>>>,
     test_mode: bool,
     // Monitor configuration

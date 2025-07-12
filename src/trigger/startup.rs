@@ -3,16 +3,16 @@ use std::sync::Arc;
 
 use crate::agent::Agents;
 use crate::agent::execute_entry;
-use crate::config::trigger::CompiledEntry;
+use crate::config::trigger::Trigger;
 
 /// Startup task manager responsible for handling on_start entries
 pub struct Startup {
-    pub entries: Vec<CompiledEntry>,
+    pub entries: Vec<Trigger>,
     pub agents: Arc<Agents>,
 }
 
 impl Startup {
-    pub fn new(entries: Vec<CompiledEntry>, agents: Arc<Agents>) -> Self {
+    pub fn new(entries: Vec<Trigger>, agents: Arc<Agents>) -> Self {
         Self { entries, agents }
     }
 

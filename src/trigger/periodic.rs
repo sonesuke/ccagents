@@ -6,16 +6,16 @@ use tokio::time::interval;
 
 use crate::agent::Agents;
 use crate::agent::execute_entry;
-use crate::config::trigger::{CompiledEntry, TriggerType};
+use crate::config::trigger::{Trigger, TriggerType};
 
 /// Periodic task manager responsible for handling periodic entries
 pub struct Periodic {
-    pub entries: Vec<CompiledEntry>,
+    pub entries: Vec<Trigger>,
     pub agents: Arc<Agents>,
 }
 
 impl Periodic {
-    pub fn new(entries: Vec<CompiledEntry>, agents: Arc<Agents>) -> Self {
+    pub fn new(entries: Vec<Trigger>, agents: Arc<Agents>) -> Self {
         Self { entries, agents }
     }
 
@@ -33,11 +33,7 @@ impl Periodic {
         handles
     }
 
-    fn start_single_task(
-        &self,
-        entry: CompiledEntry,
-        period: tokio::time::Duration,
-    ) -> JoinHandle<()> {
+    fn start_single_task(&self, entry: Trigger, period: tokio::time::Duration) -> JoinHandle<()> {
         let entry_clone = entry.clone();
         let agents_clone = Arc::clone(&self.agents);
 
@@ -93,7 +89,7 @@ impl Periodic {
 }
 
 /// Check if a periodic entry will produce data to process
-async fn has_data_to_process(entry: &CompiledEntry) -> Result<bool> {
+async fn has_data_to_process(entry: &Trigger) -> Result<bool> {
     // If there's no source command, we consider it as having data to process
     if entry.source.is_none() {
         return Ok(true);

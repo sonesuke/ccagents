@@ -1,6 +1,6 @@
 use crate::config::agents::{AgentsConfig, FullAgentsConfig};
 use crate::config::rule::CompiledRule;
-use crate::config::trigger::CompiledEntry;
+use crate::config::trigger::Trigger;
 use crate::config::web_ui::WebUIConfig;
 use anyhow::{Context, Result};
 use serde::Deserialize;
@@ -25,7 +25,7 @@ pub struct ConfigFile {
 }
 
 /// Load configuration from a YAML file and compile entries and rules
-pub fn load_config(path: &Path) -> Result<(Vec<CompiledEntry>, Vec<CompiledRule>, MonitorConfig)> {
+pub fn load_config(path: &Path) -> Result<(Vec<Trigger>, Vec<CompiledRule>, MonitorConfig)> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("Failed to read config file: {}", path.display()))?;
 
