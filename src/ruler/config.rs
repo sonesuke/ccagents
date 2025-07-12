@@ -5,7 +5,7 @@ use serde::Deserialize;
 use std::path::Path;
 
 // Configuration structure with separate web_ui and agents sections
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Clone)]
 pub struct MonitorConfig {
     #[serde(default)]
     pub web_ui: WebUIConfig,
@@ -13,13 +13,13 @@ pub struct MonitorConfig {
     pub agents: AgentsConfig,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct AgentsConfig {
     #[serde(default = "default_pool_size")]
     pub pool: usize,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct WebUIConfig {
     #[serde(default = "default_enabled")]
     pub enabled: bool,

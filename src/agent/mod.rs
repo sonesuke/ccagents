@@ -4,9 +4,11 @@ pub mod pty_terminal;
 
 use crate::agent::pty_process::{PtyProcess, PtyProcessConfig};
 use crate::ruler::config::MonitorConfig;
+use crate::web_server::WebServer;
 use anyhow::Result;
 use std::process::Command;
 use std::sync::{Arc, RwLock};
+use tokio::task::JoinHandle;
 
 /// Agent status for state management
 #[derive(Debug, Clone, PartialEq)]
@@ -34,7 +36,27 @@ impl AgentPool {
             let port = base_port + i as u16;
             let agent_id = format!("agent-{}", i);
             let (cols, rows) = monitor_config.get_agent_dimensions(i);
-            let agent = Arc::new(Agent::new(agent_id, test_mode, port, cols, rows).await?);
+            let agent = Arc::new(
+                Agent::new(
+                    agent_id,
+                    test_mode,
+                    port,
+                    cols,
+                    rows,
+                    monitor_config.web_ui.host.clone(),
+                    monitor_config.web_ui.enabled,
+                )
+                .await?,
+            );
+
+            // Start web server if enabled
+            if monitor_config.web_ui.enabled {
+                agent
+                    .clone()
+                    .start_web_server(port, monitor_config.web_ui.host.clone())
+                    .await?;
+            }
+
             agents.push(agent);
         }
 
@@ -59,6 +81,9 @@ pub struct Agent {
     rows: u16,
     status: RwLock<AgentStatus>,
     command_start_time: RwLock<Option<std::time::Instant>>,
+    #[allow(dead_code)] // Will be used for future WebServer lifecycle management
+    web_server: Option<WebServer>,
+    web_server_handle: RwLock<Option<JoinHandle<()>>>,
 }
 
 impl Agent {
@@ -68,6 +93,8 @@ impl Agent {
         _port: u16,
         cols: u16,
         rows: u16,
+        _host: String,
+        _web_ui_enabled: bool,
     ) -> Result<Self> {
         let config = PtyProcessConfig {
             shell_command: Some(std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string())),
@@ -89,6 +116,8 @@ impl Agent {
             rows,
             status: RwLock::new(AgentStatus::Idle),
             command_start_time: RwLock::new(None),
+            web_server: None, // Will be set after creation
+            web_server_handle: RwLock::new(None),
         })
     }
 
@@ -226,6 +255,33 @@ impl Agent {
             tracing::debug!("❌ Agent {} could not get shell PID", self.id);
         }
     }
+
+    /// Start the WebServer for this agent if configured
+    pub async fn start_web_server(self: Arc<Self>, port: u16, host: String) -> Result<()> {
+        let web_server = WebServer::new(port, host, Arc::clone(&self));
+        let handle = tokio::spawn(async move {
+            if let Err(e) = web_server.start().await {
+                eprintln!("❌ Web server failed on port {}: {}", port, e);
+            }
+        });
+
+        *self.web_server_handle.write().unwrap() = Some(handle);
+        Ok(())
+    }
+
+    /// Stop the WebServer for this agent
+    #[allow(dead_code)] // Will be used for graceful shutdown
+    pub fn stop_web_server(&self) {
+        if let Some(handle) = self.web_server_handle.write().unwrap().take() {
+            handle.abort();
+        }
+    }
+
+    /// Check if this agent has a running web server
+    #[allow(dead_code)] // Will be used for status monitoring
+    pub fn has_web_server(&self) -> bool {
+        self.web_server_handle.read().unwrap().is_some()
+    }
 }
 
 /// Get child processes of a given parent PID
@@ -257,9 +313,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_agent_creation() {
-        let _agent = Agent::new("test-agent".to_string(), true, 9999, 80, 24)
-            .await
-            .unwrap();
+        let _agent = Agent::new(
+            "test-agent".to_string(),
+            true,
+            9999,
+            80,
+            24,
+            "localhost".to_string(),
+            false, // web_ui_enabled = false for test
+        )
+        .await
+        .unwrap();
         // Just verify the agent can be created successfully
         // Agent functionality is tested through integration tests
     }

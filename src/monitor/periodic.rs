@@ -1,0 +1,107 @@
+use std::sync::Arc;
+use tokio::task::JoinHandle;
+use tokio::time::interval;
+
+use crate::agent;
+use crate::cli::{execute_periodic_entry, has_data_to_process};
+use crate::queue::SharedQueueManager;
+use crate::ruler::entry::{CompiledEntry, TriggerType};
+
+/// Periodic task manager responsible for handling periodic entries
+pub struct PeriodicTaskManager {
+    pub entries: Vec<CompiledEntry>,
+    pub agent_pool: Arc<agent::AgentPool>,
+    pub queue_manager: SharedQueueManager,
+}
+
+impl PeriodicTaskManager {
+    pub fn new(
+        entries: Vec<CompiledEntry>,
+        agent_pool: Arc<agent::AgentPool>,
+        queue_manager: SharedQueueManager,
+    ) -> Self {
+        Self {
+            entries,
+            agent_pool,
+            queue_manager,
+        }
+    }
+
+    /// Start all periodic tasks and return their handles
+    pub fn start_all_tasks(&self) -> Vec<JoinHandle<()>> {
+        let mut handles = Vec::new();
+
+        for entry in &self.entries {
+            if let TriggerType::Periodic { interval: period } = entry.trigger {
+                let handle = self.start_single_task(entry.clone(), period);
+                handles.push(handle);
+            }
+        }
+
+        handles
+    }
+
+    fn start_single_task(
+        &self,
+        entry: CompiledEntry,
+        period: tokio::time::Duration,
+    ) -> JoinHandle<()> {
+        let entry_clone = entry.clone();
+        let queue_manager_clone = self.queue_manager.clone();
+        let agent_pool_clone = Arc::clone(&self.agent_pool);
+
+        tokio::spawn(async move {
+            // Execute immediately on startup
+            println!(
+                "⏰ Executing periodic entry immediately on startup: {}",
+                entry_clone.name
+            );
+            let agent = agent_pool_clone.get_agent_by_index(0);
+            if let Err(e) =
+                execute_periodic_entry(&entry_clone, &queue_manager_clone, Some(&agent)).await
+            {
+                eprintln!(
+                    "❌ Error executing startup periodic entry '{}': {}",
+                    entry_clone.name, e
+                );
+            }
+
+            // Continue with periodic execution
+            let mut timer = interval(period);
+            loop {
+                timer.tick().await;
+                println!("⏰ Executing periodic entry: {}", entry_clone.name);
+
+                // Check if there's data to process
+                match has_data_to_process(&entry_clone).await {
+                    Ok(true) => {
+                        // Execute on available agent
+                        let agent = agent_pool_clone.get_agent_by_index(0);
+                        if let Err(e) =
+                            execute_periodic_entry(&entry_clone, &queue_manager_clone, Some(&agent))
+                                .await
+                        {
+                            eprintln!(
+                                "❌ Error executing periodic entry '{}': {}",
+                                entry_clone.name, e
+                            );
+                        }
+                    }
+                    Ok(false) => {
+                        // No data to process
+                        println!(
+                            "ℹ️ No data to process for periodic entry: {}",
+                            entry_clone.name
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "❌ Error checking data for periodic entry '{}': {}",
+                            entry_clone.name, e
+                        );
+                    }
+                }
+            }
+        })
+    }
+}

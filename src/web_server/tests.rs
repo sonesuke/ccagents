@@ -7,9 +7,17 @@ use std::sync::Arc;
 #[tokio::test]
 async fn test_web_server_creation() {
     let agent = Arc::new(
-        Agent::new("test-agent".to_string(), true, 9999, 80, 24)
-            .await
-            .unwrap(),
+        Agent::new(
+            "test-agent".to_string(),
+            true,
+            9999,
+            80,
+            24,
+            "localhost".to_string(),
+            false,
+        )
+        .await
+        .unwrap(),
     );
     let web_server = WebServer::new(8080, "localhost".to_string(), agent);
 

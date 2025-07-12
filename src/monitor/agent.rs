@@ -1,0 +1,84 @@
+use anyhow::Result;
+use std::sync::Arc;
+use tokio::sync::broadcast;
+use tokio::time::Duration;
+
+use crate::agent;
+use crate::cli::process_pty_output;
+use crate::queue::SharedQueueManager;
+use crate::ruler::Ruler;
+
+use super::Monitor;
+
+/// Agent monitor responsible for monitoring a single agent's PTY output and processing rules
+pub struct AgentMonitor {
+    pub ruler: Arc<Ruler>,
+    pub queue_manager: SharedQueueManager,
+    pub agent: Arc<agent::Agent>,
+    pub receiver: broadcast::Receiver<String>,
+}
+
+impl Monitor for AgentMonitor {
+    async fn start_monitoring(self) -> Result<()> {
+        let monitor = self;
+        monitor.start_monitoring().await
+    }
+}
+
+impl AgentMonitor {
+    pub async fn start_monitoring(mut self) -> Result<()> {
+        loop {
+            // Monitor command completion to auto-manage Active/Idle status
+            self.agent.monitor_command_completion().await;
+            let current_status = self.agent.get_status().await;
+
+            // Process PTY output
+            self.process_pty_output(current_status).await?;
+
+            // Small delay to prevent busy waiting
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+
+    async fn process_pty_output(&mut self, status: agent::AgentStatus) -> Result<()> {
+        let mut received_any = false;
+
+        while let Ok(pty_output) = self.receiver.try_recv() {
+            received_any = true;
+            tracing::debug!(
+                "📝 Agent {} ({:?}) received PTY output: {} bytes: '{}'",
+                self.agent.get_id(),
+                status,
+                pty_output.len(),
+                pty_output.chars().take(50).collect::<String>()
+            );
+
+            // Process rules only for Active agents
+            if status == agent::AgentStatus::Active {
+                tracing::debug!(
+                    "🔍 Processing rules for agent {} ({:?})",
+                    self.agent.get_id(),
+                    status
+                );
+                if let Err(e) =
+                    process_pty_output(&pty_output, &self.agent, &self.ruler, &self.queue_manager)
+                        .await
+                {
+                    tracing::debug!("❌ Error processing PTY output: {}", e);
+                }
+            } else {
+                tracing::trace!(
+                    "⏸️  Skipping rule processing for agent {} (status: {:?})",
+                    self.agent.get_id(),
+                    status
+                );
+            }
+        }
+
+        if received_any {
+            tracing::debug!("✅ Agent {} processed data chunks", self.agent.get_id());
+        }
+
+        Ok(())
+    }
+}
