@@ -3,10 +3,9 @@ use std::sync::Arc;
 use tokio::task::JoinHandle;
 
 use crate::agent::Agent;
-use crate::agent::AgentMonitor;
 use crate::config::RuleConfig;
 use crate::config::app_config::MonitorConfig;
-use crate::rule::TimeoutMonitor;
+use crate::rule::{DiffMonitor, TimeoutMonitor};
 
 /// Agents responsible for managing agent pool and monitoring agents
 pub struct Agents {
@@ -82,18 +81,25 @@ impl Agents {
                         agent.get_id()
                     );
 
-                    let monitor = AgentMonitor {
-                        rule_config: self.rule_config.clone(), // RuleConfigはCloneする必要があります
-                        agent,
-                        receiver,
-                    };
-
-                    let handle = tokio::spawn(async move {
-                        if let Err(e) = monitor.start_monitoring().await {
-                            tracing::error!("❌ Agent monitor failed: {}", e);
+                    // Start agent status monitoring (independent of PTY output)
+                    let status_agent = Arc::clone(&agent);
+                    let status_handle = tokio::spawn(async move {
+                        if let Err(e) = status_agent.start_status_monitoring().await {
+                            tracing::error!("❌ Agent status monitor failed: {}", e);
                         }
                     });
-                    monitoring_handles.push(handle);
+                    monitoring_handles.push(status_handle);
+
+                    // Start PTY output monitoring for rule processing
+                    let diff_monitor = DiffMonitor::new(self.rule_config.clone());
+                    let pty_agent = Arc::clone(&agent);
+                    let pty_handle = tokio::spawn(async move {
+                        if let Err(e) = diff_monitor.start_pty_monitoring(pty_agent, receiver).await
+                        {
+                            tracing::error!("❌ PTY monitor failed: {}", e);
+                        }
+                    });
+                    monitoring_handles.push(pty_handle);
                 }
                 Err(e) => {
                     tracing::error!(

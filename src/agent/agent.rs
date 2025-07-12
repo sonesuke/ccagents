@@ -4,6 +4,7 @@ use anyhow::Result;
 use std::process::Command;
 use std::sync::{Arc, RwLock};
 use tokio::task::JoinHandle;
+use tokio::time::Duration;
 
 /// Agent status for state management
 #[derive(Debug, Clone, PartialEq)]
@@ -219,6 +220,17 @@ impl Agent {
     #[allow(dead_code)] // Will be used for status monitoring
     pub fn has_web_server(&self) -> bool {
         self.web_server_handle.read().unwrap().is_some()
+    }
+
+    /// Start monitoring this agent's status (Active/Idle) based on child processes
+    pub async fn start_status_monitoring(self: Arc<Self>) -> Result<()> {
+        loop {
+            // Monitor command completion to auto-manage Active/Idle status
+            self.monitor_command_completion().await;
+
+            // Small delay to prevent busy waiting
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
     }
 }
 
