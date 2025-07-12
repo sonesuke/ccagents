@@ -87,6 +87,12 @@ impl PtyProcess {
         }
     }
 
+    /// Create PtyProcess directly from TerminalConfig
+    pub fn from_terminal_config(terminal_config: &crate::config::terminal::TerminalConfig) -> Self {
+        let config = PtyProcessConfig::from_terminal_config(terminal_config);
+        Self::new(config)
+    }
+
     pub async fn start(&self) -> Result<(), PtyProcessError> {
         let mut session_lock = self.session.lock().await;
 

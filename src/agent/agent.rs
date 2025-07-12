@@ -1,5 +1,5 @@
 use crate::config::terminal::TerminalConfig;
-use crate::terminal::pty_process::{PtyProcess, PtyProcessConfig};
+use crate::terminal::pty_process::PtyProcess;
 use crate::web_server::WebServer;
 use anyhow::Result;
 use std::sync::RwLock;
@@ -23,9 +23,7 @@ pub struct Agent {
 
 impl Agent {
     pub async fn new(id: String, terminal_config: TerminalConfig) -> Result<Self> {
-        let config = PtyProcessConfig::from_terminal_config(&terminal_config);
-
-        let process = PtyProcess::new(config);
+        let process = PtyProcess::from_terminal_config(&terminal_config);
 
         // Start the PTY process
         process.start().await?;
