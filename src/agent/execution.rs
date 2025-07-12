@@ -7,7 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Execute a periodic entry action (with agent context)
 pub async fn execute_periodic_entry(
-    entry: &config::entry::CompiledEntry,
+    entry: &config::trigger::CompiledEntry,
     agent: Option<&Agent>,
 ) -> Result<()> {
     // If there's a source command, execute it first and process its output
@@ -48,8 +48,7 @@ pub async fn execute_periodic_entry(
             }
 
             // Replace ${1} placeholder with the line content
-            let resolved_action =
-                crate::config::placeholder::resolve_source_placeholders(&entry.action, &line);
+            let resolved_action = resolve_source_placeholders(&entry.action, &line);
 
             // Execute the resolved action
             match &resolved_action {
@@ -96,7 +95,7 @@ pub async fn execute_periodic_entry(
 /// Execute an entry action using the appropriate mechanism
 pub async fn execute_entry_action(
     agent: &Agent,
-    entry: &config::entry::CompiledEntry,
+    entry: &config::trigger::CompiledEntry,
 ) -> Result<()> {
     // DETAILED DEBUG LOGGING FOR ENTRY EXECUTION
     tracing::debug!("=== EXECUTING ENTRY ACTION ===");
@@ -138,8 +137,7 @@ pub async fn execute_entry_action(
             }
 
             // Replace ${1} placeholder with the line content
-            let resolved_action =
-                crate::config::placeholder::resolve_source_placeholders(&entry.action, &line);
+            let resolved_action = resolve_source_placeholders(&entry.action, &line);
 
             // Execute the resolved action
             match &resolved_action {
@@ -243,4 +241,17 @@ pub async fn execute_rule_action(action: &config::types::ActionType, agent: &Age
         }
     }
     Ok(())
+}
+
+/// Resolve ${1} placeholders in action with source line content
+fn resolve_source_placeholders(
+    action: &config::types::ActionType,
+    value: &str,
+) -> config::types::ActionType {
+    match action {
+        config::types::ActionType::SendKeys(keys) => {
+            let resolved_keys = keys.iter().map(|key| key.replace("${1}", value)).collect();
+            config::types::ActionType::SendKeys(resolved_keys)
+        }
+    }
 }

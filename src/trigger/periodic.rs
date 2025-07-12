@@ -4,22 +4,19 @@ use std::sync::Arc;
 use tokio::task::JoinHandle;
 use tokio::time::interval;
 
-use crate::agent::AgentPool;
+use crate::agent::Agents;
 use crate::agent::execution::execute_periodic_entry;
-use crate::config::entry::{CompiledEntry, TriggerType};
+use crate::config::trigger::{CompiledEntry, TriggerType};
 
 /// Periodic task manager responsible for handling periodic entries
 pub struct PeriodicTaskManager {
     pub entries: Vec<CompiledEntry>,
-    pub agent_pool: Arc<AgentPool>,
+    pub agents: Arc<Agents>,
 }
 
 impl PeriodicTaskManager {
-    pub fn new(entries: Vec<CompiledEntry>, agent_pool: Arc<AgentPool>) -> Self {
-        Self {
-            entries,
-            agent_pool,
-        }
+    pub fn new(entries: Vec<CompiledEntry>, agents: Arc<Agents>) -> Self {
+        Self { entries, agents }
     }
 
     /// Start all periodic tasks and return their handles
@@ -42,7 +39,7 @@ impl PeriodicTaskManager {
         period: tokio::time::Duration,
     ) -> JoinHandle<()> {
         let entry_clone = entry.clone();
-        let agent_pool_clone = Arc::clone(&self.agent_pool);
+        let agents_clone = Arc::clone(&self.agents);
 
         tokio::spawn(async move {
             // Execute immediately on startup
@@ -50,7 +47,7 @@ impl PeriodicTaskManager {
                 "⏰ Executing periodic entry immediately on startup: {}",
                 entry_clone.name
             );
-            let agent = agent_pool_clone.get_agent_by_index(0);
+            let agent = agents_clone.get_agent_by_index(0);
             if let Err(e) = execute_periodic_entry(&entry_clone, Some(&agent)).await {
                 eprintln!(
                     "❌ Error executing startup periodic entry '{}': {}",
@@ -68,7 +65,7 @@ impl PeriodicTaskManager {
                 match has_data_to_process(&entry_clone).await {
                     Ok(true) => {
                         // Execute on available agent
-                        let agent = agent_pool_clone.get_agent_by_index(0);
+                        let agent = agents_clone.get_agent_by_index(0);
                         if let Err(e) = execute_periodic_entry(&entry_clone, Some(&agent)).await {
                             eprintln!(
                                 "❌ Error executing periodic entry '{}': {}",

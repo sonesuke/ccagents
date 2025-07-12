@@ -49,16 +49,16 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
     println!("🌐 Terminal available at: http://localhost:{}", base_port);
     println!("🛑 Press Ctrl+C to stop");
 
-    // Create agent pool (includes web server management now)
-    let agent_pool = Arc::new(agent::AgentPool::new(config.get_monitor_config()).await?);
+    // Create agents system (includes agent pool and web server management)
+    let agents =
+        Arc::new(Agents::new(config.get_rule_config(), config.get_monitor_config()).await?);
 
     // 1. Start triggers (startup + periodic)
-    let triggers = Triggers::new(config.get_trigger_config(), Arc::clone(&agent_pool));
+    let triggers = Triggers::new(config.get_trigger_config(), Arc::clone(&agents));
     let trigger_handles = triggers.start_all().await?;
 
     // 2. Start agents (monitoring)
-    let agents = Agents::new(config.get_rule_config(), Arc::clone(&agent_pool));
-    let agent_handles = agents.start_monitoring().await?;
+    let agent_handles = agents.start_all().await?;
 
     // Wait for Ctrl+C signal
     signal::ctrl_c()

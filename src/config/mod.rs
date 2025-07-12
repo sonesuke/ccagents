@@ -1,12 +1,11 @@
 pub mod app_config;
-pub mod entry;
-pub mod placeholder;
 pub mod rule;
+pub mod trigger;
 pub mod types;
 
 use crate::config::app_config::load_config;
-use crate::config::entry::{CompiledEntry, TriggerType};
 use crate::config::rule::CompiledRule;
+use crate::config::trigger::{CompiledEntry, TriggerType};
 use crate::config::types::ActionType;
 use crate::rule::engine::{TimeoutState, decide_action_with_timeout};
 use anyhow::Result;

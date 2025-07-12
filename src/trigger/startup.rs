@@ -1,22 +1,19 @@
 use anyhow::Result;
 use std::sync::Arc;
 
-use crate::agent::AgentPool;
+use crate::agent::Agents;
 use crate::agent::execution::execute_entry_action;
-use crate::config::entry::CompiledEntry;
+use crate::config::trigger::CompiledEntry;
 
 /// Startup task manager responsible for handling on_start entries
 pub struct StartupTaskManager {
     pub entries: Vec<CompiledEntry>,
-    pub agent_pool: Arc<AgentPool>,
+    pub agents: Arc<Agents>,
 }
 
 impl StartupTaskManager {
-    pub fn new(entries: Vec<CompiledEntry>, agent_pool: Arc<AgentPool>) -> Self {
-        Self {
-            entries,
-            agent_pool,
-        }
+    pub fn new(entries: Vec<CompiledEntry>, agents: Arc<Agents>) -> Self {
+        Self { entries, agents }
     }
 
     /// Execute all startup entries
@@ -28,9 +25,7 @@ impl StartupTaskManager {
         println!("🎬 Executing on_start entries...");
 
         for (i, entry) in self.entries.iter().enumerate() {
-            let agent = self
-                .agent_pool
-                .get_agent_by_index(i % self.agent_pool.size());
+            let agent = self.agents.get_agent_by_index(i % self.agents.size());
             println!(
                 "🎯 Executing startup entry '{}' on agent {}",
                 entry.name,
