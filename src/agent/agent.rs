@@ -8,7 +8,7 @@ use tokio::time::Duration;
 
 /// Agent status for state management
 #[derive(Debug, Clone, PartialEq)]
-pub enum AgentStatus {
+enum AgentStatus {
     Idle,   // Waiting and monitoring triggers
     Active, // Executing tasks and monitoring rules
 }
@@ -126,5 +126,68 @@ mod tests {
             .unwrap();
         // Just verify the agent can be created successfully
         // Agent functionality is tested through integration tests
+    }
+
+    #[tokio::test]
+    async fn test_agent_getters() {
+        let terminal_config = TerminalConfig::new(120, 30);
+        let agent = Agent::new("test-agent-123".to_string(), terminal_config.clone())
+            .await
+            .unwrap();
+
+        // Test ID getter
+        assert_eq!(agent.get_id(), "test-agent-123");
+
+        // Test terminal config getter
+        let returned_config = agent.get_terminal_config();
+        assert_eq!(returned_config.cols, 120);
+        assert_eq!(returned_config.rows, 30);
+        assert_eq!(returned_config.shell_command, terminal_config.shell_command);
+
+        // Test process getter (just verify it returns something)
+        let _process = agent.get_process();
+    }
+
+    #[tokio::test]
+    async fn test_agent_status_management() {
+        let terminal_config = TerminalConfig::new(80, 24);
+        let agent = Agent::new("status-test".to_string(), terminal_config)
+            .await
+            .unwrap();
+
+        // Agent should start as Idle
+        assert!(!agent.is_active().await, "Agent should start as Idle");
+
+        // Test status transitions
+        agent.set_status(AgentStatus::Active).await;
+        assert!(
+            agent.is_active().await,
+            "Agent should be Active after setting"
+        );
+
+        agent.set_status(AgentStatus::Idle).await;
+        assert!(
+            !agent.is_active().await,
+            "Agent should be Idle after setting"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_is_active_method() {
+        let terminal_config = TerminalConfig::new(80, 24);
+        let agent = Agent::new("active-test".to_string(), terminal_config)
+            .await
+            .unwrap();
+
+        // Test initial state
+        assert_eq!(agent.is_active().await, false);
+
+        // Test Active state
+        agent.set_status(AgentStatus::Active).await;
+        assert_eq!(agent.is_active().await, true);
+
+        // Test Idle state
+        agent.set_status(AgentStatus::Idle).await;
+        assert_eq!(agent.is_active().await, false);
     }
 }
