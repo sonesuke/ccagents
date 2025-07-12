@@ -18,7 +18,7 @@ pub enum AgentStatus {
 
 pub struct Agent {
     id: String,
-    process: PtyProcess,
+    pub process: PtyProcess,
     cols: u16,
     rows: u16,
     status: RwLock<AgentStatus>,
@@ -77,55 +77,14 @@ impl Agent {
             .map_err(|e| anyhow::anyhow!("Failed to send keys: {}", e))
     }
 
-    /// Send input to the terminal (for WebSocket)
-    pub async fn send_input(&self, input: &str) -> Result<()> {
-        self.send_keys(input).await
-    }
-
     /// Get terminal dimensions for asciinema integration
     pub fn get_terminal_size(&self) -> (u16, u16) {
         (self.cols, self.rows)
     }
 
-    /// Get direct access to PTY raw bytes receiver for WebSocket streaming
-    pub async fn get_pty_bytes_receiver(
-        &self,
-    ) -> Result<tokio::sync::broadcast::Receiver<bytes::Bytes>> {
-        self.process
-            .get_pty_bytes_receiver()
-            .await
-            .map_err(|e| anyhow::anyhow!(e))
-    }
-
-    /// Get direct access to PTY string receiver for rule matching
-    pub async fn get_pty_string_receiver(
-        &self,
-    ) -> Result<tokio::sync::broadcast::Receiver<String>> {
-        self.process
-            .get_pty_string_receiver()
-            .await
-            .map_err(|e| anyhow::anyhow!(e))
-    }
-
-    /// Get current screen contents from vt100::Parser for WebSocket initial state
-    pub async fn get_screen_contents(&self) -> Result<String> {
-        self.process
-            .get_screen_contents()
-            .await
-            .map_err(|e| anyhow::anyhow!(e))
-    }
-
     /// Get agent ID
     pub fn get_id(&self) -> &str {
         &self.id
-    }
-
-    /// Get the shell PID
-    pub async fn get_shell_pid(&self) -> Result<Option<u32>> {
-        self.process
-            .get_shell_pid()
-            .await
-            .map_err(|e| anyhow::anyhow!(e))
     }
 
     /// Get the current status of the agent
@@ -163,7 +122,7 @@ impl Agent {
     /// Automatically manages Active/Idle status based on child process presence
     pub async fn monitor_command_completion(&self) {
         // Get the shell PID
-        if let Ok(Some(shell_pid)) = self.get_shell_pid().await {
+        if let Ok(Some(shell_pid)) = self.process.get_shell_pid().await {
             // Get current child processes of the shell
             let child_pids = get_child_processes(shell_pid);
             let current_status = self.get_status().await;
@@ -407,7 +366,7 @@ async fn execute_send_keys_action(
 
 /// Start command tracking for an agent
 async fn start_command_tracking(agent: &Agent) {
-    if let Ok(shell_pid) = agent.get_shell_pid().await {
+    if let Ok(shell_pid) = agent.process.get_shell_pid().await {
         agent.start_command_tracking(shell_pid).await;
     }
 }

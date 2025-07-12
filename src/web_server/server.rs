@@ -131,7 +131,7 @@ async fn send_command(
 ) -> Json<CommandResponse> {
     info!("📨 Command API request: {}", request.command);
 
-    match agent.send_input(&request.command).await {
+    match agent.send_keys(&request.command).await {
         Ok(_) => {
             info!("✅ Command sent successfully: {}", request.command);
             Json(CommandResponse {

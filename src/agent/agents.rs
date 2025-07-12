@@ -75,7 +75,7 @@ impl Agents {
             let agent = self.get_agent_by_index(i);
 
             // Get PTY receiver for this agent
-            match agent.get_pty_string_receiver().await {
+            match agent.process.get_pty_string_receiver().await {
                 Ok(receiver) => {
                     tracing::info!(
                         "✅ Agent {} persistent string receiver created",
