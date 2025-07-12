@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use crate::agent;
 use crate::agent::Agent;
-use crate::agent::execute_rule_action;
+use crate::agent::execute_action;
 use crate::config::rule::{CompiledRule, RuleType};
 use crate::config::types::ActionType;
 use tokio::sync::{Mutex, RwLock};
@@ -62,7 +62,7 @@ impl DiffTimeout {
 
                 for action in timeout_actions {
                     tracing::info!("⏰ Executing timeout rule action: {:?}", action);
-                    if let Err(e) = execute_rule_action(&action, agent).await {
+                    if let Err(e) = execute_action(&action, agent, "🤖 Rule action").await {
                         tracing::error!("❌ Error executing timeout rule action: {}", e);
                     }
                 }

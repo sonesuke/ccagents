@@ -25,18 +25,7 @@ impl Agents {
             let port = base_port + i as u16;
             let agent_id = format!("agent-{}", i);
             let (cols, rows) = monitor_config.get_agent_dimensions(i);
-            let agent = Arc::new(
-                Agent::new(
-                    agent_id,
-                    test_mode,
-                    port,
-                    cols,
-                    rows,
-                    monitor_config.web_ui.host.clone(),
-                    monitor_config.web_ui.enabled,
-                )
-                .await?,
-            );
+            let agent = Arc::new(Agent::new(agent_id, test_mode, cols, rows).await?);
 
             // Start web server if enabled
             if monitor_config.web_ui.enabled {
@@ -85,7 +74,9 @@ impl Agents {
                     // Start agent status monitoring (independent of PTY output)
                     let status_agent = Arc::clone(&agent);
                     let status_handle = tokio::spawn(async move {
-                        if let Err(e) = status_agent.start_status_monitoring().await {
+                        if let Err(e) =
+                            crate::agent::monitoring::start_status_monitoring(status_agent).await
+                        {
                             tracing::error!("❌ Agent status monitor failed: {}", e);
                         }
                     });

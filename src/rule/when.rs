@@ -46,7 +46,7 @@ impl When {
 
             if !matches!(action, ActionType::SendKeys(ref keys) if keys.is_empty()) {
                 tracing::debug!("Action decided: {:?}", action);
-                crate::agent::execute_rule_action(&action, agent).await?;
+                crate::agent::execute_action(&action, agent, "🤖 Rule action").await?;
             }
         }
 

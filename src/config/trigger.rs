@@ -30,6 +30,7 @@ pub struct Trigger {
     pub trigger: TriggerType,
     pub action: ActionType,
     pub source: Option<String>,
+    #[allow(dead_code)] // Will be used for future deduplication functionality
     pub dedupe: bool,
 }
 
