@@ -4,10 +4,10 @@ use std::time::{Duration, Instant};
 
 use crate::agent;
 use crate::agent::Agent;
-use crate::agent::execute_action;
 use crate::config::rule::{CompiledRule, RuleType};
 use crate::config::types::ActionType;
 use tokio::sync::{Mutex, RwLock};
+use tokio::time::Duration as TokioDuration;
 
 use super::Monitor;
 
@@ -62,7 +62,7 @@ impl DiffTimeout {
 
                 for action in timeout_actions {
                     tracing::info!("⏰ Executing timeout rule action: {:?}", action);
-                    if let Err(e) = execute_action(&action, agent, "🤖 Rule action").await {
+                    if let Err(e) = execute_rule_action(&action, agent, "🤖 Rule action").await {
                         tracing::error!("❌ Error executing timeout rule action: {}", e);
                     }
                 }
@@ -157,6 +157,27 @@ pub fn check_timeout_rules(
     }
 
     triggered_actions
+}
+
+/// Execute an action for rules (not for triggers)
+async fn execute_rule_action(action: &ActionType, agent: &Agent, context: &str) -> Result<()> {
+    let ActionType::SendKeys(keys) = action;
+    if keys.is_empty() {
+        tracing::debug!("{}: No keys to send", context);
+        return Ok(());
+    }
+
+    tracing::info!("{}: Sending {} keys", context, keys.len());
+    tracing::debug!("{}: Keys: {:?}", context, keys);
+
+    for (i, key) in keys.iter().enumerate() {
+        if i > 0 {
+            tokio::time::sleep(TokioDuration::from_millis(100)).await;
+        }
+        agent.send_keys(key).await?;
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

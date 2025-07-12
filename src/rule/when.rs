@@ -46,7 +46,7 @@ impl When {
 
             if !matches!(action, ActionType::SendKeys(ref keys) if keys.is_empty()) {
                 tracing::debug!("Action decided: {:?}", action);
-                crate::agent::execute_action(&action, agent, "🤖 Rule action").await?;
+                execute_rule_action(&action, agent, "Rule action").await?;
             }
         }
 
@@ -123,6 +123,31 @@ impl When {
         let ansi_regex = regex::Regex::new(r"\x1b\[[0-9;]*[mGKHF]").unwrap();
         ansi_regex.replace_all(text, "").to_string()
     }
+}
+
+/// Execute an action for rules (not for triggers)
+async fn execute_rule_action(
+    action: &crate::config::types::ActionType,
+    agent: &Agent,
+    context: &str,
+) -> Result<()> {
+    let crate::config::types::ActionType::SendKeys(keys) = action;
+    if keys.is_empty() {
+        tracing::debug!("{}: No keys to send", context);
+        return Ok(());
+    }
+
+    tracing::info!("{}: Sending {} keys", context, keys.len());
+    tracing::debug!("{}: Keys: {:?}", context, keys);
+
+    for (i, key) in keys.iter().enumerate() {
+        if i > 0 {
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        }
+        agent.send_keys(key).await?;
+    }
+
+    Ok(())
 }
 
 /// Matches capture text against compiled rules and returns the appropriate action.
