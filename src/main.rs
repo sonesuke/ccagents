@@ -288,22 +288,30 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
                             agent.monitor_command_completion().await;
                         }
 
-                        // Process rules for all agents (both Active and Idle)
-                        // This ensures rules are processed even during startup
-                        tracing::debug!(
-                            "🔍 Processing rules for agent {} ({:?})",
-                            agent.get_id(),
-                            current_status
-                        );
-                        if let Err(e) = process_pty_output(
-                            &pty_output,
-                            &agent,
-                            &ruler_for_monitoring,
-                            &queue_manager_for_monitoring,
-                        )
-                        .await
-                        {
-                            tracing::debug!("❌ Error processing PTY output: {}", e);
+                        // Process rules only for Active agents
+                        // Rules should only be evaluated when agent is actively running commands
+                        if current_status == agent::AgentStatus::Active {
+                            tracing::debug!(
+                                "🔍 Processing rules for agent {} ({:?})",
+                                agent.get_id(),
+                                current_status
+                            );
+                            if let Err(e) = process_pty_output(
+                                &pty_output,
+                                &agent,
+                                &ruler_for_monitoring,
+                                &queue_manager_for_monitoring,
+                            )
+                            .await
+                            {
+                                tracing::debug!("❌ Error processing PTY output: {}", e);
+                            }
+                        } else {
+                            tracing::trace!(
+                                "⏸️  Skipping rule processing for agent {} (status: {:?})",
+                                agent.get_id(),
+                                current_status
+                            );
                         }
                     }
 
@@ -320,16 +328,21 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
             }
 
             // Check for timeout rule triggers periodically
+            // Only process timeout rules when agent is Active
             if agent_pool_for_monitoring.size() > 0 {
                 let agent = agent_pool_for_monitoring.get_agent_by_index(0);
-                let timeout_actions = ruler_for_monitoring.check_timeout_rules().await;
-                for action in timeout_actions {
-                    tracing::info!("⏰ Executing timeout rule action: {:?}", action);
-                    if let Err(e) =
-                        cli::execute_rule_action(&action, &agent, &queue_manager_for_monitoring)
-                            .await
-                    {
-                        tracing::error!("❌ Error executing timeout rule action: {}", e);
+                let current_status = agent.get_status().await;
+
+                if current_status == agent::AgentStatus::Active {
+                    let timeout_actions = ruler_for_monitoring.check_timeout_rules().await;
+                    for action in timeout_actions {
+                        tracing::info!("⏰ Executing timeout rule action: {:?}", action);
+                        if let Err(e) =
+                            cli::execute_rule_action(&action, &agent, &queue_manager_for_monitoring)
+                                .await
+                        {
+                            tracing::error!("❌ Error executing timeout rule action: {}", e);
+                        }
                     }
                 }
             }

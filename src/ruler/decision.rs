@@ -26,6 +26,11 @@ impl TimeoutState {
         }
     }
 
+    #[cfg(test)]
+    pub fn set_last_activity_for_test(&mut self, instant: Instant) {
+        self.last_activity = instant;
+    }
+
     pub fn check_timeouts(&mut self, timeout_durations: &[Duration]) -> Vec<usize> {
         let elapsed = self.last_activity.elapsed();
         let mut triggered_indices = Vec::new();
@@ -446,6 +451,41 @@ mod tests {
         assert_eq!(
             actions[1],
             ActionType::SendKeys(vec!["long_timeout".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_diff_timeout_multiple_triggers() {
+        let rules = vec![create_timeout_rule(
+            "1s",
+            vec!["timeout_action".to_string()],
+        )];
+
+        let mut timeout_state = TimeoutState::new();
+
+        // First timeout trigger
+        timeout_state.last_activity = Instant::now() - Duration::from_millis(1500);
+        let actions = check_timeout_rules(&rules, &mut timeout_state);
+        assert_eq!(actions.len(), 1);
+        assert_eq!(
+            actions[0],
+            ActionType::SendKeys(vec!["timeout_action".to_string()])
+        );
+
+        // Reset activity (simulating terminal output)
+        timeout_state.reset_activity();
+
+        // Should not trigger immediately after reset
+        let actions = check_timeout_rules(&rules, &mut timeout_state);
+        assert_eq!(actions.len(), 0);
+
+        // Second timeout trigger after reset
+        timeout_state.last_activity = Instant::now() - Duration::from_millis(1500);
+        let actions = check_timeout_rules(&rules, &mut timeout_state);
+        assert_eq!(actions.len(), 1);
+        assert_eq!(
+            actions[0],
+            ActionType::SendKeys(vec!["timeout_action".to_string()])
         );
     }
 }

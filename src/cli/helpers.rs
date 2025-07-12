@@ -330,6 +330,10 @@ pub async fn process_pty_output(
     ruler: &ruler::Ruler,
     queue_manager: &SharedQueueManager,
 ) -> Result<()> {
+    // Reset timeout activity for diff_timeout rules whenever ANY terminal output is received
+    // This ensures diff_timeout detects "no terminal output" rather than "no pattern matches"
+    ruler.reset_timeout_activity().await;
+
     // Remove ANSI escape sequences for cleaner pattern matching
     let clean_output = strip_ansi_escapes(pty_output);
 
