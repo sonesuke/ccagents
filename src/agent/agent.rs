@@ -48,13 +48,6 @@ impl Agent {
     }
 
     pub async fn send_keys(&self, keys: &str) -> Result<()> {
-        // AGENT SEND_KEYS DEBUG
-        tracing::debug!("🔄 Agent::send_keys called with: {:?}", keys);
-
-        tracing::debug!("=== AGENT SEND_KEYS ===");
-        tracing::debug!("Keys: {:?}", keys);
-        tracing::debug!("About to call process.send_input");
-
         self.process
             .send_input(keys.to_string())
             .await
