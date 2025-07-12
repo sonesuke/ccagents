@@ -112,8 +112,8 @@ impl Agent {
         }
     }
 
-    /// Start monitoring this agent's status (Active/Idle) based on child processes
-    pub async fn start_status_monitoring(self: std::sync::Arc<Self>) -> Result<()> {
+    /// Start monitoring this agent's status
+    pub async fn start_monitoring(self: std::sync::Arc<Self>) -> Result<()> {
         loop {
             self.monitor().await;
             tokio::time::sleep(Duration::from_millis(100)).await;
