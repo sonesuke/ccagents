@@ -57,6 +57,17 @@ impl Default for PtyProcessConfig {
     }
 }
 
+impl PtyProcessConfig {
+    /// Create PtyProcessConfig from TerminalConfig
+    pub fn from_terminal_config(terminal_config: &crate::config::terminal::TerminalConfig) -> Self {
+        Self {
+            shell_command: Some(terminal_config.shell_command.clone()),
+            cols: terminal_config.cols,
+            rows: terminal_config.rows,
+        }
+    }
+}
+
 pub struct PtyProcess {
     config: PtyProcessConfig,
     session: Arc<Mutex<Option<Arc<PtySession>>>>,

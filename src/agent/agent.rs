@@ -23,11 +23,7 @@ pub struct Agent {
 
 impl Agent {
     pub async fn new(id: String, terminal_config: TerminalConfig) -> Result<Self> {
-        let config = PtyProcessConfig {
-            shell_command: Some(terminal_config.shell_command.clone()),
-            cols: terminal_config.cols,
-            rows: terminal_config.rows,
-        };
+        let config = PtyProcessConfig::from_terminal_config(&terminal_config);
 
         let process = PtyProcess::new(config);
 
