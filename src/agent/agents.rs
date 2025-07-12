@@ -74,9 +74,7 @@ impl Agents {
                     // Start agent status monitoring (independent of PTY output)
                     let status_agent = Arc::clone(&agent);
                     let status_handle = tokio::spawn(async move {
-                        if let Err(e) =
-                            crate::agent::monitoring::start_status_monitoring(status_agent).await
-                        {
+                        if let Err(e) = crate::agent::start_status_monitoring(status_agent).await {
                             tracing::error!("❌ Agent status monitor failed: {}", e);
                         }
                     });
