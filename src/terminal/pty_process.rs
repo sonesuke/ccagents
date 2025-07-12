@@ -1,6 +1,7 @@
 use super::pty_session::{PtyCommand, PtyEvent, PtyEventData, PtySession};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::process::Command;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::{Mutex, broadcast, mpsc};
@@ -192,6 +193,29 @@ impl PtyProcess {
                 .map_err(|e| PtyProcessError::CommunicationError(e.to_string()))
         } else {
             Err(PtyProcessError::NotRunning)
+        }
+    }
+
+    /// Get child processes of the shell process
+    pub async fn get_child_processes(&self) -> Result<Vec<u32>, PtyProcessError> {
+        if let Ok(Some(shell_pid)) = self.get_shell_pid().await {
+            let output = Command::new("pgrep")
+                .arg("-P")
+                .arg(shell_pid.to_string())
+                .output()
+                .map_err(PtyProcessError::IoError)?;
+
+            if output.status.success() {
+                let child_pids = String::from_utf8_lossy(&output.stdout)
+                    .lines()
+                    .filter_map(|line| line.trim().parse::<u32>().ok())
+                    .collect();
+                Ok(child_pids)
+            } else {
+                Ok(Vec::new())
+            }
+        } else {
+            Ok(Vec::new())
         }
     }
 }

@@ -2,7 +2,6 @@ use crate::config::terminal::TerminalConfig;
 use crate::terminal::pty_process::{PtyProcess, PtyProcessConfig};
 use crate::web_server::WebServer;
 use anyhow::Result;
-use std::process::Command;
 use std::sync::RwLock;
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
@@ -16,7 +15,7 @@ pub enum AgentStatus {
 
 pub struct Agent {
     id: String,
-    pub process: PtyProcess,
+    process: PtyProcess,
     terminal_config: TerminalConfig,
     status: RwLock<AgentStatus>,
     web_server_handle: RwLock<Option<JoinHandle<()>>>,
@@ -46,7 +45,7 @@ impl Agent {
     }
 
     pub async fn send_keys(&self, keys: &str) -> Result<()> {
-        self.process
+        self.get_process()
             .send_input(keys.to_string())
             .await
             .map_err(|e| anyhow::anyhow!("Failed to send keys: {}", e))
@@ -62,15 +61,25 @@ impl Agent {
         &self.id
     }
 
-    /// Get the current status of the agent
-    pub async fn get_status(&self) -> AgentStatus {
-        self.status.read().unwrap().clone()
+    /// Get access to the PTY process
+    pub fn get_process(&self) -> &PtyProcess {
+        &self.process
+    }
+
+    /// Check if the agent is currently active (true = Active, false = Idle)
+    pub async fn is_active(&self) -> bool {
+        matches!(*self.status.read().unwrap(), AgentStatus::Active)
     }
 
     /// Set the status of the agent
     async fn set_status(&self, new_status: AgentStatus) {
         let mut status = self.status.write().unwrap();
-        *status = new_status;
+        let old_status = status.clone();
+
+        if old_status != new_status {
+            *status = new_status.clone();
+            tracing::debug!("🔄 Agent {} → {:?}", self.get_id(), new_status);
+        }
     }
 
     /// Start the WebServer for this agent if configured
@@ -92,21 +101,14 @@ impl Agent {
 
     /// Monitor agent status by checking child processes
     async fn monitor(&self) {
-        if let Ok(Some(shell_pid)) = self.process.get_shell_pid().await {
-            let child_pids = get_child_processes(shell_pid);
-            let current_status = self.get_status().await;
+        if let Ok(child_pids) = self.get_process().get_child_processes().await {
+            let new_status = if child_pids.is_empty() {
+                AgentStatus::Idle
+            } else {
+                AgentStatus::Active
+            };
 
-            match (!child_pids.is_empty(), current_status) {
-                (true, AgentStatus::Idle) => {
-                    self.set_status(AgentStatus::Active).await;
-                    tracing::debug!("🔄 Agent {} → Active", self.get_id());
-                }
-                (false, AgentStatus::Active) => {
-                    self.set_status(AgentStatus::Idle).await;
-                    tracing::debug!("✅ Agent {} → Idle", self.get_id());
-                }
-                _ => {}
-            }
+            self.set_status(new_status).await;
         }
     }
 
@@ -116,22 +118,6 @@ impl Agent {
             self.monitor().await;
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
-    }
-}
-
-/// Get child processes of a given parent PID
-fn get_child_processes(parent_pid: u32) -> Vec<u32> {
-    let output = Command::new("pgrep")
-        .arg("-P")
-        .arg(parent_pid.to_string())
-        .output();
-
-    match output {
-        Ok(output) if output.status.success() => String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .filter_map(|line| line.trim().parse::<u32>().ok())
-            .collect(),
-        _ => Vec::new(),
     }
 }
 

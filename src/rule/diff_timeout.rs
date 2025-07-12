@@ -2,7 +2,6 @@ use anyhow::Result;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::agent;
 use crate::agent::Agent;
 use crate::config::rule::{CompiledRule, RuleType};
 use crate::config::types::ActionType;
@@ -53,9 +52,7 @@ impl DiffTimeout {
     async fn check_timeout_rules(&self) -> Result<()> {
         // Only process timeout rules when there are active agents
         for agent in self.agents.iter() {
-            let current_status = agent.get_status().await;
-
-            if current_status == agent::AgentStatus::Active {
+            if agent.is_active().await {
                 let rules = self.rules.read().await;
                 let mut timeout_state = self.timeout_state.lock().await;
                 let timeout_actions = check_timeout_rules(&rules, &mut timeout_state);

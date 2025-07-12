@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::{RwLock, broadcast};
 
-use crate::agent::{Agent, AgentStatus};
+use crate::agent::Agent;
 use crate::config::rule::{CompiledRule, RuleType, resolve_capture_groups_in_vec};
 use crate::config::types::ActionType;
 use crate::rule::DiffTimeout;
@@ -77,12 +77,9 @@ impl When {
 
         while let Ok(pty_output) = receiver.try_recv() {
             received_any = true;
-            let current_status = agent.get_status().await;
-
             tracing::debug!(
-                "📝 Agent {} ({:?}) received PTY output: {} bytes: '{}'",
+                "📝 Agent {} received PTY output: {} bytes: '{}'",
                 agent.get_id(),
-                current_status,
                 pty_output.len(),
                 pty_output.chars().take(50).collect::<String>()
             );
@@ -93,20 +90,15 @@ impl When {
             }
 
             // Process rules only for Active agents
-            if current_status == AgentStatus::Active {
-                tracing::debug!(
-                    "🔍 Processing rules for agent {} ({:?})",
-                    agent.get_id(),
-                    current_status
-                );
+            if agent.is_active().await {
+                tracing::debug!("🔍 Processing rules for agent {}", agent.get_id());
                 if let Err(e) = self.process_rules_for_output(&pty_output, agent).await {
                     tracing::debug!("❌ Error processing PTY output: {}", e);
                 }
             } else {
                 tracing::trace!(
-                    "⏸️  Skipping rule processing for agent {} (status: {:?})",
-                    agent.get_id(),
-                    current_status
+                    "⏸️  Skipping rule processing for agent {} (inactive)",
+                    agent.get_id()
                 );
             }
         }

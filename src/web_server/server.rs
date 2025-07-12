@@ -168,11 +168,8 @@ async fn get_agent_status(
     State((agent, _)): State<(Arc<Agent>, AssetCache)>,
 ) -> Json<AgentStatusResponse> {
     // Get actual agent status
-    let status = agent.get_status().await;
-    let state = match status {
-        crate::agent::AgentStatus::Idle => "Idle",
-        crate::agent::AgentStatus::Active => "Active",
-    };
+    let is_active = agent.is_active().await;
+    let state = if is_active { "Active" } else { "Idle" };
 
     info!("📊 Agent status request: {}", state);
 

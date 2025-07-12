@@ -50,7 +50,7 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
     info!("✅ Asciinema header sent successfully");
 
     // Send initial state from vt100::Parser screen contents
-    match agent.process.get_screen_contents().await {
+    match agent.get_process().get_screen_contents().await {
         Ok(initial_content) => {
             if !initial_content.trim().is_empty() {
                 let initial_time = 0.0;
@@ -111,7 +111,7 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
         info!("🔄 WebSocket full-screen output task started");
 
         // Get direct access to PTY raw bytes broadcast channel
-        if let Ok(mut pty_bytes_rx) = agent_output.process.get_pty_bytes_receiver().await {
+        if let Ok(mut pty_bytes_rx) = agent_output.get_process().get_pty_bytes_receiver().await {
             info!("✅ Connected to PTY raw bytes broadcast channel");
 
             info!("🔄 WebSocket: Starting recv loop for full-screen updates");
@@ -134,7 +134,7 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
                 }
 
                 // Get full screen contents from vt100 parser
-                match agent_output.process.get_screen_contents().await {
+                match agent_output.get_process().get_screen_contents().await {
                     Ok(screen_content) => {
                         // Only send if screen content has changed
                         if screen_content != last_screen_content {
