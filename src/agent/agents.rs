@@ -64,9 +64,32 @@ impl Agents {
     }
 
     /// Get the next agent using round-robin selection
+    #[allow(dead_code)]
     pub fn get_next_agent(&self) -> Arc<Agent> {
         let index = self.next_agent_index.fetch_add(1, Ordering::Relaxed);
         self.get_agent_by_index(index)
+    }
+
+    /// Get the next idle agent using round-robin selection
+    /// Returns None if all agents are active
+    pub async fn get_next_idle_agent(&self) -> Option<Arc<Agent>> {
+        let total_agents = self.agents.len();
+        let start_index = self.next_agent_index.load(Ordering::Relaxed);
+
+        // Check all agents starting from the next one
+        for i in 0..total_agents {
+            let index = (start_index + i) % total_agents;
+            let agent = self.get_agent_by_index(index);
+
+            if !agent.is_active().await {
+                // Update the index for next call
+                self.next_agent_index
+                    .store((index + 1) % total_agents, Ordering::Relaxed);
+                return Some(agent);
+            }
+        }
+
+        None // All agents are active
     }
 
     /// Start all monitoring systems: agent monitors with timeout monitoring per agent

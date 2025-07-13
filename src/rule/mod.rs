@@ -28,11 +28,13 @@ pub async fn execute_rule_action(action: &ActionType, agent: &Agent, context: &s
     tracing::info!("{}: Sending {} keys", context, keys.len());
     tracing::debug!("{}: Keys: {:?}", context, keys);
 
-    for key in keys.iter() {
-        // TODO: Investigate if sleep is needed for actual use cases
-        // Sleep removed to fix PTY reader hanging in test environments
-        // Original sleep was intended for human-like typing simulation
+    for (i, key) in keys.iter().enumerate() {
         agent.send_keys(key).await?;
+        // Add small delay between keys (but not after the last key)
+        // This is especially important for interactive applications like Claude
+        if i < keys.len() - 1 {
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+        }
     }
 
     Ok(())

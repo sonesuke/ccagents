@@ -29,14 +29,17 @@ impl Periodic {
                     Some(tokio::spawn(async move {
                         tracing::debug!("Starting periodic entry: {}", entry.name);
 
-                        // Execute immediately on startup
-                        let agent = agents.get_next_agent();
-                        if let Err(e) = entry.execute(&agent).await {
-                            tracing::error!(
-                                "Error executing periodic entry '{}': {}",
-                                entry.name,
-                                e
-                            );
+                        // Execute immediately on startup (only if agent is idle)
+                        if let Some(agent) = agents.get_next_idle_agent().await {
+                            if let Err(e) = entry.execute(&agent).await {
+                                tracing::error!(
+                                    "Error executing periodic entry '{}': {}",
+                                    entry.name,
+                                    e
+                                );
+                            }
+                        } else {
+                            tracing::debug!("No idle agents available for startup execution of '{}'", entry.name);
                         }
 
                         // Continue with periodic execution
@@ -46,13 +49,16 @@ impl Periodic {
 
                             match has_data_to_process(&entry).await {
                                 Ok(true) => {
-                                    let agent = agents.get_next_agent();
-                                    if let Err(e) = entry.execute(&agent).await {
-                                        tracing::error!(
-                                            "Error executing periodic entry '{}': {}",
-                                            entry.name,
-                                            e
-                                        );
+                                    if let Some(agent) = agents.get_next_idle_agent().await {
+                                        if let Err(e) = entry.execute(&agent).await {
+                                            tracing::error!(
+                                                "Error executing periodic entry '{}': {}",
+                                                entry.name,
+                                                e
+                                            );
+                                        }
+                                    } else {
+                                        tracing::debug!("No idle agents available for periodic execution of '{}'", entry.name);
                                     }
                                 }
                                 Ok(false) => {
