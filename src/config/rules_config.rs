@@ -1,4 +1,5 @@
-use crate::config::types::{ActionType, parse_action};
+use crate::config::helper::{ActionType, parse_action};
+use crate::config::helper::parse_duration;
 use anyhow::{Context, Result, anyhow};
 use regex::Regex;
 use serde::Deserialize;
@@ -6,9 +7,8 @@ use std::convert::TryFrom;
 use std::time::Duration;
 
 // YAML structure for loading rules
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct RuleConfig {
-    #[serde(alias = "pattern")]
     pub when: Option<String>,
     #[serde(default)]
     pub diff_timeout: Option<String>,
@@ -16,10 +16,6 @@ pub struct RuleConfig {
     pub action: Option<String>,
     #[serde(default)]
     pub keys: Vec<String>,
-    #[serde(default)]
-    pub workflow: Option<String>,
-    #[serde(default)]
-    pub args: Vec<String>,
 }
 
 // Parsed and validated structure for runtime use
@@ -61,79 +57,19 @@ impl TryFrom<RuleConfig> for Rule {
             }
         };
 
-        let action = parse_action(&config.action, &config.keys, &config.workflow, &config.args)?;
+        let action = parse_action(&config.action, &config.keys)?;
 
         Ok(Self { rule_type, action })
     }
 }
 
-/// Resolve capture group references in a template string
-pub fn resolve_capture_groups(template: &str, captured_groups: &[String]) -> String {
-    let mut result = template.to_string();
-    for (i, group) in captured_groups.iter().enumerate() {
-        let placeholder = format!("${{{}}}", i + 1);
-        result = result.replace(&placeholder, group);
-    }
-    result
-}
 
-/// Resolve capture groups in a vector of strings
-pub fn resolve_capture_groups_in_vec(
-    templates: &[String],
-    captured_groups: &[String],
-) -> Vec<String> {
-    templates
-        .iter()
-        .map(|template| resolve_capture_groups(template, captured_groups))
-        .collect()
-}
-
-/// Parse duration string (e.g., "30s", "5m", "2h") into Duration
-fn parse_duration(s: &str) -> Result<Duration> {
-    if s.is_empty() {
-        return Err(anyhow!("Empty duration string"));
-    }
-
-    let (num_str, unit) = if let Some(stripped) = s.strip_suffix('s') {
-        (stripped, "s")
-    } else if let Some(stripped) = s.strip_suffix('m') {
-        (stripped, "m")
-    } else if let Some(stripped) = s.strip_suffix('h') {
-        (stripped, "h")
-    } else {
-        return Err(anyhow!("Duration must end with 's', 'm', or 'h': {}", s));
-    };
-
-    let num: u64 = num_str
-        .parse()
-        .map_err(|_| anyhow!("Invalid number in duration: {}", num_str))?;
-
-    let duration = match unit {
-        "s" => Duration::from_secs(num),
-        "m" => Duration::from_secs(num * 60),
-        "h" => Duration::from_secs(num * 3600),
-        _ => unreachable!(),
-    };
-
-    Ok(duration)
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::time::Duration;
 
-    #[test]
-    fn test_parse_duration() {
-        assert_eq!(parse_duration("30s").unwrap(), Duration::from_secs(30));
-        assert_eq!(parse_duration("5m").unwrap(), Duration::from_secs(300));
-        assert_eq!(parse_duration("2h").unwrap(), Duration::from_secs(7200));
-
-        assert!(parse_duration("").is_err());
-        assert!(parse_duration("30").is_err());
-        assert!(parse_duration("abc").is_err());
-        assert!(parse_duration("30x").is_err());
-    }
 
     #[test]
     fn test_rule_try_from_pattern() {
@@ -142,8 +78,6 @@ mod tests {
             diff_timeout: None,
             action: Some("send_keys".to_string()),
             keys: vec!["hello".to_string()],
-            workflow: None,
-            args: vec![],
         };
 
         let rule = Rule::try_from(rule).unwrap();
@@ -162,8 +96,6 @@ mod tests {
             diff_timeout: Some("5m".to_string()),
             action: Some("send_keys".to_string()),
             keys: vec!["timeout".to_string()],
-            workflow: None,
-            args: vec![],
         };
 
         let rule = Rule::try_from(rule).unwrap();
@@ -182,8 +114,6 @@ mod tests {
             diff_timeout: Some("5m".to_string()),
             action: Some("send_keys".to_string()),
             keys: vec!["hello".to_string()],
-            workflow: None,
-            args: vec![],
         };
 
         assert!(Rule::try_from(rule).is_err());
@@ -196,8 +126,6 @@ mod tests {
             diff_timeout: None,
             action: Some("send_keys".to_string()),
             keys: vec!["hello".to_string()],
-            workflow: None,
-            args: vec![],
         };
 
         assert!(Rule::try_from(rule).is_err());

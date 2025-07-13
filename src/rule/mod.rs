@@ -1,3 +1,4 @@
+pub mod capture;
 pub mod diff_timeout;
 pub mod when;
 

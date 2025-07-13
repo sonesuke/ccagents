@@ -40,21 +40,24 @@ async fn main() -> Result<()> {
 /// Run automation command (default mode when no subcommand is provided)
 async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
     // Create core components
-    let config = Arc::new(Config::new(rules_path.to_str().unwrap()).await?);
+    let config = Arc::new(Config::from_file(rules_path.to_str().unwrap())?);
 
-    let base_port = config.get_monitor_config().get_web_ui_port();
+    let base_port = config.web_ui.base_port;
 
     println!("🎯 RuleAgents started");
     println!("📂 Config file: {}", rules_path.display());
     println!("🌐 Terminal available at: http://localhost:{}", base_port);
     println!("🛑 Press Ctrl+C to stop");
 
+    // Parse configuration
+    let rules = config.parse_rules()?;
+
     // Create agents system (includes agent pool and web server management)
-    let rules = config.get_rules();
-    let agents = Arc::new(Agents::new(rules, config.get_monitor_config()).await?);
+    let agents = Arc::new(Agents::new(rules, &config).await?);
 
     // 1. Start triggers (startup + periodic)
-    let triggers = Triggers::new(config.get_trigger_manager(), Arc::clone(&agents));
+    let trigger_list = config.parse_triggers()?;
+    let triggers = Triggers::new(trigger_list, Arc::clone(&agents));
     let trigger_handles = triggers.start_all().await?;
 
     // 2. Start agents (monitoring)

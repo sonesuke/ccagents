@@ -3,8 +3,8 @@ use std::sync::Arc;
 use tokio::task::JoinHandle;
 
 use crate::agent::Agent;
-use crate::config::loader::MonitorConfig;
-use crate::config::rule::Rule;
+use crate::config::Config;
+use crate::config::rules_config::Rule;
 
 /// Agents responsible for managing agent pool and monitoring agents
 pub struct Agents {
@@ -13,13 +13,13 @@ pub struct Agents {
 }
 
 impl Agents {
-    /// Create a new agents system from monitor configuration
-    pub async fn new(rules: Vec<Rule>, monitor_config: &MonitorConfig) -> Result<Self> {
-        let pool_size = monitor_config.get_agent_pool_size();
+    /// Create a new agents system from configuration
+    pub async fn new(rules: Vec<Rule>, config: &Config) -> Result<Self> {
+        let pool_size = config.agents.pool;
         let mut agents = Vec::with_capacity(pool_size);
 
         for i in 0..pool_size {
-            let agent = Agent::from_monitor_config(i, monitor_config).await?;
+            let agent = Agent::from_config(i, config).await?;
             agents.push(agent);
         }
 
@@ -55,30 +55,28 @@ impl Agents {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::rule::RuleType;
-    use crate::config::types::ActionType;
 
     #[tokio::test]
     async fn test_agents_creation() {
-        let monitor_config = MonitorConfig::default();
+        let config = Config::default();
         let rules = vec![];
 
-        let agents = Agents::new(rules, &monitor_config).await;
+        let agents = Agents::new(rules, &config).await;
         assert!(agents.is_ok(), "Agents creation should succeed");
 
         let agents = agents.unwrap();
-        assert_eq!(agents.size(), monitor_config.get_agent_pool_size());
+        assert_eq!(agents.size(), config.agents.pool);
     }
 
     #[tokio::test]
     #[ignore] // Temporarily disabled due to PTY resource conflicts
     async fn test_agents_creation_with_custom_pool_size() {
-        let mut monitor_config = MonitorConfig::default();
-        monitor_config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
-        monitor_config.agents.pool = 3;
+        let mut config = Config::default();
+        config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
+        config.agents.pool = 3;
         let rules = vec![];
 
-        let agents = Agents::new(rules, &monitor_config).await;
+        let agents = Agents::new(rules, &config).await;
         assert!(agents.is_ok(), "Agents creation should succeed");
 
         let agents = agents.unwrap();
@@ -88,24 +86,24 @@ mod tests {
     #[tokio::test]
     #[ignore] // Temporarily disabled due to PTY resource conflicts
     async fn test_agents_size() {
-        let mut monitor_config = MonitorConfig::default();
-        monitor_config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
-        monitor_config.agents.pool = 5;
+        let mut config = Config::default();
+        config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
+        config.agents.pool = 5;
         let rules = vec![];
 
-        let agents = Agents::new(rules, &monitor_config).await.unwrap();
+        let agents = Agents::new(rules, &config).await.unwrap();
         assert_eq!(agents.size(), 5);
     }
 
     #[tokio::test]
     #[ignore] // Temporarily disabled due to PTY resource conflicts
     async fn test_get_agent_by_index() {
-        let mut monitor_config = MonitorConfig::default();
-        monitor_config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
-        monitor_config.agents.pool = 3;
+        let mut config = Config::default();
+        config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
+        config.agents.pool = 3;
         let rules = vec![];
 
-        let agents = Agents::new(rules, &monitor_config).await.unwrap();
+        let agents = Agents::new(rules, &config).await.unwrap();
 
         // Test getting agents by valid indices
         let agent0 = agents.get_agent_by_index(0);
@@ -127,18 +125,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_start_all_with_empty_rules() {
-        let mut monitor_config = MonitorConfig::default();
-        monitor_config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
+        let mut config = Config::default();
+        config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
         let rules = vec![];
 
-        let agents = Agents::new(rules, &monitor_config).await.unwrap();
+        let agents = Agents::new(rules, &config).await.unwrap();
         let result = agents.start_all().await;
 
         assert!(result.is_ok(), "start_all should succeed with empty rules");
 
         let handles = result.unwrap();
         // Should have 3 handles per agent (status monitoring, when monitoring, diff_timeout monitoring)
-        let expected_handles = monitor_config.get_agent_pool_size() * 3;
+        let expected_handles = config.agents.pool * 3;
         assert_eq!(handles.len(), expected_handles);
 
         // Clean up by aborting all handles
@@ -150,9 +148,11 @@ mod tests {
     #[tokio::test]
     async fn test_start_all_with_rules() {
         use regex::Regex;
+        use crate::config::rules_config::RuleType;
+        use crate::config::helper::ActionType;
 
-        let mut monitor_config = MonitorConfig::default();
-        monitor_config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
+        let mut config = Config::default();
+        config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
         let rules = vec![
             Rule {
                 rule_type: RuleType::When(Regex::new("test").unwrap()),
@@ -164,14 +164,14 @@ mod tests {
             },
         ];
 
-        let agents = Agents::new(rules, &monitor_config).await.unwrap();
+        let agents = Agents::new(rules, &config).await.unwrap();
         let result = agents.start_all().await;
 
         assert!(result.is_ok(), "start_all should succeed with rules");
 
         let handles = result.unwrap();
         // Should have 3 handles per agent (status monitoring, when monitoring, diff_timeout monitoring)
-        let expected_handles = monitor_config.get_agent_pool_size() * 3;
+        let expected_handles = config.agents.pool * 3;
         assert_eq!(handles.len(), expected_handles);
 
         // Clean up by aborting all handles
@@ -182,12 +182,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_agents_with_single_agent() {
-        let mut monitor_config = MonitorConfig::default();
-        monitor_config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
-        monitor_config.agents.pool = 1;
+        let mut config = Config::default();
+        config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
+        config.agents.pool = 1;
         let rules = vec![];
 
-        let agents = Agents::new(rules, &monitor_config).await.unwrap();
+        let agents = Agents::new(rules, &config).await.unwrap();
         assert_eq!(agents.size(), 1);
 
         // Test that wrapping works correctly with single agent

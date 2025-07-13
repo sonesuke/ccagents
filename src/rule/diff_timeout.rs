@@ -3,8 +3,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::agent::Agent;
-use crate::config::rule::{Rule, RuleType};
-use crate::config::types::ActionType;
+use crate::config::rules_config::{Rule, RuleType};
+use crate::config::helper::ActionType;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::Duration as TokioDuration;
 
@@ -186,7 +186,7 @@ async fn execute_rule_action(action: &ActionType, agent: &Agent, context: &str) 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::rule::RuleType;
+    use crate::config::rules_config::RuleType;
 
     fn create_timeout_rule(duration_str: &str, keys: Vec<String>) -> Rule {
         let duration = match duration_str.strip_suffix('s') {

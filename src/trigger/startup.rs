@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::sync::Arc;
 
 use crate::agent::Agents;
-use crate::config::trigger::Trigger;
+use crate::config::triggers_config::Trigger;
 
 /// Startup task manager responsible for handling on_start entries
 pub struct Startup {

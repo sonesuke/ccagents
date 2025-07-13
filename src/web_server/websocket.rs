@@ -20,12 +20,12 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
         .as_secs();
 
     // Get actual terminal dimensions from agent config
-    let terminal_config = agent.get_terminal_config();
+    let (cols, rows) = agent.get_terminal_dimensions();
 
     let header = json!({
         "version": 2,
-        "width": terminal_config.cols,
-        "height": terminal_config.rows,
+        "width": cols,
+        "height": rows,
         "timestamp": start_time,
         "env": {
             "TERM": "xterm-256color",
@@ -35,7 +35,7 @@ pub async fn handle_websocket(socket: WebSocket, agent: Arc<Agent>) {
 
     info!(
         "📐 Using terminal dimensions: {}x{} from config",
-        terminal_config.cols, terminal_config.rows
+        cols, rows
     );
 
     if sender

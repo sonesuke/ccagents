@@ -3,8 +3,9 @@ use std::sync::Arc;
 use tokio::sync::{RwLock, broadcast};
 
 use crate::agent::Agent;
-use crate::config::rule::{Rule, RuleType, resolve_capture_groups_in_vec};
-use crate::config::types::ActionType;
+use crate::config::rules_config::{Rule, RuleType};
+use crate::rule::capture::resolve_capture_groups_in_vec;
+use crate::config::helper::ActionType;
 
 /// When condition processor for PTY output pattern matching
 pub struct When {
@@ -107,11 +108,11 @@ impl When {
 
 /// Execute an action for rules (not for triggers)
 async fn execute_rule_action(
-    action: &crate::config::types::ActionType,
+    action: &crate::config::helper::ActionType,
     agent: &Agent,
     context: &str,
 ) -> Result<()> {
-    let crate::config::types::ActionType::SendKeys(keys) = action;
+    let crate::config::helper::ActionType::SendKeys(keys) = action;
     if keys.is_empty() {
         tracing::debug!("{}: No keys to send", context);
         return Ok(());
@@ -206,7 +207,7 @@ pub fn decide_action(capture: &str, rules: &[Rule]) -> ActionType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::rule::RuleType;
+    use crate::config::rules_config::RuleType;
     use regex::Regex;
 
     fn create_test_rule(pattern: &str, keys: Vec<String>) -> Rule {

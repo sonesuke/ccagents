@@ -1,5 +1,5 @@
 use super::pty_session::{PtyCommand, PtyEvent, PtyEventData, PtySession};
-use crate::config::loader::MonitorConfig;
+use crate::config::Config;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::process::Command;
@@ -59,9 +59,9 @@ impl Default for PtyProcessConfig {
 }
 
 impl PtyProcessConfig {
-    /// Create PtyProcessConfig from MonitorConfig and agent index
-    pub fn from_monitor_config(monitor_config: &MonitorConfig, index: usize) -> Self {
-        let (cols, rows) = monitor_config.get_agent_dimensions(index);
+    /// Create PtyProcessConfig from Config
+    pub fn from_config(config: &Config) -> Self {
+        let (cols, rows) = (config.web_ui.cols, config.web_ui.rows);
         Self {
             shell_command: Some(std::env::var("SHELL").unwrap_or_else(|_| "bash".to_string())),
             cols,
@@ -89,10 +89,10 @@ impl PtyProcess {
         }
     }
 
-    /// Create PtyProcess directly from MonitorConfig and agent index
-    pub fn from_monitor_config(monitor_config: &MonitorConfig, index: usize) -> Self {
-        let config = PtyProcessConfig::from_monitor_config(monitor_config, index);
-        Self::new(config)
+    /// Create PtyProcess directly from Config
+    pub fn from_config(config: &Config) -> Self {
+        let pty_config = PtyProcessConfig::from_config(config);
+        Self::new(pty_config)
     }
 
     pub async fn start(&self) -> Result<(), PtyProcessError> {

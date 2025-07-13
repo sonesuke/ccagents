@@ -5,7 +5,7 @@ use tokio::task::JoinHandle;
 use tokio::time::interval;
 
 use crate::agent::Agents;
-use crate::config::trigger::{Trigger, TriggerType};
+use crate::config::triggers_config::{Trigger, TriggerType};
 
 /// Periodic task manager responsible for handling periodic entries
 pub struct Periodic {

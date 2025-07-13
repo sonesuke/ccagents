@@ -4,7 +4,7 @@ use anyhow::Result;
 use std::process::Command;
 use tokio::time::Duration;
 
-impl config::trigger::Trigger {
+impl config::triggers_config::Trigger {
     /// Execute this trigger using the provided agent
     pub async fn execute(&self, agent: &Agent) -> Result<()> {
         tracing::info!("📦 Executing entry '{}': {:?}", self.name, self.action);
@@ -75,11 +75,11 @@ impl config::trigger::Trigger {
 
 /// Execute an action with consistent 100ms delay between keys
 async fn execute_action_with_agent(
-    action: &config::types::ActionType,
+    action: &config::helper::ActionType,
     agent: &Agent,
     context: &str,
 ) -> Result<()> {
-    let config::types::ActionType::SendKeys(keys) = action;
+    let config::helper::ActionType::SendKeys(keys) = action;
     if keys.is_empty() {
         tracing::debug!("{}: No keys to send", context);
         return Ok(());
@@ -100,13 +100,13 @@ async fn execute_action_with_agent(
 
 /// Resolve ${1} placeholders in action with source line content
 fn resolve_placeholders(
-    action: &config::types::ActionType,
+    action: &config::helper::ActionType,
     line: &str,
-) -> config::types::ActionType {
+) -> config::helper::ActionType {
     match action {
-        config::types::ActionType::SendKeys(keys) => {
+        config::helper::ActionType::SendKeys(keys) => {
             let resolved_keys = keys.iter().map(|key| key.replace("${1}", line)).collect();
-            config::types::ActionType::SendKeys(resolved_keys)
+            config::helper::ActionType::SendKeys(resolved_keys)
         }
     }
 }
