@@ -423,7 +423,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_monitor_method() {
-        let config = Config::default();
+        let _config = Config::default();
         let agent = create_test_agent().await;
 
         // Initially should be idle
@@ -446,7 +446,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_pty_receiver() {
-        let config = Config::default();
+        let _config = Config::default();
         let agent = create_test_agent().await;
 
         // Test getting PTY receiver

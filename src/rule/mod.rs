@@ -171,7 +171,7 @@ mod tests {
         let mock_pty = Arc::new(MockPtyProcess::new());
 
         // Test sending multiple keys through mock
-        let action = ActionType::SendKeys(vec!["echo".to_string(), "test".to_string()]);
+        let _action = ActionType::SendKeys(vec!["echo".to_string(), "test".to_string()]);
 
         // Directly test the send_input calls that would be made
         for key in ["echo", "test"] {
