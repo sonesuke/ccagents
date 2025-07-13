@@ -3,26 +3,25 @@ use std::sync::Arc;
 use tokio::sync::{RwLock, broadcast};
 
 use crate::agent::Agent;
-use crate::config::rule::{CompiledRule, RuleType, resolve_capture_groups_in_vec};
+use crate::config::rule::{Rule, RuleType, resolve_capture_groups_in_vec};
 use crate::config::types::ActionType;
-use crate::rule::DiffTimeout;
 
 /// When condition processor for PTY output pattern matching
 pub struct When {
-    rules: Arc<RwLock<Vec<CompiledRule>>>,
-    diff_timeout: Option<Arc<DiffTimeout>>,
+    rules: Arc<RwLock<Vec<Rule>>>,
+    agent: Arc<Agent>,
 }
 
 impl When {
-    pub fn new(rules: Vec<CompiledRule>, diff_timeout: Option<Arc<DiffTimeout>>) -> Self {
+    pub fn new(rules: Vec<Rule>, agent: Arc<Agent>) -> Self {
         Self {
             rules: Arc::new(RwLock::new(rules)),
-            diff_timeout,
+            agent,
         }
     }
 
     /// Process rules for the given PTY output
-    pub async fn process_rules_for_output(&self, pty_output: &str, agent: &Agent) -> Result<()> {
+    pub async fn process_rules_for_output(&self, pty_output: &str) -> Result<()> {
         // Remove ANSI escape sequences for cleaner pattern matching
         let clean_output = self.strip_ansi_escapes(pty_output);
 
@@ -46,7 +45,7 @@ impl When {
 
             if !matches!(action, ActionType::SendKeys(ref keys) if keys.is_empty()) {
                 tracing::debug!("Action decided: {:?}", action);
-                execute_rule_action(&action, agent, "Rule action").await?;
+                execute_rule_action(&action, &self.agent, "Rule action").await?;
             }
         }
 
@@ -54,14 +53,9 @@ impl When {
     }
 
     /// Start monitoring PTY output for rule processing
-    pub async fn start_pty_monitoring(
-        &self,
-        agent: Arc<Agent>,
-        mut receiver: broadcast::Receiver<String>,
-    ) -> Result<()> {
+    pub async fn start_monitoring(&self, mut receiver: broadcast::Receiver<String>) -> Result<()> {
         loop {
-            self.receive_and_process_pty_output(&agent, &mut receiver)
-                .await?;
+            self.receive_and_process_pty_output(&mut receiver).await?;
 
             // Small delay to prevent busy waiting
             tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
@@ -70,7 +64,6 @@ impl When {
 
     async fn receive_and_process_pty_output(
         &self,
-        agent: &Agent,
         receiver: &mut broadcast::Receiver<String>,
     ) -> Result<()> {
         let mut received_any = false;
@@ -79,32 +72,27 @@ impl When {
             received_any = true;
             tracing::debug!(
                 "📝 Agent {} received PTY output: {} bytes: '{}'",
-                agent.get_id(),
+                self.agent.get_id(),
                 pty_output.len(),
                 pty_output.chars().take(50).collect::<String>()
             );
 
-            // Reset timeout activity when any PTY output is received
-            if let Some(diff_timeout) = &self.diff_timeout {
-                diff_timeout.reset_timeout_activity().await;
-            }
-
             // Process rules only for Active agents
-            if agent.is_active().await {
-                tracing::debug!("🔍 Processing rules for agent {}", agent.get_id());
-                if let Err(e) = self.process_rules_for_output(&pty_output, agent).await {
+            if self.agent.is_active().await {
+                tracing::debug!("🔍 Processing rules for agent {}", self.agent.get_id());
+                if let Err(e) = self.process_rules_for_output(&pty_output).await {
                     tracing::debug!("❌ Error processing PTY output: {}", e);
                 }
             } else {
                 tracing::trace!(
                     "⏸️  Skipping rule processing for agent {} (inactive)",
-                    agent.get_id()
+                    self.agent.get_id()
                 );
             }
         }
 
         if received_any {
-            tracing::debug!("✅ Agent {} processed data chunks", agent.get_id());
+            tracing::debug!("✅ Agent {} processed data chunks", self.agent.get_id());
         }
 
         Ok(())
@@ -158,7 +146,7 @@ async fn execute_rule_action(
 /// # Performance
 /// Early termination on first match ensures optimal performance.
 /// Should complete within 1ms for 100 rules with typical patterns.
-pub fn decide_action(capture: &str, rules: &[CompiledRule]) -> ActionType {
+pub fn decide_action(capture: &str, rules: &[Rule]) -> ActionType {
     // Debug log the capture being checked
     if !capture.trim().is_empty() {
         tracing::debug!("🔍 Checking capture against rules: {:?}", capture);
@@ -172,7 +160,7 @@ pub fn decide_action(capture: &str, rules: &[CompiledRule]) -> ActionType {
 
     for (i, rule) in rules.iter().enumerate() {
         match &rule.rule_type {
-            RuleType::Pattern(regex) => {
+            RuleType::When(regex) => {
                 if let Some(captures) = regex.captures(capture) {
                     // Log the matched pattern
                     tracing::info!(
@@ -221,9 +209,9 @@ mod tests {
     use crate::config::rule::RuleType;
     use regex::Regex;
 
-    fn create_test_rule(pattern: &str, keys: Vec<String>) -> CompiledRule {
-        CompiledRule {
-            rule_type: RuleType::Pattern(Regex::new(pattern).unwrap()),
+    fn create_test_rule(pattern: &str, keys: Vec<String>) -> Rule {
+        Rule {
+            rule_type: RuleType::When(Regex::new(pattern).unwrap()),
             action: ActionType::SendKeys(keys),
         }
     }
@@ -311,7 +299,7 @@ mod tests {
         use std::time::Instant;
 
         // Create 100 test rules that don't match our test input
-        let rules: Vec<CompiledRule> = (0..100)
+        let rules: Vec<Rule> = (0..100)
             .map(|i| create_test_rule(&format!("unique_pattern_{}", i), vec![]))
             .collect();
 

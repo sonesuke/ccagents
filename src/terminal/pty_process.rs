@@ -1,4 +1,5 @@
 use super::pty_session::{PtyCommand, PtyEvent, PtyEventData, PtySession};
+use crate::config::loader::MonitorConfig;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::process::Command;
@@ -58,12 +59,13 @@ impl Default for PtyProcessConfig {
 }
 
 impl PtyProcessConfig {
-    /// Create PtyProcessConfig from TerminalConfig
-    pub fn from_terminal_config(terminal_config: &crate::config::terminal::TerminalConfig) -> Self {
+    /// Create PtyProcessConfig from MonitorConfig and agent index
+    pub fn from_monitor_config(monitor_config: &MonitorConfig, index: usize) -> Self {
+        let (cols, rows) = monitor_config.get_agent_dimensions(index);
         Self {
-            shell_command: Some(terminal_config.shell_command.clone()),
-            cols: terminal_config.cols,
-            rows: terminal_config.rows,
+            shell_command: Some(std::env::var("SHELL").unwrap_or_else(|_| "bash".to_string())),
+            cols,
+            rows,
         }
     }
 }
@@ -87,9 +89,9 @@ impl PtyProcess {
         }
     }
 
-    /// Create PtyProcess directly from TerminalConfig
-    pub fn from_terminal_config(terminal_config: &crate::config::terminal::TerminalConfig) -> Self {
-        let config = PtyProcessConfig::from_terminal_config(terminal_config);
+    /// Create PtyProcess directly from MonitorConfig and agent index
+    pub fn from_monitor_config(monitor_config: &MonitorConfig, index: usize) -> Self {
+        let config = PtyProcessConfig::from_monitor_config(monitor_config, index);
         Self::new(config)
     }
 

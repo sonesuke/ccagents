@@ -6,7 +6,7 @@ use std::time::Duration;
 
 // YAML structure for loading rules
 #[derive(Debug, Deserialize)]
-pub struct Rule {
+pub struct RuleConfig {
     #[serde(alias = "pattern")]
     pub when: Option<String>,
     #[serde(default)]
@@ -23,24 +23,24 @@ pub struct Rule {
 
 // Compiled structure for runtime use
 #[derive(Debug, Clone)]
-pub struct CompiledRule {
+pub struct Rule {
     pub rule_type: RuleType,
     pub action: ActionType,
 }
 
 #[derive(Debug, Clone)]
 pub enum RuleType {
-    Pattern(Regex),
+    When(Regex),
     DiffTimeout(Duration),
 }
 
-impl Rule {
-    pub fn compile(&self) -> Result<CompiledRule> {
+impl RuleConfig {
+    pub fn compile(&self) -> Result<Rule> {
         let rule_type = match (&self.when, &self.diff_timeout) {
             (Some(pattern), None) => {
                 let regex = Regex::new(pattern)
                     .with_context(|| format!("Invalid regex pattern: {}", pattern))?;
-                RuleType::Pattern(regex)
+                RuleType::When(regex)
             }
             (None, Some(timeout_str)) => {
                 let duration = parse_duration(timeout_str)?;
@@ -60,7 +60,7 @@ impl Rule {
 
         let action = compile_action(&self.action, &self.keys, &self.workflow, &self.args)?;
 
-        Ok(CompiledRule { rule_type, action })
+        Ok(Rule { rule_type, action })
     }
 }
 
@@ -134,7 +134,7 @@ mod tests {
 
     #[test]
     fn test_rule_compilation_pattern() {
-        let rule = Rule {
+        let rule = RuleConfig {
             when: Some("test".to_string()),
             diff_timeout: None,
             action: Some("send_keys".to_string()),
@@ -145,16 +145,16 @@ mod tests {
 
         let compiled = rule.compile().unwrap();
         match compiled.rule_type {
-            RuleType::Pattern(ref regex) => {
+            RuleType::When(ref regex) => {
                 assert_eq!(regex.as_str(), "test");
             }
-            _ => panic!("Expected pattern rule type"),
+            _ => panic!("Expected when rule type"),
         }
     }
 
     #[test]
     fn test_rule_compilation_diff_timeout() {
-        let rule = Rule {
+        let rule = RuleConfig {
             when: None,
             diff_timeout: Some("5m".to_string()),
             action: Some("send_keys".to_string()),
@@ -174,7 +174,7 @@ mod tests {
 
     #[test]
     fn test_rule_compilation_both_fields_error() {
-        let rule = Rule {
+        let rule = RuleConfig {
             when: Some("test".to_string()),
             diff_timeout: Some("5m".to_string()),
             action: Some("send_keys".to_string()),
@@ -188,7 +188,7 @@ mod tests {
 
     #[test]
     fn test_rule_compilation_no_fields_error() {
-        let rule = Rule {
+        let rule = RuleConfig {
             when: None,
             diff_timeout: None,
             action: Some("send_keys".to_string()),

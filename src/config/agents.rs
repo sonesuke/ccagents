@@ -1,4 +1,4 @@
-use crate::config::rule::Rule;
+use crate::config::rule::RuleConfig;
 use crate::config::trigger::Entry;
 use serde::Deserialize;
 
@@ -16,7 +16,7 @@ pub struct FullAgentsConfig {
     #[serde(default)]
     pub triggers: Vec<Entry>,
     #[serde(default)]
-    pub rules: Vec<Rule>,
+    pub rules: Vec<RuleConfig>,
 }
 
 impl Default for AgentsConfig {

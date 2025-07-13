@@ -4,37 +4,22 @@ use tokio::task::JoinHandle;
 
 use crate::agent::Agent;
 use crate::config::loader::MonitorConfig;
-use crate::config::rule::CompiledRule;
-use crate::rule::{DiffTimeout, When};
+use crate::config::rule::Rule;
 
 /// Agents responsible for managing agent pool and monitoring agents
 pub struct Agents {
-    rules: Vec<CompiledRule>,
+    rules: Vec<Rule>,
     agents: Vec<Arc<Agent>>,
 }
 
 impl Agents {
     /// Create a new agents system from monitor configuration
-    pub async fn new(rules: Vec<CompiledRule>, monitor_config: &MonitorConfig) -> Result<Self> {
-        let mut agents = Vec::new();
+    pub async fn new(rules: Vec<Rule>, monitor_config: &MonitorConfig) -> Result<Self> {
         let pool_size = monitor_config.get_agent_pool_size();
-        let base_port = monitor_config.get_web_ui_port();
+        let mut agents = Vec::with_capacity(pool_size);
 
         for i in 0..pool_size {
-            let port = base_port + i as u16;
-            let agent_id = format!("agent-{}", i);
-            let (cols, rows) = monitor_config.get_agent_dimensions(i);
-            let terminal_config = crate::config::terminal::TerminalConfig::new(cols, rows);
-            let agent = Arc::new(Agent::new(agent_id, terminal_config).await?);
-
-            // Start web server if enabled
-            if monitor_config.web_ui.enabled {
-                agent
-                    .clone()
-                    .start_web_server(port, monitor_config.web_ui.host.clone())
-                    .await?;
-            }
-
+            let agent = Agent::from_monitor_config(i, monitor_config).await?;
             agents.push(agent);
         }
 
@@ -51,69 +36,158 @@ impl Agents {
         Arc::clone(&self.agents[index % self.agents.len()])
     }
 
-    /// Start all monitoring systems: agent monitors and timeout monitor
+    /// Start all monitoring systems: agent monitors with timeout monitoring per agent
     pub async fn start_all(&self) -> Result<Vec<JoinHandle<()>>> {
         let mut monitoring_handles = Vec::new();
 
-        // Create shared diff_timeout monitor - pass agents as a reference
-        let agents_arc = Arc::new(self.agents.clone());
-        let diff_timeout_monitor = Arc::new(DiffTimeout::new(self.rules.clone(), agents_arc));
-
-        // Create agent monitors for each agent
-        for i in 0..self.size() {
-            let agent = self.get_agent_by_index(i);
-
-            // Get PTY receiver for this agent
-            match agent.get_process().get_pty_string_receiver().await {
-                Ok(receiver) => {
-                    tracing::info!(
-                        "✅ Agent {} persistent string receiver created",
-                        agent.get_id()
-                    );
-
-                    // Start agent status monitoring (independent of PTY output)
-                    let status_agent = Arc::clone(&agent);
-                    let status_handle = tokio::spawn(async move {
-                        if let Err(e) = status_agent.start_monitoring().await {
-                            tracing::error!("❌ Agent status monitor failed: {}", e);
-                        }
-                    });
-                    monitoring_handles.push(status_handle);
-
-                    // Start PTY output monitoring for when condition processing
-                    let when_processor =
-                        When::new(self.rules.clone(), Some(Arc::clone(&diff_timeout_monitor)));
-                    let pty_agent = Arc::clone(&agent);
-                    let pty_handle = tokio::spawn(async move {
-                        if let Err(e) = when_processor
-                            .start_pty_monitoring(pty_agent, receiver)
-                            .await
-                        {
-                            tracing::error!("❌ PTY monitor failed: {}", e);
-                        }
-                    });
-                    monitoring_handles.push(pty_handle);
-                }
-                Err(e) => {
-                    tracing::error!(
-                        "❌ Agent {} failed to create string receiver: {}",
-                        agent.get_id(),
-                        e
-                    );
-                }
-            }
+        // Setup monitoring for each agent (includes both When and DiffTimeout monitoring)
+        for agent in &self.agents {
+            let agent_handles = Arc::clone(agent)
+                .setup_monitoring(self.rules.clone())
+                .await?;
+            monitoring_handles.extend(agent_handles);
         }
 
-        // Start the diff_timeout monitor
-        let timeout_monitor_for_task =
-            DiffTimeout::new(self.rules.clone(), Arc::new(self.agents.clone()));
-        let timeout_handle = tokio::spawn(async move {
-            if let Err(e) = timeout_monitor_for_task.start_monitoring().await {
-                tracing::error!("❌ Diff timeout monitor failed: {}", e);
-            }
-        });
-        monitoring_handles.push(timeout_handle);
-
         Ok(monitoring_handles)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::rule::RuleType;
+    use crate::config::types::ActionType;
+
+    #[tokio::test]
+    async fn test_agents_creation() {
+        let monitor_config = MonitorConfig::default();
+        let rules = vec![];
+
+        let agents = Agents::new(rules, &monitor_config).await;
+        assert!(agents.is_ok(), "Agents creation should succeed");
+
+        let agents = agents.unwrap();
+        assert_eq!(agents.size(), monitor_config.get_agent_pool_size());
+    }
+
+    #[tokio::test]
+    async fn test_agents_creation_with_custom_pool_size() {
+        let mut monitor_config = MonitorConfig::default();
+        monitor_config.agents.pool = 3;
+        let rules = vec![];
+
+        let agents = Agents::new(rules, &monitor_config).await;
+        assert!(agents.is_ok(), "Agents creation should succeed");
+
+        let agents = agents.unwrap();
+        assert_eq!(agents.size(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_agents_size() {
+        let mut monitor_config = MonitorConfig::default();
+        monitor_config.agents.pool = 5;
+        let rules = vec![];
+
+        let agents = Agents::new(rules, &monitor_config).await.unwrap();
+        assert_eq!(agents.size(), 5);
+    }
+
+    #[tokio::test]
+    async fn test_get_agent_by_index() {
+        let mut monitor_config = MonitorConfig::default();
+        monitor_config.agents.pool = 3;
+        let rules = vec![];
+
+        let agents = Agents::new(rules, &monitor_config).await.unwrap();
+
+        // Test getting agents by valid indices
+        let agent0 = agents.get_agent_by_index(0);
+        let agent1 = agents.get_agent_by_index(1);
+        let agent2 = agents.get_agent_by_index(2);
+
+        assert_eq!(agent0.get_id(), "agent-0");
+        assert_eq!(agent1.get_id(), "agent-1");
+        assert_eq!(agent2.get_id(), "agent-2");
+
+        // Test wrapping behavior - index 3 should wrap to 0
+        let agent3 = agents.get_agent_by_index(3);
+        assert_eq!(agent3.get_id(), "agent-0");
+
+        // Test wrapping behavior - index 4 should wrap to 1
+        let agent4 = agents.get_agent_by_index(4);
+        assert_eq!(agent4.get_id(), "agent-1");
+    }
+
+    #[tokio::test]
+    async fn test_start_all_with_empty_rules() {
+        let monitor_config = MonitorConfig::default();
+        let rules = vec![];
+
+        let agents = Agents::new(rules, &monitor_config).await.unwrap();
+        let result = agents.start_all().await;
+
+        assert!(result.is_ok(), "start_all should succeed with empty rules");
+
+        let handles = result.unwrap();
+        // Should have 3 handles per agent (status monitoring, when monitoring, diff_timeout monitoring)
+        let expected_handles = monitor_config.get_agent_pool_size() * 3;
+        assert_eq!(handles.len(), expected_handles);
+
+        // Clean up by aborting all handles
+        for handle in handles {
+            handle.abort();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_start_all_with_rules() {
+        use regex::Regex;
+
+        let monitor_config = MonitorConfig::default();
+        let rules = vec![
+            Rule {
+                rule_type: RuleType::When(Regex::new("test").unwrap()),
+                action: ActionType::SendKeys(vec!["echo".to_string()]),
+            },
+            Rule {
+                rule_type: RuleType::DiffTimeout(std::time::Duration::from_secs(1)),
+                action: ActionType::SendKeys(vec!["timeout".to_string()]),
+            },
+        ];
+
+        let agents = Agents::new(rules, &monitor_config).await.unwrap();
+        let result = agents.start_all().await;
+
+        assert!(result.is_ok(), "start_all should succeed with rules");
+
+        let handles = result.unwrap();
+        // Should have 3 handles per agent (status monitoring, when monitoring, diff_timeout monitoring)
+        let expected_handles = monitor_config.get_agent_pool_size() * 3;
+        assert_eq!(handles.len(), expected_handles);
+
+        // Clean up by aborting all handles
+        for handle in handles {
+            handle.abort();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_agents_with_single_agent() {
+        let mut monitor_config = MonitorConfig::default();
+        monitor_config.agents.pool = 1;
+        let rules = vec![];
+
+        let agents = Agents::new(rules, &monitor_config).await.unwrap();
+        assert_eq!(agents.size(), 1);
+
+        // Test that wrapping works correctly with single agent
+        let agent0 = agents.get_agent_by_index(0);
+        let agent1 = agents.get_agent_by_index(1);
+        let agent10 = agents.get_agent_by_index(10);
+
+        assert_eq!(agent0.get_id(), "agent-0");
+        assert_eq!(agent1.get_id(), "agent-0"); // Should wrap to 0
+        assert_eq!(agent10.get_id(), "agent-0"); // Should wrap to 0
     }
 }

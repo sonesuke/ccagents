@@ -3,32 +3,34 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::agent::Agent;
-use crate::config::rule::{CompiledRule, RuleType};
+use crate::config::rule::{Rule, RuleType};
 use crate::config::types::ActionType;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::Duration as TokioDuration;
 
 use super::Monitor;
 
-/// Diff timeout processor responsible for checking diff_timeout rules across all agents
+/// Diff timeout processor responsible for checking diff_timeout rules for a single agent
 pub struct DiffTimeout {
-    rules: Arc<RwLock<Vec<CompiledRule>>>,
+    rules: Arc<RwLock<Vec<Rule>>>,
     timeout_state: Arc<Mutex<TimeoutState>>,
-    pub agents: Arc<Vec<Arc<Agent>>>,
+    agent: Arc<Agent>,
 }
 
 impl Monitor for DiffTimeout {
     async fn start_monitoring(self) -> Result<()> {
-        self.start_monitoring().await
+        // This trait method is not used for DiffTimeout since it requires a receiver
+        // Use the specific start_monitoring(receiver) method instead
+        unimplemented!("DiffTimeout requires a receiver, use start_monitoring(receiver) instead")
     }
 }
 
 impl DiffTimeout {
-    pub fn new(rules: Vec<CompiledRule>, agents: Arc<Vec<Arc<Agent>>>) -> Self {
+    pub fn new(rules: Vec<Rule>, agent: Arc<Agent>) -> Self {
         Self {
             rules: Arc::new(RwLock::new(rules)),
             timeout_state: Arc::new(Mutex::new(TimeoutState::new())),
-            agents,
+            agent,
         }
     }
 
@@ -38,32 +40,39 @@ impl DiffTimeout {
         timeout_state.reset_activity();
     }
 
-    pub async fn start_monitoring(self) -> Result<()> {
+    pub async fn start_monitoring(
+        self,
+        mut receiver: tokio::sync::broadcast::Receiver<String>,
+    ) -> Result<()> {
         let mut interval = tokio::time::interval(Duration::from_millis(100));
 
         loop {
-            interval.tick().await;
-
-            // Check timeout rules for active agents only
-            self.check_timeout_rules().await?;
+            tokio::select! {
+                // Listen for PTY output to reset timeout
+                Ok(_output) = receiver.recv() => {
+                    self.reset_timeout_activity().await;
+                }
+                // Check timeout rules periodically
+                _ = interval.tick() => {
+                    self.check_timeout_rules().await?;
+                }
+            }
         }
     }
 
     async fn check_timeout_rules(&self) -> Result<()> {
-        // Only process timeout rules when there are active agents
-        for agent in self.agents.iter() {
-            if agent.is_active().await {
-                let rules = self.rules.read().await;
-                let mut timeout_state = self.timeout_state.lock().await;
-                let timeout_actions = check_timeout_rules(&rules, &mut timeout_state);
+        // Only process timeout rules when the agent is active
+        if self.agent.is_active().await {
+            let rules = self.rules.read().await;
+            let mut timeout_state = self.timeout_state.lock().await;
+            let timeout_actions = check_timeout_rules(&rules, &mut timeout_state);
 
-                for action in timeout_actions {
-                    tracing::info!("⏰ Executing timeout rule action: {:?}", action);
-                    if let Err(e) = execute_rule_action(&action, agent, "🤖 Rule action").await {
-                        tracing::error!("❌ Error executing timeout rule action: {}", e);
-                    }
+            for action in timeout_actions {
+                tracing::info!("⏰ Executing timeout rule action: {:?}", action);
+                if let Err(e) = execute_rule_action(&action, &self.agent, "🤖 Rule action").await
+                {
+                    tracing::error!("❌ Error executing timeout rule action: {}", e);
                 }
-                break; // Only need to check once per cycle if any agent is active
             }
         }
 
@@ -116,10 +125,7 @@ impl TimeoutState {
 }
 
 /// Check timeout rules and return triggered actions
-pub fn check_timeout_rules(
-    rules: &[CompiledRule],
-    timeout_state: &mut TimeoutState,
-) -> Vec<ActionType> {
+pub fn check_timeout_rules(rules: &[Rule], timeout_state: &mut TimeoutState) -> Vec<ActionType> {
     let mut triggered_actions = Vec::new();
 
     // Extract timeout durations from rules
@@ -182,7 +188,7 @@ mod tests {
     use super::*;
     use crate::config::rule::RuleType;
 
-    fn create_timeout_rule(duration_str: &str, keys: Vec<String>) -> CompiledRule {
+    fn create_timeout_rule(duration_str: &str, keys: Vec<String>) -> Rule {
         let duration = match duration_str.strip_suffix('s') {
             Some(n) => Duration::from_secs(n.parse().unwrap()),
             None => match duration_str.strip_suffix('m') {
@@ -190,7 +196,7 @@ mod tests {
                 None => Duration::from_secs(1), // fallback
             },
         };
-        CompiledRule {
+        Rule {
             rule_type: RuleType::DiffTimeout(duration),
             action: ActionType::SendKeys(keys),
         }

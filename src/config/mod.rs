@@ -7,7 +7,7 @@ pub mod types;
 pub mod web_ui;
 
 use crate::config::loader::load_config;
-use crate::config::rule::CompiledRule;
+use crate::config::rule::Rule;
 use crate::config::trigger::{Trigger, TriggerType};
 use anyhow::Result;
 use std::sync::Arc;
@@ -62,7 +62,7 @@ pub fn is_test_mode() -> bool {
 
 pub struct Config {
     entries: Arc<RwLock<Vec<Trigger>>>,
-    rules: Arc<RwLock<Vec<CompiledRule>>>,
+    rules: Arc<RwLock<Vec<Rule>>>,
     test_mode: bool,
     // Monitor configuration
     monitor_config: loader::MonitorConfig,
@@ -100,7 +100,7 @@ impl Config {
     }
 
     /// Get compiled rules directly
-    pub fn get_rules(&self) -> Vec<CompiledRule> {
+    pub fn get_rules(&self) -> Vec<Rule> {
         self.rules.try_read().map(|r| r.clone()).unwrap_or_default()
     }
 }

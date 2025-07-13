@@ -3,16 +3,13 @@ use crate::agent::Agent;
 use crate::config::loader::MonitorConfig;
 use crate::config::web_ui::WebUIConfig;
 use crate::web_ui::assets::AssetCache;
-use std::sync::Arc;
 
 #[tokio::test]
 async fn test_web_server_creation() {
-    let terminal_config = crate::config::terminal::TerminalConfig::new(80, 24);
-    let agent = Arc::new(
-        Agent::new("test-agent".to_string(), terminal_config)
-            .await
-            .unwrap(),
-    );
+    let monitor_config = MonitorConfig::default();
+    let agent = Agent::from_monitor_config(0, &monitor_config)
+        .await
+        .unwrap();
     let web_server = WebServer::new(8080, "localhost".to_string(), agent);
 
     assert_eq!(web_server.port, 8080);
