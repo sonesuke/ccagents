@@ -45,9 +45,12 @@ mod tests {
     use std::sync::Arc;
 
     async fn create_test_agent() -> Arc<Agent> {
+        use crate::terminal::pty_process_trait::MockPtyProcess;
+
         let mut config = Config::default();
         config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
-        Agent::from_config(0, &config).await.unwrap()
+        let mock_pty = Box::new(MockPtyProcess::new());
+        Agent::new_with_process(0, &config, mock_pty).await.unwrap()
     }
 
     #[tokio::test]

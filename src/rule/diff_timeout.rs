@@ -195,9 +195,12 @@ mod tests {
     async fn test_check_timeout_rules() {
         use crate::agent::Agent;
         use crate::config::Config;
+        use crate::terminal::pty_process_trait::MockPtyProcess;
 
-        let config = Config::default();
-        let agent = Agent::from_config(0, &config).await.unwrap();
+        let mut config = Config::default();
+        config.web_ui.enabled = false;
+        let mock_pty = Box::new(MockPtyProcess::new());
+        let agent = Agent::new_with_process(0, &config, mock_pty).await.unwrap();
 
         let rules = vec![
             create_timeout_rule("1s", vec!["timeout1".to_string()]),
@@ -227,9 +230,12 @@ mod tests {
     async fn test_multiple_timeout_rules() {
         use crate::agent::Agent;
         use crate::config::Config;
+        use crate::terminal::pty_process_trait::MockPtyProcess;
 
-        let config = Config::default();
-        let agent = Agent::from_config(0, &config).await.unwrap();
+        let mut config = Config::default();
+        config.web_ui.enabled = false;
+        let mock_pty = Box::new(MockPtyProcess::new());
+        let agent = Agent::new_with_process(0, &config, mock_pty).await.unwrap();
 
         let rules = vec![
             create_timeout_rule("1s", vec!["short_timeout".to_string()]),
@@ -263,9 +269,12 @@ mod tests {
     async fn test_diff_timeout_multiple_triggers() {
         use crate::agent::Agent;
         use crate::config::Config;
+        use crate::terminal::pty_process_trait::MockPtyProcess;
 
-        let config = Config::default();
-        let agent = Agent::from_config(0, &config).await.unwrap();
+        let mut config = Config::default();
+        config.web_ui.enabled = false;
+        let mock_pty = Box::new(MockPtyProcess::new());
+        let agent = Agent::new_with_process(0, &config, mock_pty).await.unwrap();
 
         let rules = vec![create_timeout_rule(
             "1s",

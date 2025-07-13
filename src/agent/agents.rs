@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::task::JoinHandle;
 
 use crate::agent::Agent;
@@ -10,6 +11,7 @@ use crate::config::rules_config::Rule;
 pub struct Agents {
     rules: Vec<Rule>,
     agents: Vec<Arc<Agent>>,
+    next_agent_index: AtomicUsize,
 }
 
 impl Agents {
@@ -23,7 +25,11 @@ impl Agents {
             agents.push(agent);
         }
 
-        Ok(Self { rules, agents })
+        Ok(Self {
+            rules,
+            agents,
+            next_agent_index: AtomicUsize::new(0),
+        })
     }
 
     /// Create a new agents system with mock PTY for testing
@@ -40,7 +46,11 @@ impl Agents {
             agents.push(agent);
         }
 
-        Ok(Self { rules, agents })
+        Ok(Self {
+            rules,
+            agents,
+            next_agent_index: AtomicUsize::new(0),
+        })
     }
 
     /// Get the number of agents in the pool
@@ -51,6 +61,12 @@ impl Agents {
     /// Get agent by index
     pub fn get_agent_by_index(&self, index: usize) -> Arc<Agent> {
         Arc::clone(&self.agents[index % self.agents.len()])
+    }
+
+    /// Get the next agent using round-robin selection
+    pub fn get_next_agent(&self) -> Arc<Agent> {
+        let index = self.next_agent_index.fetch_add(1, Ordering::Relaxed);
+        self.get_agent_by_index(index)
     }
 
     /// Start all monitoring systems: agent monitors with timeout monitoring per agent
@@ -87,7 +103,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Temporarily disabled due to PTY resource conflicts
     async fn test_agents_creation_with_custom_pool_size() {
         let mut config = Config::default();
         config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
@@ -102,7 +117,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Temporarily disabled due to PTY resource conflicts
     async fn test_agents_size() {
         let mut config = Config::default();
         config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
@@ -114,7 +128,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Temporarily disabled due to PTY resource conflicts
     async fn test_get_agent_by_index() {
         let mut config = Config::default();
         config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts

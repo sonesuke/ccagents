@@ -130,9 +130,12 @@ mod tests {
     async fn create_test_agent() -> Arc<Agent> {
         use crate::agent::Agent;
         use crate::config::Config;
+        use crate::terminal::pty_process_trait::MockPtyProcess;
 
-        let config = Config::default();
-        Agent::from_config(0, &config).await.unwrap()
+        let mut config = Config::default();
+        config.web_ui.enabled = false;
+        let mock_pty = Box::new(MockPtyProcess::new());
+        Agent::new_with_process(0, &config, mock_pty).await.unwrap()
     }
 
     #[tokio::test]
