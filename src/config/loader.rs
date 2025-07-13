@@ -32,23 +32,20 @@ pub fn load_config(path: &Path) -> Result<(Vec<Trigger>, Vec<Rule>, MonitorConfi
     let config_file: ConfigFile =
         serde_yml::from_str(&content).with_context(|| "Failed to parse YAML config file")?;
 
-    let mut compiled_entries = Vec::new();
-    for entry in config_file.agents.triggers {
-        let compiled = entry
-            .compile()
-            .with_context(|| format!("Failed to compile trigger: {}", entry.name))?;
-        compiled_entries.push(compiled);
+    let mut triggers = Vec::new();
+    for trigger_config in config_file.agents.triggers {
+        let name = trigger_config.name.clone(); // Clone name before moving trigger_config
+        let trigger = Trigger::try_from(trigger_config)
+            .with_context(|| format!("Failed to parse trigger: {}", name))?;
+        triggers.push(trigger);
     }
 
-    let mut compiled_rules = Vec::new();
-    for rule in config_file.agents.rules {
-        let compiled = rule.compile().with_context(|| {
-            format!(
-                "Failed to compile rule with pattern: {:?}",
-                rule.when.as_deref().unwrap_or("timeout")
-            )
-        })?;
-        compiled_rules.push(compiled);
+    let mut rules = Vec::new();
+    for rule_config in config_file.agents.rules {
+        let pattern = rule_config.when.as_deref().unwrap_or("timeout").to_string(); // Clone pattern before moving
+        let rule = Rule::try_from(rule_config)
+            .with_context(|| format!("Failed to parse rule with pattern: {:?}", pattern))?;
+        rules.push(rule);
     }
 
     // Rules are processed in order (no sorting needed - line order = priority)
@@ -60,7 +57,7 @@ pub fn load_config(path: &Path) -> Result<(Vec<Trigger>, Vec<Rule>, MonitorConfi
         },
     };
 
-    Ok((compiled_entries, compiled_rules, monitor_config))
+    Ok((triggers, rules, monitor_config))
 }
 
 impl MonitorConfig {

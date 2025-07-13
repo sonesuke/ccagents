@@ -1,7 +1,8 @@
-use crate::config::types::{ActionType, compile_action};
+use crate::config::types::{ActionType, parse_action};
 use anyhow::{Context, Result, anyhow};
 use regex::Regex;
 use serde::Deserialize;
+use std::convert::TryFrom;
 use std::time::Duration;
 
 // YAML structure for loading rules
@@ -21,7 +22,7 @@ pub struct RuleConfig {
     pub args: Vec<String>,
 }
 
-// Compiled structure for runtime use
+// Parsed and validated structure for runtime use
 #[derive(Debug, Clone)]
 pub struct Rule {
     pub rule_type: RuleType,
@@ -34,9 +35,11 @@ pub enum RuleType {
     DiffTimeout(Duration),
 }
 
-impl RuleConfig {
-    pub fn compile(&self) -> Result<Rule> {
-        let rule_type = match (&self.when, &self.diff_timeout) {
+impl TryFrom<RuleConfig> for Rule {
+    type Error = anyhow::Error;
+
+    fn try_from(config: RuleConfig) -> Result<Self> {
+        let rule_type = match (&config.when, &config.diff_timeout) {
             (Some(pattern), None) => {
                 let regex = Regex::new(pattern)
                     .with_context(|| format!("Invalid regex pattern: {}", pattern))?;
@@ -58,9 +61,9 @@ impl RuleConfig {
             }
         };
 
-        let action = compile_action(&self.action, &self.keys, &self.workflow, &self.args)?;
+        let action = parse_action(&config.action, &config.keys, &config.workflow, &config.args)?;
 
-        Ok(Rule { rule_type, action })
+        Ok(Self { rule_type, action })
     }
 }
 
@@ -133,7 +136,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rule_compilation_pattern() {
+    fn test_rule_try_from_pattern() {
         let rule = RuleConfig {
             when: Some("test".to_string()),
             diff_timeout: None,
@@ -143,8 +146,8 @@ mod tests {
             args: vec![],
         };
 
-        let compiled = rule.compile().unwrap();
-        match compiled.rule_type {
+        let rule = Rule::try_from(rule).unwrap();
+        match rule.rule_type {
             RuleType::When(ref regex) => {
                 assert_eq!(regex.as_str(), "test");
             }
@@ -153,7 +156,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rule_compilation_diff_timeout() {
+    fn test_rule_try_from_diff_timeout() {
         let rule = RuleConfig {
             when: None,
             diff_timeout: Some("5m".to_string()),
@@ -163,8 +166,8 @@ mod tests {
             args: vec![],
         };
 
-        let compiled = rule.compile().unwrap();
-        match compiled.rule_type {
+        let rule = Rule::try_from(rule).unwrap();
+        match rule.rule_type {
             RuleType::DiffTimeout(duration) => {
                 assert_eq!(duration, Duration::from_secs(300));
             }
@@ -173,7 +176,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rule_compilation_both_fields_error() {
+    fn test_rule_try_from_both_fields_error() {
         let rule = RuleConfig {
             when: Some("test".to_string()),
             diff_timeout: Some("5m".to_string()),
@@ -183,11 +186,11 @@ mod tests {
             args: vec![],
         };
 
-        assert!(rule.compile().is_err());
+        assert!(Rule::try_from(rule).is_err());
     }
 
     #[test]
-    fn test_rule_compilation_no_fields_error() {
+    fn test_rule_try_from_no_fields_error() {
         let rule = RuleConfig {
             when: None,
             diff_timeout: None,
@@ -197,6 +200,6 @@ mod tests {
             args: vec![],
         };
 
-        assert!(rule.compile().is_err());
+        assert!(Rule::try_from(rule).is_err());
     }
 }

@@ -1,11 +1,14 @@
-use crate::config::types::{ActionType, compile_action};
+use crate::config::types::{ActionType, parse_action};
 use anyhow::{Result, anyhow};
 use serde::Deserialize;
+use std::convert::TryFrom;
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::RwLock;
 
-// YAML structure for loading entries (triggers)
+// YAML structure for loading trigger configuration
 #[derive(Debug, Deserialize)]
-pub struct Entry {
+pub struct TriggerConfig {
     pub name: String,
     #[serde(alias = "trigger")]
     pub event: String,
@@ -23,7 +26,7 @@ pub struct Entry {
     pub dedupe: bool,
 }
 
-// Compiled structure for runtime use
+// Parsed and validated structure for runtime use
 #[derive(Debug, Clone)]
 pub struct Trigger {
     pub name: String,
@@ -41,30 +44,32 @@ pub enum TriggerType {
     Periodic { interval: std::time::Duration },
 }
 
-impl Entry {
-    pub fn compile(&self) -> Result<Trigger> {
-        let trigger = if self.event.starts_with("timer:") {
-            let duration_str = self
+impl TryFrom<TriggerConfig> for Trigger {
+    type Error = anyhow::Error;
+
+    fn try_from(config: TriggerConfig) -> Result<Self> {
+        let trigger = if config.event.starts_with("timer:") {
+            let duration_str = config
                 .event
                 .strip_prefix("timer:")
                 .ok_or_else(|| anyhow::anyhow!("Invalid timer format"))?
                 .to_string();
             let interval = parse_duration(&duration_str)?;
             TriggerType::Periodic { interval }
-        } else if self.event == "startup" {
+        } else if config.event == "startup" {
             TriggerType::OnStart
         } else {
-            TriggerType::UserCommand(self.event.clone())
+            TriggerType::UserCommand(config.event.clone())
         };
 
-        let action = compile_action(&self.action, &self.keys, &self.workflow, &self.args)?;
+        let action = parse_action(&config.action, &config.keys, &config.workflow, &config.args)?;
 
-        Ok(Trigger {
-            name: self.name.clone(),
+        Ok(Self {
+            name: config.name,
             trigger,
             action,
-            source: self.source.clone(),
-            dedupe: self.dedupe,
+            source: config.source,
+            dedupe: config.dedupe,
         })
     }
 }
@@ -97,6 +102,41 @@ fn parse_duration(s: &str) -> Result<Duration> {
     };
 
     Ok(duration)
+}
+
+/// Configuration for trigger system
+#[derive(Clone)]
+pub struct TriggerManager {
+    triggers: Arc<RwLock<Vec<Trigger>>>,
+}
+
+impl TriggerManager {
+    /// Create new trigger manager
+    pub fn new(triggers: Vec<Trigger>) -> Self {
+        Self {
+            triggers: Arc::new(RwLock::new(triggers)),
+        }
+    }
+
+    /// Get startup triggers (on_start triggers)
+    pub async fn get_on_start_triggers(&self) -> Vec<Trigger> {
+        let triggers = self.triggers.read().await;
+        triggers
+            .iter()
+            .filter(|trigger| trigger.trigger == TriggerType::OnStart)
+            .cloned()
+            .collect()
+    }
+
+    /// Get periodic triggers (periodic triggers)
+    pub async fn get_periodic_triggers(&self) -> Vec<Trigger> {
+        let triggers = self.triggers.read().await;
+        triggers
+            .iter()
+            .filter(|trigger| matches!(trigger.trigger, TriggerType::Periodic { .. }))
+            .cloned()
+            .collect()
+    }
 }
 
 #[cfg(test)]

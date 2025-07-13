@@ -130,7 +130,7 @@ async fn execute_rule_action(
     Ok(())
 }
 
-/// Matches capture text against compiled rules and returns the appropriate action.
+/// Matches capture text against parsed rules and returns the appropriate action.
 ///
 /// This function iterates through rules in priority order (as loaded by load_config)
 /// and returns the first matching rule's action with resolved capture groups.
@@ -138,7 +138,7 @@ async fn execute_rule_action(
 ///
 /// # Arguments
 /// * `capture` - The text to match against rule patterns
-/// * `rules` - Slice of compiled rules, assumed to be sorted by priority
+/// * `rules` - Slice of parsed rules, assumed to be sorted by priority
 ///
 /// # Returns
 /// An ActionType representing the action to take

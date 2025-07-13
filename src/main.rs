@@ -54,7 +54,7 @@ async fn run_automation_command(rules_path: PathBuf) -> Result<()> {
     let agents = Arc::new(Agents::new(rules, config.get_monitor_config()).await?);
 
     // 1. Start triggers (startup + periodic)
-    let triggers = Triggers::new(config.get_trigger_config(), Arc::clone(&agents));
+    let triggers = Triggers::new(config.get_trigger_manager(), Arc::clone(&agents));
     let trigger_handles = triggers.start_all().await?;
 
     // 2. Start agents (monitoring)

@@ -323,7 +323,8 @@ mod tests {
         use crate::config::rule::{Rule, RuleType};
         use crate::config::types::ActionType;
 
-        let monitor_config = MonitorConfig::default();
+        let mut monitor_config = MonitorConfig::default();
+        monitor_config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
         let agent = Agent::from_monitor_config(0, &monitor_config)
             .await
             .unwrap();

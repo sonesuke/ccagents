@@ -1,5 +1,5 @@
 use crate::config::rule::RuleConfig;
-use crate::config::trigger::Entry;
+use crate::config::trigger::TriggerConfig;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Clone)]
@@ -14,7 +14,7 @@ pub struct FullAgentsConfig {
     #[serde(default = "default_pool_size")]
     pub pool: usize,
     #[serde(default)]
-    pub triggers: Vec<Entry>,
+    pub triggers: Vec<TriggerConfig>,
     #[serde(default)]
     pub rules: Vec<RuleConfig>,
 }

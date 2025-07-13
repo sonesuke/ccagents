@@ -6,8 +6,8 @@ pub enum ActionType {
     SendKeys(Vec<String>),
 }
 
-/// Compile action from YAML fields into ActionType
-pub fn compile_action(
+/// Parse and validate action from YAML fields into ActionType
+pub fn parse_action(
     action: &Option<String>,
     keys: &[String],
     _workflow: &Option<String>,

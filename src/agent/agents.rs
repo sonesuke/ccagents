@@ -127,7 +127,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_start_all_with_empty_rules() {
-        let monitor_config = MonitorConfig::default();
+        let mut monitor_config = MonitorConfig::default();
+        monitor_config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
         let rules = vec![];
 
         let agents = Agents::new(rules, &monitor_config).await.unwrap();
@@ -150,7 +151,8 @@ mod tests {
     async fn test_start_all_with_rules() {
         use regex::Regex;
 
-        let monitor_config = MonitorConfig::default();
+        let mut monitor_config = MonitorConfig::default();
+        monitor_config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
         let rules = vec![
             Rule {
                 rule_type: RuleType::When(Regex::new("test").unwrap()),
@@ -181,6 +183,7 @@ mod tests {
     #[tokio::test]
     async fn test_agents_with_single_agent() {
         let mut monitor_config = MonitorConfig::default();
+        monitor_config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
         monitor_config.agents.pool = 1;
         let rules = vec![];
 
