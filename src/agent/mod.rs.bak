@@ -354,7 +354,7 @@ mod tests {
     async fn test_send_keys() {
         let mut config = Config::default();
         config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
-        let agent = create_test_agent().await;
+        let agent = Agent::from_config(0, &config).await.unwrap();
 
         // Test sending keys to the process
         let result = agent.send_keys("echo test").await;
@@ -368,7 +368,7 @@ mod tests {
     async fn test_send_keys_empty() {
         let mut config = Config::default();
         config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
-        let agent = create_test_agent().await;
+        let agent = Agent::from_config(0, &config).await.unwrap();
 
         // Test sending empty string
         let result = agent.send_keys("").await;
@@ -382,7 +382,7 @@ mod tests {
 
         let mut config = Config::default();
         config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
-        let agent = create_test_agent().await;
+        let agent = Agent::from_config(0, &config).await.unwrap();
 
         // Create some test rules
         let rules = vec![Rule {
@@ -424,7 +424,7 @@ mod tests {
     #[tokio::test]
     async fn test_monitor_method() {
         let config = Config::default();
-        let agent = create_test_agent().await;
+        let agent = Agent::from_config(0, &config).await.unwrap();
 
         // Initially should be idle
         assert!(!agent.is_active().await, "Agent should start as idle");
@@ -447,7 +447,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_pty_receiver() {
         let config = Config::default();
-        let agent = create_test_agent().await;
+        let agent = Agent::from_config(0, &config).await.unwrap();
 
         // Test getting PTY receiver
         let result = agent.get_pty_receiver().await;
@@ -692,7 +692,7 @@ mod tests {
         let mut config = Config::default();
         config.web_ui.enabled = false;
         
-        let agent = create_test_agent().await;
+        let agent = Agent::from_config(0, &config).await.unwrap();
         
         // Create test rules
         let rules = vec![Rule {
@@ -792,7 +792,7 @@ mod tests {
         let mut config = Config::default();
         config.web_ui.enabled = false;
         
-        let agent = create_test_agent().await;
+        let agent = Agent::from_config(0, &config).await.unwrap();
         let pty_process = agent.get_process();
         
         // Initial PTY state
@@ -903,7 +903,7 @@ mod tests {
         let mut config = Config::default();
         config.web_ui.enabled = false;
         
-        let agent = create_test_agent().await;
+        let agent = Agent::from_config(0, &config).await.unwrap();
         
         // Step 1: Send one command successfully
         info!("📤 Step 1: Sending first command (should work)...");

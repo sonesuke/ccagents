@@ -1,4 +1,5 @@
 use super::pty_session::{PtyCommand, PtyEvent, PtyEventData, PtySession};
+use super::pty_process_trait::PtyProcessTrait;
 use crate::config::Config;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -295,5 +296,28 @@ impl Drop for PtyProcess {
         if let Ok(mut session) = self.session.try_lock() {
             session.take();
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl PtyProcessTrait for PtyProcess {
+    async fn send_input(&self, input: String) -> Result<(), PtyProcessError> {
+        self.send_input(input).await
+    }
+
+    async fn get_pty_string_receiver(&self) -> Result<broadcast::Receiver<String>, PtyProcessError> {
+        self.get_pty_string_receiver().await
+    }
+
+    async fn get_child_processes(&self) -> Result<Vec<u32>, PtyProcessError> {
+        self.get_child_processes().await
+    }
+
+    async fn get_screen_contents(&self) -> Result<String, PtyProcessError> {
+        self.get_screen_contents().await
+    }
+
+    async fn get_pty_bytes_receiver(&self) -> Result<broadcast::Receiver<bytes::Bytes>, PtyProcessError> {
+        self.get_pty_bytes_receiver().await
     }
 }
