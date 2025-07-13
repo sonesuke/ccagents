@@ -163,19 +163,19 @@ mod tests {
     async fn test_execute_rule_action_with_mock_pty() {
         use crate::terminal::pty_process_trait::{MockPtyProcess, PtyProcessTrait};
         use std::sync::Arc;
-        
+
         // Create mock PTY process
         let mock_pty = Arc::new(MockPtyProcess::new());
-        
+
         // Test sending multiple keys through mock
         let action = ActionType::SendKeys(vec!["echo".to_string(), "test".to_string()]);
-        
+
         // Directly test the send_input calls that would be made
         for key in ["echo", "test"] {
             let result = mock_pty.send_input(key.to_string()).await;
             assert!(result.is_ok(), "Mock PTY should succeed");
         }
-        
+
         // Verify all inputs were recorded
         let sent_inputs = mock_pty.get_sent_inputs();
         assert_eq!(sent_inputs, vec!["echo", "test"]);

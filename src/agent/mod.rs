@@ -41,9 +41,9 @@ impl Agent {
 
     /// Create a new agent with a specific PTY process (for testing with mocks)
     pub async fn new_with_process(
-        index: usize, 
-        config: &Config, 
-        process: Box<dyn PtyProcessTrait>
+        index: usize,
+        config: &Config,
+        process: Box<dyn PtyProcessTrait>,
     ) -> Result<Arc<Self>> {
         let agent = Arc::new(Agent {
             index,
@@ -260,11 +260,11 @@ pub use agents::Agents;
 mod tests {
     use super::*;
     use crate::terminal::pty_process_trait::MockPtyProcess;
-    
+
     async fn create_test_agent() -> Arc<Agent> {
         let mut config = Config::default();
         config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
-        
+
         let mock_pty = Box::new(MockPtyProcess::new());
         Agent::new_with_process(0, &config, mock_pty).await.unwrap()
     }
@@ -279,11 +279,11 @@ mod tests {
     #[tokio::test]
     async fn test_agent_getters() {
         use crate::terminal::pty_process_trait::MockPtyProcess;
-        
+
         let mut config = Config::default();
         config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
         config.agents.pool = 3;
-        
+
         // Use mock PTY instead of real PTY for stable testing
         let mock_pty = Box::new(MockPtyProcess::new());
         let agent = Agent::new_with_process(0, &config, mock_pty).await.unwrap();
@@ -304,10 +304,10 @@ mod tests {
     #[tokio::test]
     async fn test_agent_status_management() {
         use crate::terminal::pty_process_trait::MockPtyProcess;
-        
+
         let mut config = Config::default();
         config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
-        
+
         let mock_pty = Box::new(MockPtyProcess::new());
         let agent = Agent::new_with_process(0, &config, mock_pty).await.unwrap();
 
@@ -331,10 +331,10 @@ mod tests {
     #[tokio::test]
     async fn test_is_active_method() {
         use crate::terminal::pty_process_trait::MockPtyProcess;
-        
+
         let mut config = Config::default();
         config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
-        
+
         let mock_pty = Box::new(MockPtyProcess::new());
         let agent = Agent::new_with_process(0, &config, mock_pty).await.unwrap();
 
@@ -406,7 +406,7 @@ mod tests {
     #[tokio::test]
     async fn test_web_server_setup_when_disabled() {
         use crate::terminal::pty_process_trait::MockPtyProcess;
-        
+
         let mut config = Config::default();
         config.web_ui.enabled = false;
 
@@ -461,7 +461,7 @@ mod tests {
     async fn test_send_keys_with_comprehensive_debugging() {
         use std::time::{Duration, Instant};
         use tokio::time::timeout;
-        use tracing::{info, warn, error};
+        use tracing::{error, info, warn};
 
         // Initialize detailed logging for this test
         let _ = tracing_subscriber::fmt()
@@ -474,18 +474,21 @@ mod tests {
             .try_init();
 
         info!("🚀 Starting comprehensive debugging test for send_keys hang detection");
-        
+
         // Create config with WebUI disabled to avoid port conflicts
         let mut config = Config::default();
         config.web_ui.enabled = false;
         info!("✅ Config created with WebUI disabled");
-        
+
         // Create agent with timeout monitoring
         info!("📦 Creating agent...");
         let start_time = Instant::now();
         let agent = match timeout(Duration::from_secs(10), Agent::from_config(0, &config)).await {
             Ok(Ok(agent)) => {
-                info!("✅ Agent created successfully in {:?}", start_time.elapsed());
+                info!(
+                    "✅ Agent created successfully in {:?}",
+                    start_time.elapsed()
+                );
                 agent
             }
             Ok(Err(e)) => {
@@ -497,22 +500,30 @@ mod tests {
                 panic!("Agent creation timed out");
             }
         };
-        
+
         // Log initial agent state
         info!("🔍 Agent ID: {}", agent.get_id());
         info!("🔍 Agent active status: {}", agent.is_active().await);
-        
+
         // Get reference to PTY process for deeper inspection
         let pty_process = agent.get_process();
         info!("🔍 PTY process reference obtained");
-        
+
         // Test Pattern 1: Single send_keys operation
         info!("🎯 === TEST PATTERN 1: Single send_keys ===");
         info!("📤 Sending single command: 'echo single_test'");
         let send_start = Instant::now();
-        match timeout(Duration::from_secs(3), agent.send_keys("echo single_test\n")).await {
+        match timeout(
+            Duration::from_secs(3),
+            agent.send_keys("echo single_test\n"),
+        )
+        .await
+        {
             Ok(Ok(())) => {
-                info!("✅ Single send_keys completed in {:?}", send_start.elapsed());
+                info!(
+                    "✅ Single send_keys completed in {:?}",
+                    send_start.elapsed()
+                );
             }
             Ok(Err(e)) => {
                 error!("❌ Single send_keys failed: {}", e);
@@ -524,12 +535,21 @@ mod tests {
                 panic!("Single send_keys timed out - HANG DETECTED");
             }
         }
-        
+
         // Check PTY state after first operation
         info!("🔍 Checking PTY process state after single operation...");
-        match timeout(Duration::from_millis(1000), pty_process.get_child_processes()).await {
+        match timeout(
+            Duration::from_millis(1000),
+            pty_process.get_child_processes(),
+        )
+        .await
+        {
             Ok(Ok(child_pids)) => {
-                info!("✅ PTY child processes: {:?} (count: {})", child_pids, child_pids.len());
+                info!(
+                    "✅ PTY child processes: {:?} (count: {})",
+                    child_pids,
+                    child_pids.len()
+                );
             }
             Ok(Err(e)) => {
                 warn!("⚠️ Failed to get child processes: {}", e);
@@ -541,27 +561,50 @@ mod tests {
 
         // Test Pattern 2: Multiple send_keys with 100ms sleep pattern (the hanging pattern)
         info!("🎯 === TEST PATTERN 2: Multiple send_keys with 100ms sleep ===");
-        
+
         for iteration in 1..=3 {
-            info!("📤 [Iteration {}/3] Sending: 'echo test_{}'", iteration, iteration);
+            info!(
+                "📤 [Iteration {}/3] Sending: 'echo test_{}'",
+                iteration, iteration
+            );
             let send_start = Instant::now();
-            
+
             // This is the problematic pattern: send_keys followed by sleep
-            match timeout(Duration::from_secs(5), agent.send_keys(&format!("echo test_{}\n", iteration))).await {
+            match timeout(
+                Duration::from_secs(5),
+                agent.send_keys(&format!("echo test_{}\n", iteration)),
+            )
+            .await
+            {
                 Ok(Ok(())) => {
-                    info!("✅ [Iteration {}/3] send_keys completed in {:?}", iteration, send_start.elapsed());
+                    info!(
+                        "✅ [Iteration {}/3] send_keys completed in {:?}",
+                        iteration,
+                        send_start.elapsed()
+                    );
                 }
                 Ok(Err(e)) => {
                     error!("❌ [Iteration {}/3] send_keys failed: {}", iteration, e);
                     panic!("Send_keys failed at iteration {}: {}", iteration, e);
                 }
                 Err(_) => {
-                    error!("⏱️ [Iteration {}/3] send_keys timed out after 5 seconds", iteration);
-                    error!("🔴 HANG DETECTED: send_keys operation {} is blocking!", iteration);
-                    
+                    error!(
+                        "⏱️ [Iteration {}/3] send_keys timed out after 5 seconds",
+                        iteration
+                    );
+                    error!(
+                        "🔴 HANG DETECTED: send_keys operation {} is blocking!",
+                        iteration
+                    );
+
                     // Additional debugging for hang detection
                     info!("🔍 HANG DEBUG: Attempting to get PTY process state during hang...");
-                    match timeout(Duration::from_millis(500), pty_process.get_child_processes()).await {
+                    match timeout(
+                        Duration::from_millis(500),
+                        pty_process.get_child_processes(),
+                    )
+                    .await
+                    {
                         Ok(Ok(child_pids)) => {
                             error!("🔍 HANG DEBUG: PTY children during hang: {:?}", child_pids);
                         }
@@ -572,29 +615,57 @@ mod tests {
                             error!("🔍 HANG DEBUG: Child process check also timed out during hang");
                         }
                     }
-                    
-                    panic!("Send_keys timed out at iteration {} - HANG DETECTED", iteration);
+
+                    panic!(
+                        "Send_keys timed out at iteration {} - HANG DETECTED",
+                        iteration
+                    );
                 }
             }
-            
+
             // The problematic 100ms sleep
             info!("😴 [Sleep {}/2] Starting 100ms sleep...", iteration);
             let sleep_start = Instant::now();
-            match timeout(Duration::from_millis(300), tokio::time::sleep(Duration::from_millis(100))).await {
+            match timeout(
+                Duration::from_millis(300),
+                tokio::time::sleep(Duration::from_millis(100)),
+            )
+            .await
+            {
                 Ok(()) => {
-                    info!("✅ [Sleep {}/2] Sleep completed in {:?}", iteration, sleep_start.elapsed());
+                    info!(
+                        "✅ [Sleep {}/2] Sleep completed in {:?}",
+                        iteration,
+                        sleep_start.elapsed()
+                    );
                 }
                 Err(_) => {
-                    error!("⏱️ [Sleep {}/2] Sleep timed out (this should never happen!)", iteration);
+                    error!(
+                        "⏱️ [Sleep {}/2] Sleep timed out (this should never happen!)",
+                        iteration
+                    );
                     panic!("Sleep timed out at iteration {}", iteration);
                 }
             }
-            
+
             // Check PTY state after each iteration
-            info!("🔍 [Check {}/3] Checking PTY state after iteration {}...", iteration, iteration);
-            match timeout(Duration::from_millis(1000), pty_process.get_child_processes()).await {
+            info!(
+                "🔍 [Check {}/3] Checking PTY state after iteration {}...",
+                iteration, iteration
+            );
+            match timeout(
+                Duration::from_millis(1000),
+                pty_process.get_child_processes(),
+            )
+            .await
+            {
                 Ok(Ok(child_pids)) => {
-                    info!("✅ [Check {}/3] PTY children: {:?} (count: {})", iteration, child_pids, child_pids.len());
+                    info!(
+                        "✅ [Check {}/3] PTY children: {:?} (count: {})",
+                        iteration,
+                        child_pids,
+                        child_pids.len()
+                    );
                 }
                 Ok(Err(e)) => {
                     warn!("⚠️ [Check {}/3] Failed to get children: {}", iteration, e);
@@ -604,16 +675,16 @@ mod tests {
                 }
             }
         }
-        
+
         info!("🎉 All send_keys operations with sleep pattern completed successfully!");
-        
+
         // Test Pattern 3: Rapid fire send_keys without sleep
         info!("🎯 === TEST PATTERN 3: Rapid fire send_keys ===");
-        
+
         for i in 1..=5 {
             let cmd = format!("echo rapid_{}\n", i);
             info!("📤 [Rapid {}/5] Sending: {}", i, cmd.trim());
-            
+
             match timeout(Duration::from_secs(2), agent.send_keys(&cmd)).await {
                 Ok(Ok(())) => {
                     info!("✅ [Rapid {}/5] Command sent successfully", i);
@@ -630,17 +701,22 @@ mod tests {
             }
             // No sleep between rapid commands
         }
-        
+
         info!("✅ All rapid commands sent successfully");
-        
+
         // Final comprehensive state check
         info!("🎯 === FINAL STATE VERIFICATION ===");
-        
+
         info!("🔍 Final agent active status: {}", agent.is_active().await);
-        
+
         // Test PTY receiver creation to verify PTY is still responsive
         info!("🔍 Testing PTY receiver creation...");
-        match timeout(Duration::from_secs(2), pty_process.get_pty_string_receiver()).await {
+        match timeout(
+            Duration::from_secs(2),
+            pty_process.get_pty_string_receiver(),
+        )
+        .await
+        {
             Ok(Ok(_receiver)) => {
                 info!("✅ PTY receiver created successfully - PTY is responsive");
             }
@@ -652,7 +728,7 @@ mod tests {
                 error!("🔴 PTY process may be in a bad state!");
             }
         }
-        
+
         // Test one final send_keys to ensure agent is still functional
         info!("🔍 Testing final send_keys for agent responsiveness...");
         match timeout(Duration::from_secs(3), agent.send_keys("echo final_test\n")).await {
@@ -667,9 +743,11 @@ mod tests {
                 error!("🔴 Agent may be in a bad state after test sequence!");
             }
         }
-        
+
         info!("✅ Comprehensive debugging test completed successfully!");
-        info!("🎯 If this test passes, the hang issue may be specific to certain conditions or timing");
+        info!(
+            "🎯 If this test passes, the hang issue may be specific to certain conditions or timing"
+        );
     }
 
     /// Test send_keys behavior with monitoring systems active
@@ -677,35 +755,44 @@ mod tests {
     #[tokio::test]
     #[ignore] // Debug test that hangs due to PTY reader issues
     async fn test_send_keys_with_monitoring_debug() {
-        use std::time::{Duration, Instant};
-        use tokio::time::timeout;
-        use tracing::{info, warn, error};
         use crate::config::helper::ActionType;
         use crate::config::rules_config::{Rule, RuleType};
+        use std::time::{Duration, Instant};
+        use tokio::time::timeout;
+        use tracing::{error, info, warn};
 
         let _ = tracing_subscriber::fmt()
             .with_max_level(tracing::Level::DEBUG)
             .try_init();
 
         info!("🚀 Starting send_keys with monitoring debugging test");
-        
+
         let mut config = Config::default();
         config.web_ui.enabled = false;
-        
+
         let agent = create_test_agent().await;
-        
+
         // Create test rules
         let rules = vec![Rule {
             rule_type: RuleType::When(regex::Regex::new("test_trigger").unwrap()),
             action: ActionType::SendKeys(vec!["echo triggered".to_string()]),
         }];
-        
+
         // Start monitoring systems
         info!("🔍 Starting monitoring systems...");
         let monitoring_start = Instant::now();
-        let monitoring_handles = match timeout(Duration::from_secs(5), agent.clone().setup_monitoring(rules)).await {
+        let monitoring_handles = match timeout(
+            Duration::from_secs(5),
+            agent.clone().setup_monitoring(rules),
+        )
+        .await
+        {
             Ok(Ok(handles)) => {
-                info!("✅ Monitoring systems started in {:?}: {} handles", monitoring_start.elapsed(), handles.len());
+                info!(
+                    "✅ Monitoring systems started in {:?}: {} handles",
+                    monitoring_start.elapsed(),
+                    handles.len()
+                );
                 handles
             }
             Ok(Err(e)) => {
@@ -717,21 +804,25 @@ mod tests {
                 panic!("Monitoring setup timed out");
             }
         };
-        
+
         // Give monitoring time to initialize
         info!("😴 Allowing monitoring systems to initialize...");
         tokio::time::sleep(Duration::from_millis(500)).await;
-        
+
         // Test send_keys with monitoring active
         info!("🎯 Testing send_keys with active monitoring...");
         for i in 1..=3 {
             let cmd = format!("echo monitor_test_{}\n", i);
             info!("📤 [Monitor Test {}/3] Sending: {}", i, cmd.trim());
-            
+
             let send_start = Instant::now();
             match timeout(Duration::from_secs(5), agent.send_keys(&cmd)).await {
                 Ok(Ok(())) => {
-                    info!("✅ [Monitor Test {}/3] Command sent in {:?}", i, send_start.elapsed());
+                    info!(
+                        "✅ [Monitor Test {}/3] Command sent in {:?}",
+                        i,
+                        send_start.elapsed()
+                    );
                 }
                 Ok(Err(e)) => {
                     error!("❌ [Monitor Test {}/3] Command failed: {}", i, e);
@@ -739,28 +830,39 @@ mod tests {
                 }
                 Err(_) => {
                     error!("⏱️ [Monitor Test {}/3] Command timed out", i);
-                    error!("🔴 HANG DETECTED at monitor test {} with monitoring active", i);
+                    error!(
+                        "🔴 HANG DETECTED at monitor test {} with monitoring active",
+                        i
+                    );
                     panic!("Hang detected at monitor test {} with monitoring", i);
                 }
             }
-            
+
             // Sleep between commands to match the problematic pattern
-            info!("😴 [Monitor Sleep {}/2] 100ms sleep with monitoring active...", i);
+            info!(
+                "😴 [Monitor Sleep {}/2] 100ms sleep with monitoring active...",
+                i
+            );
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
-        
+
         info!("✅ All commands with monitoring completed successfully");
-        
+
         // Cleanup monitoring
         info!("🧹 Cleaning up monitoring handles...");
         for (i, handle) in monitoring_handles.into_iter().enumerate() {
             handle.abort();
             info!("🧹 Aborted monitoring handle {}", i + 1);
         }
-        
+
         // Test send_keys after monitoring cleanup
         info!("🔍 Testing send_keys after monitoring cleanup...");
-        match timeout(Duration::from_secs(3), agent.send_keys("echo post_monitoring\n")).await {
+        match timeout(
+            Duration::from_secs(3),
+            agent.send_keys("echo post_monitoring\n"),
+        )
+        .await
+        {
             Ok(Ok(())) => {
                 info!("✅ Post-monitoring send_keys successful");
             }
@@ -771,7 +873,7 @@ mod tests {
                 error!("⏱️ Post-monitoring send_keys timed out");
             }
         }
-        
+
         info!("✅ Send_keys with monitoring debugging test completed");
     }
 
@@ -781,25 +883,34 @@ mod tests {
     async fn test_pty_process_state_during_send_keys_pattern() {
         use std::time::{Duration, Instant};
         use tokio::time::timeout;
-        use tracing::{info, warn, error};
+        use tracing::{error, info, warn};
 
         let _ = tracing_subscriber::fmt()
             .with_max_level(tracing::Level::DEBUG)
             .try_init();
 
         info!("🚀 Starting PTY process state debugging test");
-        
+
         let mut config = Config::default();
         config.web_ui.enabled = false;
-        
+
         let agent = create_test_agent().await;
         let pty_process = agent.get_process();
-        
+
         // Initial PTY state
         info!("🔍 Initial PTY state check...");
-        match timeout(Duration::from_millis(1000), pty_process.get_child_processes()).await {
+        match timeout(
+            Duration::from_millis(1000),
+            pty_process.get_child_processes(),
+        )
+        .await
+        {
             Ok(Ok(child_pids)) => {
-                info!("✅ Initial PTY children: {:?} (count: {})", child_pids, child_pids.len());
+                info!(
+                    "✅ Initial PTY children: {:?} (count: {})",
+                    child_pids,
+                    child_pids.len()
+                );
             }
             Ok(Err(e)) => {
                 warn!("⚠️ Initial PTY check failed: {}", e);
@@ -808,14 +919,19 @@ mod tests {
                 warn!("⏱️ Initial PTY check timed out");
             }
         }
-        
+
         // Test the exact problematic pattern with state checks between each step
         for cycle in 1..=2 {
             info!("🔄 === CYCLE {} ===", cycle);
-            
+
             // Step 1: Pre-send state
             info!("🔍 [Cycle {}] Pre-send PTY state...", cycle);
-            match timeout(Duration::from_millis(500), pty_process.get_child_processes()).await {
+            match timeout(
+                Duration::from_millis(500),
+                pty_process.get_child_processes(),
+            )
+            .await
+            {
                 Ok(Ok(child_pids)) => {
                     info!("✅ [Cycle {}] Pre-send children: {:?}", cycle, child_pids);
                 }
@@ -826,13 +942,22 @@ mod tests {
                     warn!("⏱️ [Cycle {}] Pre-send check timed out", cycle);
                 }
             }
-            
+
             // Step 2: Send command
             info!("📤 [Cycle {}] Sending command...", cycle);
             let send_start = Instant::now();
-            match timeout(Duration::from_secs(5), agent.send_keys(&format!("echo cycle_{}\n", cycle))).await {
+            match timeout(
+                Duration::from_secs(5),
+                agent.send_keys(&format!("echo cycle_{}\n", cycle)),
+            )
+            .await
+            {
                 Ok(Ok(())) => {
-                    info!("✅ [Cycle {}] Send completed in {:?}", cycle, send_start.elapsed());
+                    info!(
+                        "✅ [Cycle {}] Send completed in {:?}",
+                        cycle,
+                        send_start.elapsed()
+                    );
                 }
                 Ok(Err(e)) => {
                     error!("❌ [Cycle {}] Send failed: {}", cycle, e);
@@ -844,10 +969,15 @@ mod tests {
                     panic!("Send hang detected at cycle {}", cycle);
                 }
             }
-            
+
             // Step 3: Post-send immediate state
             info!("🔍 [Cycle {}] Post-send immediate PTY state...", cycle);
-            match timeout(Duration::from_millis(500), pty_process.get_child_processes()).await {
+            match timeout(
+                Duration::from_millis(500),
+                pty_process.get_child_processes(),
+            )
+            .await
+            {
                 Ok(Ok(child_pids)) => {
                     info!("✅ [Cycle {}] Post-send children: {:?}", cycle, child_pids);
                 }
@@ -858,16 +988,25 @@ mod tests {
                     warn!("⏱️ [Cycle {}] Post-send check timed out", cycle);
                 }
             }
-            
+
             // Step 4: Sleep (the suspected problematic step)
             info!("😴 [Cycle {}] Starting 100ms sleep...", cycle);
             let sleep_start = Instant::now();
             tokio::time::sleep(Duration::from_millis(100)).await;
-            info!("✅ [Cycle {}] Sleep completed in {:?}", cycle, sleep_start.elapsed());
-            
+            info!(
+                "✅ [Cycle {}] Sleep completed in {:?}",
+                cycle,
+                sleep_start.elapsed()
+            );
+
             // Step 5: Post-sleep state
             info!("🔍 [Cycle {}] Post-sleep PTY state...", cycle);
-            match timeout(Duration::from_millis(500), pty_process.get_child_processes()).await {
+            match timeout(
+                Duration::from_millis(500),
+                pty_process.get_child_processes(),
+            )
+            .await
+            {
                 Ok(Ok(child_pids)) => {
                     info!("✅ [Cycle {}] Post-sleep children: {:?}", cycle, child_pids);
                 }
@@ -878,10 +1017,10 @@ mod tests {
                     warn!("⏱️ [Cycle {}] Post-sleep check timed out", cycle);
                 }
             }
-            
+
             info!("✅ [Cycle {}] Completed successfully", cycle);
         }
-        
+
         info!("✅ PTY process state debugging test completed");
     }
 
@@ -892,19 +1031,19 @@ mod tests {
     async fn test_isolate_pty_reader_hang() {
         use std::time::{Duration, Instant};
         use tokio::time::timeout;
-        use tracing::{info, error};
+        use tracing::{error, info};
 
         let _ = tracing_subscriber::fmt()
             .with_max_level(tracing::Level::DEBUG)
             .try_init();
 
         info!("🚀 Starting isolated PTY reader hang test");
-        
+
         let mut config = Config::default();
         config.web_ui.enabled = false;
-        
+
         let agent = create_test_agent().await;
-        
+
         // Step 1: Send one command successfully
         info!("📤 Step 1: Sending first command (should work)...");
         let result = timeout(Duration::from_secs(3), agent.send_keys("echo step1\n")).await;
@@ -921,20 +1060,23 @@ mod tests {
                 panic!("Step 1 timed out");
             }
         }
-        
+
         // Step 2: Wait briefly to let PTY reader process the output
         info!("😴 Step 2: Waiting for PTY to process output...");
         tokio::time::sleep(Duration::from_millis(50)).await;
         info!("✅ Step 2: Brief wait completed");
-        
+
         // Step 3: Send second command - this is where it typically hangs
         info!("📤 Step 3: Sending second command (hang expected here)...");
         let start_time = Instant::now();
         let result = timeout(Duration::from_secs(5), agent.send_keys("echo step2\n")).await;
-        
+
         match result {
             Ok(Ok(())) => {
-                info!("✅ Step 3: Second send_keys completed in {:?}", start_time.elapsed());
+                info!(
+                    "✅ Step 3: Second send_keys completed in {:?}",
+                    start_time.elapsed()
+                );
                 info!("🎉 HANG NOT REPRODUCED: Test passed without hanging");
             }
             Ok(Err(e)) => {
@@ -942,14 +1084,17 @@ mod tests {
                 panic!("Step 3 failed: {}", e);
             }
             Err(_) => {
-                error!("⏱️ Step 3: Second send_keys timed out after {:?}", start_time.elapsed());
+                error!(
+                    "⏱️ Step 3: Second send_keys timed out after {:?}",
+                    start_time.elapsed()
+                );
                 error!("🔴 HANG CONFIRMED: PTY reader is blocking on read operation");
                 error!("🔍 ROOT CAUSE: Synchronous read() call in async task");
                 error!("💡 SOLUTION: Replace std::io::Read with tokio async I/O");
                 panic!("HANG CONFIRMED - PTY reader blocking issue");
             }
         }
-        
+
         info!("✅ Isolated PTY reader hang test completed");
     }
 }

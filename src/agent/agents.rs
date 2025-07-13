@@ -26,6 +26,23 @@ impl Agents {
         Ok(Self { rules, agents })
     }
 
+    /// Create a new agents system with mock PTY for testing
+    #[cfg(test)]
+    pub async fn new_with_mock(rules: Vec<Rule>, config: &Config) -> Result<Self> {
+        use crate::terminal::pty_process_trait::MockPtyProcess;
+
+        let pool_size = config.agents.pool;
+        let mut agents = Vec::with_capacity(pool_size);
+
+        for i in 0..pool_size {
+            let mock_pty = Box::new(MockPtyProcess::new());
+            let agent = Agent::new_with_process(i, config, mock_pty).await?;
+            agents.push(agent);
+        }
+
+        Ok(Self { rules, agents })
+    }
+
     /// Get the number of agents in the pool
     pub fn size(&self) -> usize {
         self.agents.len()
@@ -62,7 +79,7 @@ mod tests {
         config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
         let rules = vec![];
 
-        let agents = Agents::new(rules, &config).await;
+        let agents = Agents::new_with_mock(rules, &config).await;
         assert!(agents.is_ok(), "Agents creation should succeed");
 
         let agents = agents.unwrap();
@@ -77,7 +94,7 @@ mod tests {
         config.agents.pool = 3;
         let rules = vec![];
 
-        let agents = Agents::new(rules, &config).await;
+        let agents = Agents::new_with_mock(rules, &config).await;
         assert!(agents.is_ok(), "Agents creation should succeed");
 
         let agents = agents.unwrap();
@@ -92,7 +109,7 @@ mod tests {
         config.agents.pool = 5;
         let rules = vec![];
 
-        let agents = Agents::new(rules, &config).await.unwrap();
+        let agents = Agents::new_with_mock(rules, &config).await.unwrap();
         assert_eq!(agents.size(), 5);
     }
 
@@ -104,7 +121,7 @@ mod tests {
         config.agents.pool = 3;
         let rules = vec![];
 
-        let agents = Agents::new(rules, &config).await.unwrap();
+        let agents = Agents::new_with_mock(rules, &config).await.unwrap();
 
         // Test getting agents by valid indices
         let agent0 = agents.get_agent_by_index(0);
@@ -130,7 +147,7 @@ mod tests {
         config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
         let rules = vec![];
 
-        let agents = Agents::new(rules, &config).await.unwrap();
+        let agents = Agents::new_with_mock(rules, &config).await.unwrap();
         let result = agents.start_all().await;
 
         assert!(result.is_ok(), "start_all should succeed with empty rules");
@@ -165,7 +182,7 @@ mod tests {
             },
         ];
 
-        let agents = Agents::new(rules, &config).await.unwrap();
+        let agents = Agents::new_with_mock(rules, &config).await.unwrap();
         let result = agents.start_all().await;
 
         assert!(result.is_ok(), "start_all should succeed with rules");
@@ -188,7 +205,7 @@ mod tests {
         config.agents.pool = 1;
         let rules = vec![];
 
-        let agents = Agents::new(rules, &config).await.unwrap();
+        let agents = Agents::new_with_mock(rules, &config).await.unwrap();
         assert_eq!(agents.size(), 1);
 
         // Test that wrapping works correctly with single agent

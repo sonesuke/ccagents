@@ -1,5 +1,5 @@
-use super::pty_session::{PtyCommand, PtyEvent, PtyEventData, PtySession};
 use super::pty_process_trait::PtyProcessTrait;
+use super::pty_session::{PtyCommand, PtyEvent, PtyEventData, PtySession};
 use crate::config::Config;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -305,7 +305,9 @@ impl PtyProcessTrait for PtyProcess {
         self.send_input(input).await
     }
 
-    async fn get_pty_string_receiver(&self) -> Result<broadcast::Receiver<String>, PtyProcessError> {
+    async fn get_pty_string_receiver(
+        &self,
+    ) -> Result<broadcast::Receiver<String>, PtyProcessError> {
         self.get_pty_string_receiver().await
     }
 
@@ -317,7 +319,9 @@ impl PtyProcessTrait for PtyProcess {
         self.get_screen_contents().await
     }
 
-    async fn get_pty_bytes_receiver(&self) -> Result<broadcast::Receiver<bytes::Bytes>, PtyProcessError> {
+    async fn get_pty_bytes_receiver(
+        &self,
+    ) -> Result<broadcast::Receiver<bytes::Bytes>, PtyProcessError> {
         self.get_pty_bytes_receiver().await
     }
 }
