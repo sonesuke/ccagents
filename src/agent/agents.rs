@@ -58,7 +58,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_agents_creation() {
-        let config = Config::default();
+        let mut config = Config::default();
+        config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
         let rules = vec![];
 
         let agents = Agents::new(rules, &config).await;

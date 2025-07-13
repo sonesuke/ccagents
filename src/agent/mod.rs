@@ -2,6 +2,7 @@ pub mod agents;
 
 use crate::config::Config;
 use crate::config::rules_config::Rule;
+use crate::rule::RuleProcessor;
 use crate::rule::{DiffTimeout, When};
 use crate::terminal::pty_process::PtyProcess;
 use crate::web_server::WebServer;
@@ -78,27 +79,33 @@ impl Agent {
     /// Set the status of the agent
     async fn set_status(&self, new_status: AgentStatus) {
         // First check if status actually needs to change (read lock only)
-        let needs_update = match tokio::time::timeout(
-            tokio::time::Duration::from_millis(50), 
-            async { self.status.read().map_err(|_| ()) }
-        ).await {
-            Ok(Ok(current_status)) => *current_status != new_status,
-            _ => {
-                tracing::warn!("Status read timeout for agent {}, assuming update needed", self.get_id());
-                true
-            }
-        };
+        let needs_update =
+            match tokio::time::timeout(tokio::time::Duration::from_millis(50), async {
+                self.status.read().map_err(|_| ())
+            })
+            .await
+            {
+                Ok(Ok(current_status)) => *current_status != new_status,
+                _ => {
+                    tracing::warn!(
+                        "Status read timeout for agent {}, assuming update needed",
+                        self.get_id()
+                    );
+                    true
+                }
+            };
 
         // Only acquire write lock if status needs to change
         if needs_update {
-            match tokio::time::timeout(
-                tokio::time::Duration::from_millis(100), 
-                async { self.status.write().map_err(|_| ()) }
-            ).await {
+            match tokio::time::timeout(tokio::time::Duration::from_millis(100), async {
+                self.status.write().map_err(|_| ())
+            })
+            .await
+            {
                 Ok(Ok(mut status)) => {
                     *status = new_status.clone();
                     tracing::debug!("🔄 Agent {} → {:?}", self.get_id(), new_status);
-                },
+                }
                 _ => {
                     tracing::error!("Status write timeout for agent {}", self.get_id());
                 }
@@ -225,12 +232,12 @@ impl Agent {
         loop {
             // Add timeout to monitor operation to prevent hanging
             match tokio::time::timeout(Duration::from_millis(200), self.monitor()).await {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(_) => {
                     tracing::warn!("Agent {} monitor operation timed out", self.get_id());
                 }
             }
-            
+
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }
@@ -245,7 +252,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_agent_creation() {
-        let config = Config::default();
+        let mut config = Config::default();
+        config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
         let _agent = Agent::from_config(0, &config).await.unwrap();
         // Just verify the agent can be created successfully
         // Agent functionality is tested through integration tests
@@ -254,6 +262,7 @@ mod tests {
     #[tokio::test]
     async fn test_agent_getters() {
         let mut config = Config::default();
+        config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
         // Set specific dimensions for testing
         config.agents.pool = 3;
         let agent = Agent::from_config(0, &config).await.unwrap();
@@ -273,7 +282,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_agent_status_management() {
-        let config = Config::default();
+        let mut config = Config::default();
+        config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
         let agent = Agent::from_config(0, &config).await.unwrap();
 
         // Agent should start as Idle

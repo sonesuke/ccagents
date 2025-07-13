@@ -79,7 +79,12 @@ mod tests {
     fn test_config_from_nonexistent_file() {
         let result = Config::from_file("nonexistent.yaml");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Failed to read config file"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Failed to read config file")
+        );
     }
 
     #[test]
@@ -89,10 +94,15 @@ mod tests {
 
         let mut temp_file = NamedTempFile::new().unwrap();
         writeln!(temp_file, "invalid: yaml: content: [").unwrap();
-        
+
         let result = Config::from_file(temp_file.path().to_str().unwrap());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Failed to parse YAML config"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Failed to parse YAML config")
+        );
     }
 
     #[test]
@@ -110,10 +120,10 @@ mod tests {
     fn test_parse_triggers() {
         let config_path = "examples/basic/config.yaml";
         let config = Config::from_file(config_path).unwrap();
-        
+
         let triggers = config.parse_triggers().unwrap();
         assert!(!triggers.is_empty());
-        
+
         // Verify we can parse multiple times
         let triggers2 = config.parse_triggers().unwrap();
         assert_eq!(triggers.len(), triggers2.len());
@@ -123,10 +133,10 @@ mod tests {
     fn test_parse_rules() {
         let config_path = "examples/basic/config.yaml";
         let config = Config::from_file(config_path).unwrap();
-        
+
         let rules = config.parse_rules().unwrap();
         assert!(!rules.is_empty());
-        
+
         // Verify we can parse multiple times
         let rules2 = config.parse_rules().unwrap();
         assert_eq!(rules.len(), rules2.len());
@@ -136,7 +146,7 @@ mod tests {
     fn test_parse_triggers_empty_config() {
         let mut config = Config::default();
         config.agents.triggers.clear();
-        
+
         let triggers = config.parse_triggers().unwrap();
         assert!(triggers.is_empty());
     }
@@ -145,7 +155,7 @@ mod tests {
     fn test_parse_rules_empty_config() {
         let mut config = Config::default();
         config.agents.rules.clear();
-        
+
         let rules = config.parse_rules().unwrap();
         assert!(rules.is_empty());
     }
@@ -156,15 +166,19 @@ mod tests {
         use tempfile::NamedTempFile;
 
         let mut temp_file = NamedTempFile::new().unwrap();
-        writeln!(temp_file, r#"
+        writeln!(
+            temp_file,
+            r#"
 web_ui:
   base_port: 8080
 agents:
   pool: 2
-"#).unwrap();
-        
+"#
+        )
+        .unwrap();
+
         let config = Config::from_file(temp_file.path().to_str().unwrap()).unwrap();
-        
+
         // Check that defaults are applied for missing fields
         assert!(config.web_ui.enabled); // default
         assert_eq!(config.web_ui.host, "localhost"); // default
