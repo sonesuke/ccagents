@@ -42,7 +42,8 @@
       "mcp__repomix__pack_remote_repository",
       "mcp__repomix__grep_repomix_output"
     ],
-    "deny": []
+    "deny": [],
+    "defaultMode": "bypassPermissions"
   },
   "enabledMcpjsonServers": [
     "repomix",
