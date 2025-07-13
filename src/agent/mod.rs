@@ -28,10 +28,7 @@ pub struct Agent {
 
 impl Agent {
     /// Create a new agent from configuration, handling web server setup
-    pub async fn from_config(
-        index: usize,
-        config: &Config,
-    ) -> Result<Arc<Self>> {
+    pub async fn from_config(index: usize, config: &Config) -> Result<Arc<Self>> {
         let process = PtyProcess::from_config(config);
 
         // Start the PTY process
@@ -80,12 +77,32 @@ impl Agent {
 
     /// Set the status of the agent
     async fn set_status(&self, new_status: AgentStatus) {
-        let mut status = self.status.write().unwrap();
-        let old_status = status.clone();
+        // First check if status actually needs to change (read lock only)
+        let needs_update = match tokio::time::timeout(
+            tokio::time::Duration::from_millis(50), 
+            async { self.status.read().map_err(|_| ()) }
+        ).await {
+            Ok(Ok(current_status)) => *current_status != new_status,
+            _ => {
+                tracing::warn!("Status read timeout for agent {}, assuming update needed", self.get_id());
+                true
+            }
+        };
 
-        if old_status != new_status {
-            *status = new_status.clone();
-            tracing::debug!("🔄 Agent {} → {:?}", self.get_id(), new_status);
+        // Only acquire write lock if status needs to change
+        if needs_update {
+            match tokio::time::timeout(
+                tokio::time::Duration::from_millis(100), 
+                async { self.status.write().map_err(|_| ()) }
+            ).await {
+                Ok(Ok(mut status)) => {
+                    *status = new_status.clone();
+                    tracing::debug!("🔄 Agent {} → {:?}", self.get_id(), new_status);
+                },
+                _ => {
+                    tracing::error!("Status write timeout for agent {}", self.get_id());
+                }
+            }
         }
     }
 
@@ -206,7 +223,14 @@ impl Agent {
     /// Start monitoring this agent's status
     pub async fn start_monitoring(self: std::sync::Arc<Self>) -> Result<()> {
         loop {
-            self.monitor().await;
+            // Add timeout to monitor operation to prevent hanging
+            match tokio::time::timeout(Duration::from_millis(200), self.monitor()).await {
+                Ok(_) => {},
+                Err(_) => {
+                    tracing::warn!("Agent {} monitor operation timed out", self.get_id());
+                }
+            }
+            
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }
@@ -222,9 +246,7 @@ mod tests {
     #[tokio::test]
     async fn test_agent_creation() {
         let config = Config::default();
-        let _agent = Agent::from_config(0, &config)
-            .await
-            .unwrap();
+        let _agent = Agent::from_config(0, &config).await.unwrap();
         // Just verify the agent can be created successfully
         // Agent functionality is tested through integration tests
     }
@@ -234,9 +256,7 @@ mod tests {
         let mut config = Config::default();
         // Set specific dimensions for testing
         config.agents.pool = 3;
-        let agent = Agent::from_config(0, &config)
-            .await
-            .unwrap();
+        let agent = Agent::from_config(0, &config).await.unwrap();
 
         // Test ID getter
         assert_eq!(agent.get_id(), "agent-0");
@@ -254,9 +274,7 @@ mod tests {
     #[tokio::test]
     async fn test_agent_status_management() {
         let config = Config::default();
-        let agent = Agent::from_config(0, &config)
-            .await
-            .unwrap();
+        let agent = Agent::from_config(0, &config).await.unwrap();
 
         // Agent should start as Idle
         assert!(!agent.is_active().await, "Agent should start as Idle");
@@ -277,10 +295,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_is_active_method() {
-        let config = Config::default();
-        let agent = Agent::from_config(0, &config)
-            .await
-            .unwrap();
+        let mut config = Config::default();
+        config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
+        let agent = Agent::from_config(0, &config).await.unwrap();
 
         // Test initial state
         assert_eq!(agent.is_active().await, false);
@@ -296,10 +313,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_send_keys() {
-        let config = Config::default();
-        let agent = Agent::from_config(0, &config)
-            .await
-            .unwrap();
+        let mut config = Config::default();
+        config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
+        let agent = Agent::from_config(0, &config).await.unwrap();
 
         // Test sending keys to the process
         let result = agent.send_keys("echo test").await;
@@ -311,10 +327,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_send_keys_empty() {
-        let config = Config::default();
-        let agent = Agent::from_config(0, &config)
-            .await
-            .unwrap();
+        let mut config = Config::default();
+        config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
+        let agent = Agent::from_config(0, &config).await.unwrap();
 
         // Test sending empty string
         let result = agent.send_keys("").await;
@@ -323,14 +338,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_setup_monitoring_returns_handles() {
-        use crate::config::rules_config::{Rule, RuleType};
         use crate::config::helper::ActionType;
+        use crate::config::rules_config::{Rule, RuleType};
 
         let mut config = Config::default();
         config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts
-        let agent = Agent::from_config(0, &config)
-            .await
-            .unwrap();
+        let agent = Agent::from_config(0, &config).await.unwrap();
 
         // Create some test rules
         let rules = vec![Rule {
@@ -356,9 +369,7 @@ mod tests {
         let mut config = Config::default();
         config.web_ui.enabled = false;
 
-        let agent = Agent::from_config(0, &config)
-            .await
-            .unwrap();
+        let agent = Agent::from_config(0, &config).await.unwrap();
 
         // Web server should not be started when disabled
         let web_handle = agent.web_server_handle.read().unwrap();
@@ -371,9 +382,7 @@ mod tests {
     #[tokio::test]
     async fn test_monitor_method() {
         let config = Config::default();
-        let agent = Agent::from_config(0, &config)
-            .await
-            .unwrap();
+        let agent = Agent::from_config(0, &config).await.unwrap();
 
         // Initially should be idle
         assert!(!agent.is_active().await, "Agent should start as idle");
@@ -396,9 +405,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_pty_receiver() {
         let config = Config::default();
-        let agent = Agent::from_config(0, &config)
-            .await
-            .unwrap();
+        let agent = Agent::from_config(0, &config).await.unwrap();
 
         // Test getting PTY receiver
         let result = agent.get_pty_receiver().await;

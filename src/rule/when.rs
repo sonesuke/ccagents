@@ -3,9 +3,9 @@ use std::sync::Arc;
 use tokio::sync::{RwLock, broadcast};
 
 use crate::agent::Agent;
+use crate::config::helper::ActionType;
 use crate::config::rules_config::{Rule, RuleType};
 use crate::rule::capture::resolve_capture_groups_in_vec;
-use crate::config::helper::ActionType;
 
 /// When condition processor for PTY output pattern matching
 pub struct When {

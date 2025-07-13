@@ -14,10 +14,7 @@ pub struct Triggers {
 
 impl Triggers {
     pub fn new(triggers: Vec<Trigger>, agents: Arc<Agents>) -> Self {
-        Self {
-            triggers,
-            agents,
-        }
+        Self { triggers, agents }
     }
 
     /// Start all triggers: execute startup entries then start periodic tasks

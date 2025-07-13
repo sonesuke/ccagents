@@ -147,9 +147,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_start_all_with_rules() {
-        use regex::Regex;
-        use crate::config::rules_config::RuleType;
         use crate::config::helper::ActionType;
+        use crate::config::rules_config::RuleType;
+        use regex::Regex;
 
         let mut config = Config::default();
         config.web_ui.enabled = false; // Disable WebUI to avoid port conflicts

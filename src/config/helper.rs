@@ -38,10 +38,7 @@ pub fn parse_duration(s: &str) -> Result<Duration> {
 }
 
 /// Parse and validate action from YAML fields into ActionType
-pub fn parse_action(
-    action: &Option<String>,
-    keys: &[String],
-) -> Result<ActionType> {
+pub fn parse_action(action: &Option<String>, keys: &[String]) -> Result<ActionType> {
     let action = if let Some(action_type) = action {
         match action_type.as_str() {
             "send_keys" => {
@@ -80,7 +77,10 @@ mod tests {
         let action = Some("send_keys".to_string());
         let keys = vec!["hello".to_string(), "world".to_string()];
         let result = parse_action(&action, &keys).unwrap();
-        assert_eq!(result, ActionType::SendKeys(vec!["hello".to_string(), "world".to_string()]));
+        assert_eq!(
+            result,
+            ActionType::SendKeys(vec!["hello".to_string(), "world".to_string()])
+        );
     }
 
     #[test]

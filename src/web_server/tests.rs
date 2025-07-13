@@ -7,9 +7,7 @@ use crate::web_ui::assets::AssetCache;
 #[tokio::test]
 async fn test_web_server_creation() {
     let config = Config::default();
-    let agent = Agent::from_config(0, &config)
-        .await
-        .unwrap();
+    let agent = Agent::from_config(0, &config).await.unwrap();
     let web_server = WebServer::new(8080, "localhost".to_string(), agent);
 
     assert_eq!(web_server.port, 8080);

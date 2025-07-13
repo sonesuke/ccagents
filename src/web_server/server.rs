@@ -153,15 +153,9 @@ async fn get_terminal_size(
     State((agent, _)): State<(Arc<Agent>, AssetCache)>,
 ) -> Json<TerminalSizeResponse> {
     let (cols, rows) = agent.get_terminal_dimensions();
-    info!(
-        "📐 Terminal size API request: {}x{}",
-        cols, rows
-    );
+    info!("📐 Terminal size API request: {}x{}", cols, rows);
 
-    Json(TerminalSizeResponse {
-        cols,
-        rows,
-    })
+    Json(TerminalSizeResponse { cols, rows })
 }
 
 async fn get_agent_status(

@@ -13,7 +13,6 @@ pub struct AgentsConfig {
     pub rules: Vec<RuleConfig>,
 }
 
-
 impl Default for AgentsConfig {
     fn default() -> Self {
         Self {

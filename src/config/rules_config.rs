@@ -1,5 +1,5 @@
-use crate::config::helper::{ActionType, parse_action};
 use crate::config::helper::parse_duration;
+use crate::config::helper::{ActionType, parse_action};
 use anyhow::{Context, Result, anyhow};
 use regex::Regex;
 use serde::Deserialize;
@@ -63,13 +63,10 @@ impl TryFrom<RuleConfig> for Rule {
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::time::Duration;
-
 
     #[test]
     fn test_rule_try_from_pattern() {

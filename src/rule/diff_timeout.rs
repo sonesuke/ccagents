@@ -3,8 +3,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::agent::Agent;
-use crate::config::rules_config::{Rule, RuleType};
 use crate::config::helper::ActionType;
+use crate::config::rules_config::{Rule, RuleType};
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::Duration as TokioDuration;
 
