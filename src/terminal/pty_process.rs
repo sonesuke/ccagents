@@ -1,6 +1,9 @@
+use super::pty_process_trait::PtyProcessTrait;
 use super::pty_session::{PtyCommand, PtyEvent, PtyEventData, PtySession};
+use crate::config::Config;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::process::Command;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::{Mutex, broadcast, mpsc};
@@ -56,6 +59,18 @@ impl Default for PtyProcessConfig {
     }
 }
 
+impl PtyProcessConfig {
+    /// Create PtyProcessConfig from Config
+    pub fn from_config(config: &Config) -> Self {
+        let (cols, rows) = (config.web_ui.cols, config.web_ui.rows);
+        Self {
+            shell_command: Some(std::env::var("SHELL").unwrap_or_else(|_| "bash".to_string())),
+            cols,
+            rows,
+        }
+    }
+}
+
 pub struct PtyProcess {
     config: PtyProcessConfig,
     session: Arc<Mutex<Option<Arc<PtySession>>>>,
@@ -73,6 +88,12 @@ impl PtyProcess {
             response_tx: Arc::new(Mutex::new(None)),
             response_rx: Arc::new(Mutex::new(None)),
         }
+    }
+
+    /// Create PtyProcess directly from Config
+    pub fn from_config(config: &Config) -> Self {
+        let pty_config = PtyProcessConfig::from_config(config);
+        Self::new(pty_config)
     }
 
     pub async fn start(&self) -> Result<(), PtyProcessError> {
@@ -194,6 +215,29 @@ impl PtyProcess {
             Err(PtyProcessError::NotRunning)
         }
     }
+
+    /// Get child processes of the shell process
+    pub async fn get_child_processes(&self) -> Result<Vec<u32>, PtyProcessError> {
+        if let Ok(Some(shell_pid)) = self.get_shell_pid().await {
+            let output = Command::new("pgrep")
+                .arg("-P")
+                .arg(shell_pid.to_string())
+                .output()
+                .map_err(PtyProcessError::IoError)?;
+
+            if output.status.success() {
+                let child_pids = String::from_utf8_lossy(&output.stdout)
+                    .lines()
+                    .filter_map(|line| line.trim().parse::<u32>().ok())
+                    .collect();
+                Ok(child_pids)
+            } else {
+                Ok(Vec::new())
+            }
+        } else {
+            Ok(Vec::new())
+        }
+    }
 }
 
 async fn event_processor(
@@ -252,5 +296,32 @@ impl Drop for PtyProcess {
         if let Ok(mut session) = self.session.try_lock() {
             session.take();
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl PtyProcessTrait for PtyProcess {
+    async fn send_input(&self, input: String) -> Result<(), PtyProcessError> {
+        self.send_input(input).await
+    }
+
+    async fn get_pty_string_receiver(
+        &self,
+    ) -> Result<broadcast::Receiver<String>, PtyProcessError> {
+        self.get_pty_string_receiver().await
+    }
+
+    async fn get_child_processes(&self) -> Result<Vec<u32>, PtyProcessError> {
+        self.get_child_processes().await
+    }
+
+    async fn get_screen_contents(&self) -> Result<String, PtyProcessError> {
+        self.get_screen_contents().await
+    }
+
+    async fn get_pty_bytes_receiver(
+        &self,
+    ) -> Result<broadcast::Receiver<bytes::Bytes>, PtyProcessError> {
+        self.get_pty_bytes_receiver().await
     }
 }

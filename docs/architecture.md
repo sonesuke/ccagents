@@ -198,8 +198,6 @@ ccauto uses a sophisticated algorithm to detect new content in the PTY's termina
 ## Testing Support
 
 ccauto includes special testing features:
-- `test` command for rule validation
-- `show` command for configuration inspection
 - Mock backend support for unit tests
 - Integration test framework
 

@@ -131,7 +131,7 @@ async fn send_command(
 ) -> Json<CommandResponse> {
     info!("📨 Command API request: {}", request.command);
 
-    match agent.send_input(&request.command).await {
+    match agent.send_keys(&request.command).await {
         Ok(_) => {
             info!("✅ Command sent successfully: {}", request.command);
             Json(CommandResponse {
@@ -152,7 +152,7 @@ async fn send_command(
 async fn get_terminal_size(
     State((agent, _)): State<(Arc<Agent>, AssetCache)>,
 ) -> Json<TerminalSizeResponse> {
-    let (cols, rows) = agent.get_terminal_size();
+    let (cols, rows) = agent.get_terminal_dimensions();
     info!("📐 Terminal size API request: {}x{}", cols, rows);
 
     Json(TerminalSizeResponse { cols, rows })
@@ -162,11 +162,8 @@ async fn get_agent_status(
     State((agent, _)): State<(Arc<Agent>, AssetCache)>,
 ) -> Json<AgentStatusResponse> {
     // Get actual agent status
-    let status = agent.get_status().await;
-    let state = match status {
-        crate::agent::AgentStatus::Idle => "Idle",
-        crate::agent::AgentStatus::Active => "Active",
-    };
+    let is_active = agent.is_active().await;
+    let state = if is_active { "Active" } else { "Idle" };
 
     info!("📊 Agent status request: {}", state);
 

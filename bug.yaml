@@ -1,0 +1,24 @@
+# ccauto configuration for testing state management simplification
+web_ui:
+  enabled: true
+  host: "localhost"
+  base_port: 9990
+  cols: 120
+  rows: 40
+
+agents:
+  pool: 1
+  
+  # External triggers - periodic execution
+  triggers:
+    - name: "test_command"
+      event: "timer:10s"
+      source: "echo 'Testing state management'"
+      action: "send_keys"
+      keys: ["sleep 3", "\r"]
+
+  # Automatic detection rules
+  rules:      
+    - diff_timeout: "10s"
+      action: "send_keys"
+      keys: ["/exit", "\r"]
